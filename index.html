@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>TL MODE - Fixpoint Search</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css" rel="stylesheet">
+</head>
+<body>
+    <div id="login-modal" class="modal">
+        <div class="modal-content">
+            <h5 class="center-align">Login</h5>
+            <div class="input-field">
+                <select id="login-role">
+                    <option value="" disabled selected>Choose your role</option>
+                    <option value="tl">Login as TL</option>
+                    <option value="tech">Login as Tech</option>
+                </select>
+                <label for="login-role">Select Role</label>
+            </div>
+            <div class="input-field" id="tl-code-input" style="display: none;">
+                <input id="tl-login-code" type="password">
+                <label for="tl-login-code">TL Login Code</label>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <a href="#!" class="modal-close btn blue" id="login-button">Login</a>
+        </div>
+    </div>
+
+    <div class="container" id="main-app-content" style="display: none;">
+        <h5 class="center-align">123 EXTRACTOR v2.1</h5>
+        <div class="right-align">
+            <a class="btn-floating btn-large green modal-trigger" href="#add-project-modal" id="add-project-button">
+                <i class="material-icons">add</i>
+            </a>
+            <button class="btn grey darken-1" id="tl-settings-button">
+                <i class="material-icons left">settings</i>Settings
+            </button>
+        </div>
+        <!-- Add main content and modals here -->
+    </div>
+
+    <!-- TL Settings Modal -->
+    <div id="tl-settings-modal" class="modal">
+        <div class="modal-content">
+            <h5>TL Settings</h5>
+            <div class="input-field">
+                <input id="tl-login-code-setting" type="text">
+                <label for="tl-login-code-setting">New TL Login Code</label>
+            </div>
+            <div class="input-field">
+                <input id="project-json-url" type="text">
+                <label for="project-json-url">Project JSON URL</label>
+            </div>
+            <div class="input-field">
+                <input id="tl-code-json-url" type="text">
+                <label for="tl-code-json-url">TL Code JSON URL</label>
+            </div>
+            <div class="input-field">
+                <textarea id="include-headers" class="materialize-textarea"></textarea>
+                <label for="include-headers">Headers to Count (comma-separated)</label>
+            </div>
+            <div class="input-field">
+                <textarea id="exclude-headers" class="materialize-textarea"></textarea>
+                <label for="exclude-headers">Headers to Exclude (comma-separated)</label>
+            </div>
+            <div class="input-field">
+                <textarea id="category-prices" class="materialize-textarea"></textarea>
+                <label for="category-prices">Category Prices (JSON format)</label>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <a href="#!" class="modal-close btn green" id="save-settings-button">Save</a>
+        </div>
+    </div>
+
+    <!-- Import Scripts -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js"></script>
+    <script src="utils.js"></script>
+    <script src="login.js"></script>
+    <script src="projects.js"></script>
+    <script src="settings.js"></script>
+    <script src="main.js"></script>
+</body>
+</html>
