@@ -8,6 +8,7 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css" rel="stylesheet">
 </head>
 <body>
+
     <div id="login-modal" class="modal">
         <div class="modal-content">
             <h5 class="center-align">Login</h5>
@@ -39,44 +40,126 @@
                 <i class="material-icons left">settings</i>Settings
             </button>
         </div>
-        <!-- Add main content and modals here -->
-    </div>
 
-    <!-- TL Settings Modal -->
-    <div id="tl-settings-modal" class="modal">
+        <div class="input-field">
+            <select id="project-selector">
+               <option value="" disabled selected>Select a saved project</option>
+            </select>
+            <label for="project-selector">Load Project</label>
+         </div>
+         <div class="center-align">
+            <button class="btn orange darken-2" id="edit-project">
+            <i class="material-icons left">edit</i>Edit Project
+            </button>
+            <button class="btn red darken-2" id="delete-project">
+            <i class="material-icons left">delete</i>Delete Project
+            </button>
+             <button class="btn blue-grey darken-1 modal-trigger" href="#view-data-modal" id="view-project-data-button">
+                <i class="material-icons left">table_chart</i>View Data
+            </button>
+         </div>
+
+         <div class="input-field">
+            <input id="tech-id" type="text" placeholder="e.g. TECH123">
+            <label for="tech-id">Search TECH ID</label>
+         </div>
+         <div class="center-align">
+            <button class="btn blue" id="search-button">
+            <i class="material-icons left">search</i>Search
+            </button>
+            <button class="btn green" id="calculate-all-button">
+            <i class="material-icons left">calculate</i>Per Project Total
+            </button>
+            <button class="btn purple darken-2 modal-trigger" href="#multiplier-modal" id="calculate-all-projects-button">
+            <i class="material-icons left">grid_on</i>All Projects Total
+            </button>
+         </div>
+
+         <div class="center-align" style="margin-top: 10px;">
+            <button class="btn orange" id="export-button">
+            <i class="material-icons left">file_download</i>Download CSV
+            </button>
+            <button class="btn red" id="clear-data-button">
+            <i class="material-icons left">clear_all</i>Clear All Data
+            </button>
+         </div>
+         <div class="center-align" style="margin-top: 10px;">
+            </div>
+    </div> <div id="add-project-modal" class="modal">
         <div class="modal-content">
-            <h5>TL Settings</h5>
-            <div class="input-field">
-                <input id="tl-login-code-setting" type="text">
-                <label for="tl-login-code-setting">New TL Login Code</label>
-            </div>
-            <div class="input-field">
-                <input id="project-json-url" type="text">
-                <label for="project-json-url">Project JSON URL</label>
-            </div>
-            <div class="input-field">
-                <input id="tl-code-json-url" type="text">
-                <label for="tl-code-json-url">TL Code JSON URL</label>
-            </div>
-            <div class="input-field">
-                <textarea id="include-headers" class="materialize-textarea"></textarea>
-                <label for="include-headers">Headers to Count (comma-separated)</label>
-            </div>
-            <div class="input-field">
-                <textarea id="exclude-headers" class="materialize-textarea"></textarea>
-                <label for="exclude-headers">Headers to Exclude (comma-separated)</label>
-            </div>
-            <div class="input-field">
-                <textarea id="category-prices" class="materialize-textarea"></textarea>
-                <label for="category-prices">Category Prices (JSON format)</label>
-            </div>
+            <h4>Add New Project</h4>
+            <p>Content for adding a new project goes here...</p>
         </div>
         <div class="modal-footer">
-            <a href="#!" class="modal-close btn green" id="save-settings-button">Save</a>
+            <a href="#!" class="modal-close waves-effect waves-green btn-flat">Agree</a>
         </div>
     </div>
 
-    <!-- Import Scripts -->
+    <div id="view-data-modal" class="modal">
+        <div class="modal-content">
+            <h4>View Project Data</h4>
+            <p>Content for viewing project data goes here...</p>
+        </div>
+        <div class="modal-footer">
+            <a href="#!" class="modal-close waves-effect waves-green btn-flat">Agree</a>
+        </div>
+    </div>
+
+    <div id="multiplier-modal" class="modal">
+        <div class="modal-content">
+            <h4>All Projects Total Multiplier</h4>
+            <p>Content for multiplier settings goes here...</p>
+        </div>
+        <div class="modal-footer">
+            <a href="#!" class="modal-close waves-effect waves-green btn-flat">Agree</a>
+        </div>
+    </div>
+
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize all Materialize components found on the page
+            M.AutoInit();
+
+            // Example of how to manually initialize a modal if AutoInit doesn't catch it
+            // var loginModalElement = document.getElementById('login-modal');
+            // var instance = M.Modal.init(loginModalElement);
+
+            // You'll need to add your custom JavaScript logic here for button clicks,
+            // login functionality, data handling, etc.
+
+            // Example: Show/hide TL code input based on role selection
+            const loginRoleSelect = document.getElementById('login-role');
+            const tlCodeInput = document.getElementById('tl-code-input');
+
+            if (loginRoleSelect && tlCodeInput) {
+                loginRoleSelect.addEventListener('change', function() {
+                    if (this.value === 'tl') {
+                        tlCodeInput.style.display = 'block';
+                    } else {
+                        tlCodeInput.style.display = 'none';
+                    }
+                });
+            }
+
+            // Example: Login button click (you'll add actual login logic here)
+            const loginButton = document.getElementById('login-button');
+            const loginModal = document.getElementById('login-modal');
+            const mainAppContent = document.getElementById('main-app-content');
+
+            if (loginButton && loginModal && mainAppContent) {
+                loginButton.addEventListener('click', function() {
+                    // In a real application, you'd verify credentials here
+                    // For now, let's just assume successful login and close modal
+                    const modalInstance = M.Modal.getInstance(loginModal);
+                    modalInstance.close();
+                    mainAppContent.style.display = 'block'; // Show the main content
+                });
+            }
+        });
+    </script>
+       <!-- Import Scripts -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js"></script>
     <script src="utils.js"></script>
@@ -86,3 +169,5 @@
     <script src="main.js"></script>
 </body>
 </html>
+
+
