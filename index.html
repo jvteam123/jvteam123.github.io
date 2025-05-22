@@ -9,10 +9,10 @@
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@400;700&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600&display=swap" rel="stylesheet">
 
-    <script src="./buffer.min.js"></script> 
+    <script src="./buffer.js"></script> 
 
     <script>
-        console.log("HEAD SCRIPT (using local buffer.min.js): Attempting to set window.Buffer...");
+        console.log("HEAD SCRIPT (using local UMD buffer.js): Attempting to set window.Buffer...");
         if (typeof window.buffer !== 'undefined' && typeof window.buffer.Buffer === 'function') {
             window.Buffer = window.buffer.Buffer;
             console.log("HEAD SCRIPT: window.Buffer has been SET successfully from 'window.buffer.Buffer'.");
@@ -20,13 +20,11 @@
             window.Buffer = buffer.Buffer;
             console.log("HEAD SCRIPT: window.Buffer has been SET successfully from global 'buffer.Buffer'.");
         } else {
-            console.error("HEAD SCRIPT (local buffer.min.js): CRITICAL - The 'buffer' global (from local buffer.min.js) or its 'Buffer' property was NOT found. window.Buffer could not be set here. Ensure buffer.min.js is in the root directory and loaded correctly.");
+            console.error("HEAD SCRIPT (local UMD buffer.js): CRITICAL - The 'buffer' global (from local UMD buffer.js) or its 'Buffer' property was NOT found. window.Buffer could not be set here. Ensure the correct UMD version of buffer.js is in the root directory and loaded correctly. The file should NOT use 'require()' for its main module definition.");
         }
     </script>
 
-    <script src="./dbf.min.js"></script>
-
-    <style>
+    <script src="./dbf.min.js"></script> <style>
         :root {
             /* Define your eye-friendly purple palette (Light Mode) */
             --primary-purple: #8E7DBF; /* Muted Purple */
@@ -867,8 +865,8 @@
                 console.log("DOMContentLoaded: window.Buffer IS correctly defined and available.");
                 bufferPolyfillLoaded = true;
             } else {
-                console.error("DOMContentLoaded: CRITICAL - window.Buffer is STILL NOT DEFINED. The inline script in <head> likely failed to set it because 'buffer.min.js' (local) did not properly define 'buffer' or 'window.buffer' globally. DBF import will fail.");
-                alert("Error: A critical component (Buffer polyfill) required for DBF files failed to load or initialize correctly. DBF import functionality will not work. Please ensure 'buffer.min.js' is in the same directory as index.html, check your browser console (F12) for errors related to 'buffer.min.js' (ensure it's loading with status 200 OK and content is not empty), and try disabling browser extensions or ad blockers.");
+                console.error("DOMContentLoaded: CRITICAL - window.Buffer is STILL NOT DEFINED. The inline script in <head> likely failed to set it because 'buffer.js' (local) did not properly define 'buffer' or 'window.buffer' globally. DBF import will fail.");
+                alert("Error: A critical component (Buffer polyfill) required for DBF files failed to load or initialize correctly. DBF import functionality will not work. Please ensure 'buffer.js' (the UMD version) is in the same directory as index.html, check your browser console (F12) for errors related to 'buffer.js' (ensure it's loading with status 200 OK and content is not empty), and try disabling browser extensions or ad blockers.");
             }
 
             let dbfLibraryLoaded = false;
@@ -923,7 +921,7 @@
             const autoFetchButton = document.getElementById('auto-fetch-external-json');
             const darkModeToggle = document.getElementById('dark-mode-toggle');
             const dbfFileInput = document.getElementById('dbf-file-input'); 
-            const dbfFileFieldContainer = document.getElementById('dbf-file-upload-field'); // Container for the DBF input field
+            const dbfFileFieldContainer = document.getElementById('dbf-file-upload-field'); 
             const confirmationModalEl = document.getElementById('confirmation-modal');
             const confirmationModalTitle = document.getElementById('confirmation-modal-title');
             const confirmationModalMessage = document.getElementById('confirmation-modal-message');
@@ -942,12 +940,11 @@
             function showLoader() { const l = document.getElementById('loader-spinner'); if (l) l.style.display = 'block'; }
             function hideLoader() { const l = document.getElementById('loader-spinner'); if (l) l.style.display = 'none'; }
 
-            // Conditionally show/hide DBF functionality UI (placed after showToast is defined)
             if (dbfFileFieldContainer) { 
                 if (!bufferPolyfillLoaded || !dbfLibraryLoaded) {
                     console.warn("DBF import UI elements will be hidden due to missing dependencies.");
                     dbfFileFieldContainer.style.display = 'none'; 
-                    setTimeout(() => { // Delay toast slightly to ensure Materialize is ready for it
+                    setTimeout(() => { 
                         showToast('DBF import disabled: required components failed to load. Check console (F12).', 'red darken-2', 10000);
                     }, 500);
                 } else {
@@ -1347,7 +1344,7 @@
 
             M.Modal.init(document.querySelectorAll('.modal'), {
                 dismissible: false, 
-                onOpenEnd: (modalEl_instance) => { // modalEl is the DOM element, not instance here
+                onOpenEnd: (modalEl_instance) => { 
                     if (modalEl_instance.id === 'add-project-modal') {
                         M.textareaAutoResize(rawDataInput); 
                         if (dbfFileInput) { 
