@@ -9,8 +9,10 @@
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@400;700&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600&display=swap" rel="stylesheet">
 
-    <script src="./buffer.js"></script> 
-
+    <script src="./buffer.js" defer></script>
+    <script src="./dbf.min.js" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js" defer></script>
     <script>
         // This script runs immediately after buffer.js is parsed
         setTimeout(function() {
@@ -864,533 +866,542 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            console.log("DOMContentLoaded event fired. Final check for window.Buffer and Dbf object, which should have been set/available from <head>.");
+            console.log("DOMContentLoaded event fired.");
+
+            let attempts = 0;
+            const maxAttempts = 50; // Try for 5 seconds (50 * 100ms)
             let bufferPolyfillLoaded = false;
-            if (typeof window.Buffer === 'function') {
-                console.log("DOMContentLoaded: window.Buffer IS correctly defined and available.");
-                bufferPolyfillLoaded = true;
-            } else {
-                console.error("DOMContentLoaded: CRITICAL - window.Buffer is STILL NOT DEFINED. The inline script in <head> likely failed to set it because 'buffer.js' (local) did not properly define 'buffer' or 'window.buffer' globally. DBF import will fail.");
-                alert("Error: A critical component (Buffer polyfill) required for DBF files failed to load or initialize correctly. DBF import functionality will not work. Please ensure 'buffer.js' (the UMD version from unpkg.com or similar) is in the same directory as index.html, check your browser console (F12) for errors related to 'buffer.js' (ensure it's loading with status 200 OK and content is not empty), and try disabling browser extensions or ad blockers.");
-            }
-
             let dbfLibraryLoaded = false;
-            if (typeof Dbf === 'object' && typeof Dbf.read === 'function') {
-                console.log("DOMContentLoaded: Dbf library IS correctly defined and available.");
-                dbfLibraryLoaded = true;
-            } else {
-                console.error("DOMContentLoaded: CRITICAL - Dbf library (dbf.min.js - local) is NOT available or Dbf.read is not a function. DBF import will fail.");
-                alert("Error: The DBF reading library (dbf.min.js - local) failed to load or initialize correctly. DBF import functionality will not work. Ensure 'dbf.min.js' is in the same directory as index.html and check your browser console for related errors.");
-            }
 
-            // --- Configuration ---
-            const HARDCODED_PROJECTS_JSON_URL = 'https://raw.githubusercontent.com/serhgs/project_data.json/refs/heads/main/update.json';
-            const HARDCODED_TL_CODE_URL = 'https://raw.githubusercontent.com/gmlorenz/gmlorenz.github.io/refs/heads/main/projects_data.json';
-            const PRICES = [
-                { "3in": 2.19, "9in": 0.99 }, { "3in": 5.86, "9in": 2.08 }, { "3in": 7.44, "9in": 2.78 },
-                { "3in": 2.29, "9in": 1.57 }, { "3in": 1.55, "9in": 0.60 }, { "3in": 1.84, "9in": 0.78 },
-                { "3in": 1.00, "9in": 1.00 }, { "3in": 3.74, "9in": 3.74 }, { "3in": 1.73, "9in": 1.73 }
-            ];
+            function checkDependenciesAndInit() {
+                attempts++;
+                console.log(`Checking dependencies, attempt: ${attempts}`);
 
-            // --- DOM Elements ---
-            const projectSelector = document.getElementById('project-selector');
-            const rawDataInput = document.getElementById('raw-data');
-            const projectNameInput = document.getElementById('project-name');
-            const techIdInput = document.getElementById('tech-id');
-            const outputDiv = document.getElementById('output');
-            const allResultsDiv = document.getElementById('all-results');
-            const addProjectModalEl = document.querySelector('#add-project-modal');
-            const modalTitle = document.getElementById('modal-title');
-            const saveProjectModalButton = document.getElementById('save-project-modal-button');
-            const clearDataButton = document.getElementById('clear-data-button');
-            const addProjectButton = document.getElementById('add-project-button');
-            const mainAppContent = document.getElementById('main-app-content');
-            const logoutButton = document.getElementById('logout-button');
-            const loginModalEl = document.getElementById('login-modal');
-            const loginRoleSelect = document.getElementById('login-role');
-            const tlCodeInputDiv = document.getElementById('tl-code-input');
-            const tlLoginCodeInput = document.getElementById('tl-login-code');
-            const loginButtonElement = document.getElementById('login-button');
-            const fullscreenResultsModal = document.getElementById('fullscreen-results-modal');
-            const fullscreenResultsContent = document.getElementById('fullscreen-results-content');
-            const fullscreenCloseButton = fullscreenResultsContent.querySelector('.close-button');
-            const viewDataModalEl = document.getElementById('view-data-modal');
-            const viewDataTableContainer = document.getElementById('view-data-table-container');
-            const viewDataModalTitle = document.getElementById('view-data-modal-title');
-            const viewDataSpinner = document.getElementById('view-data-spinner');
-            const multiplierInput = document.getElementById('total-multiplier');
-            const applyMultiplierButton = document.getElementById('apply-multiplier');
-            const modalSizeSelect = document.getElementById('modal-size');
-            const modalIrCheck = document.getElementById('modal-ir-check');
-            const viewProjectDataButton = document.getElementById('view-project-data-button');
-            const autoFetchButton = document.getElementById('auto-fetch-external-json');
-            const darkModeToggle = document.getElementById('dark-mode-toggle');
-            const dbfFileInput = document.getElementById('dbf-file-input'); 
-            const dbfFileFieldContainer = document.getElementById('dbf-file-upload-field'); 
-            const confirmationModalEl = document.getElementById('confirmation-modal');
-            const confirmationModalTitle = document.getElementById('confirmation-modal-title');
-            const confirmationModalMessage = document.getElementById('confirmation-modal-message');
-            const confirmationConfirmButton = document.getElementById('confirmation-confirm-button');
-            const confirmationCancelButton = document.getElementById('confirmation-cancel-button');
-
-            let activeProjectData = '';
-            let allCalculatedResults = [];
-            let lastResult = '';
-            let allProjectsAggregatedResults = {};
-            let editingProjectName = null;
-            let isLoggedInAsTL = false;
-            let confirmPromiseResolve = null; 
-
-            function showToast(html, classes = '', duration = 4000) { M.toast({ html, classes, displayLength: duration }); }
-            function showLoader() { const l = document.getElementById('loader-spinner'); if (l) l.style.display = 'block'; }
-            function hideLoader() { const l = document.getElementById('loader-spinner'); if (l) l.style.display = 'none'; }
-
-            if (dbfFileFieldContainer) { 
-                if (!bufferPolyfillLoaded || !dbfLibraryLoaded) {
-                    console.warn("DBF import UI elements will be hidden due to missing dependencies.");
-                    dbfFileFieldContainer.style.display = 'none'; 
-                    setTimeout(() => { 
-                        showToast('DBF import disabled: required components failed to load. Check console (F12).', 'red darken-2', 10000);
-                    }, 500);
+                // Check for Buffer polyfill (lowercase 'buffer' global from UMD)
+                if (typeof window.buffer === 'object' && typeof window.buffer.Buffer === 'function') {
+                    window.Buffer = window.buffer.Buffer; // Assign to uppercase 'B'
+                    console.log("Buffer polyfill IS NOW LOADED and window.Buffer is set.");
+                    bufferPolyfillLoaded = true;
+                } else if (typeof buffer === 'object' && typeof buffer.Buffer === 'function') {
+                     window.Buffer = buffer.Buffer; // Fallback
+                     console.log("Buffer polyfill IS NOW LOADED (from global 'buffer') and window.Buffer is set.");
+                     bufferPolyfillLoaded = true;
                 } else {
-                    console.log("DBF import UI elements are available and will be shown.");
-                    dbfFileFieldContainer.style.display = 'block'; 
+                    console.log("Buffer polyfill (window.buffer or buffer) not yet available.");
                 }
-            } else {
-                 console.error("Could not find the DBF file upload field container ('dbf-file-upload-field') to hide/show.");
-            }
 
-            // ... (Rest of your functions: safeSetLocalStorage, safeGetLocalStorage, showCustomConfirm, etc. exactly as before) ...
-            // ... (loadProjectList, addResultButtons, removeResultButtons, hideFullscreenModal, displayDataTableInModal, viewProjectData, getBonusPercentage, calculateRowDetails, calculateDetailsForTechIDInRaw, saveProject, deleteSelectedProject, searchTechID, calculateAllTechIDs, calculateTotalAcrossAllProjects, exportToCsv, autoFetchExternalJson, verifyTlLoginCode, updateButtonVisibility, handleDbfFileSelect, applyDarkModePreference) ...
-            // For brevity, I am not repeating all functions here, but they should be included from your previous complete version.
-            // Ensure all functions are defined here before they are called by event listeners or initializations below.
-            
-            // Make sure the following functions (and others you use) are defined above this point:
-            // safeSetLocalStorage, safeGetLocalStorage, showCustomConfirm, loadProjectList, addResultButtons, 
-            // removeResultButtons, hideFullscreenModal, displayDataTableInModal, viewProjectData, getBonusPercentage, 
-            // calculateRowDetails, calculateDetailsForTechIDInRaw, saveProject, deleteSelectedProject, searchTechID, 
-            // calculateAllTechIDs, calculateTotalAcrossAllProjects, exportToCsv, autoFetchExternalJson, 
-            // verifyTlLoginCode, updateButtonVisibility, handleDbfFileSelect, applyDarkModePreference
-
-            function safeSetLocalStorage(key, value) {
-                try {
-                    const compressedValue = LZString.compressToUTF16(value);
-                    if (compressedValue === null) throw new Error("Compression failed.");
-                    localStorage.setItem(key, compressedValue); return true;
-                } catch (e) {
-                    if (e instanceof DOMException && e.name === 'QuotaExceededError') showToast('Local storage full!', 'red');
-                    else { showToast(`Error saving to local storage. ${e.message}`, 'red'); console.error("LS save error:", e); }
-                    return false;
+                // Check for Dbf library
+                if (typeof Dbf === 'object' && typeof Dbf.read === 'function') {
+                    console.log("Dbf library IS NOW LOADED.");
+                    dbfLibraryLoaded = true;
+                } else {
+                    console.log("Dbf library not yet available.");
                 }
-            }
 
-            function safeGetLocalStorage(key) {
-                try {
-                    const value = localStorage.getItem(key); if (value === null) return null;
-                    let decompressedValue = LZString.decompressFromUTF16(value);
-                    if (decompressedValue !== null) return decompressedValue;
-                    console.warn(`Decompression failed for key "${key}". Attempting to load as uncompressed data.`); return value;
-                } catch (e) { console.error(`Error retrieving or decompressing data for key "${key}":`, e); showToast('Error loading project data. Data might be corrupted.', 'red'); return null; }
-            }
-
-            function showCustomConfirm(message, title = 'Confirm Action') {
-                return new Promise(resolve => {
-                    confirmationModalTitle.textContent = title; confirmationModalMessage.textContent = message;
-                    M.Modal.getInstance(confirmationModalEl).open(); confirmPromiseResolve = resolve;
-                });
-            }
-
-            function loadProjectList() {
-                projectSelector.innerHTML = '<option value="" disabled selected>Select a saved project</option>';
-                for (let i = 0; i < localStorage.length; i++) {
-                    const key = localStorage.key(i);
-                    if (key.startsWith('tl_project_')) {
-                        const name = key.replace('tl_project_', '');
-                        const option = document.createElement('option'); option.value = name; option.textContent = name;
-                        projectSelector.appendChild(option);
+                if (bufferPolyfillLoaded && dbfLibraryLoaded) {
+                    console.log("All critical dependencies (Buffer, Dbf) are loaded. Initializing application.");
+                    initializeApp(); // Call your main app initialization function
+                } else if (attempts < maxAttempts) {
+                    setTimeout(checkDependenciesAndInit, 100); // Check again shortly
+                } else {
+                    console.error("CRITICAL FAILURE: Could not load Buffer polyfill or Dbf library after multiple attempts. DBF import will fail.");
+                    alert("Error: Critical components for DBF import (Buffer or DBF Reader) failed to load after several attempts. Please check your internet connection, ensure 'buffer.js' and 'dbf.min.js' are in the root directory and loading correctly (check Network tab in F12 console), and try disabling browser extensions. The application might not function correctly.");
+                    // You might still want to try initializing the rest of the app,
+                    // but DBF functionality will be broken.
+                    // initializeApp(false); // Or a version of init that knows DBF is broken
+                    const dbfFileFieldContainer = document.getElementById('dbf-file-upload-field');
+                    if (dbfFileFieldContainer) {
+                        dbfFileFieldContainer.style.display = 'none';
+                         // Can't use showToast here as Materialize might not be ready if this path is hit
                     }
                 }
-                M.FormSelect.init(projectSelector);
             }
 
-            function addResultButtons(targetDiv) {
-                const existingButtons = targetDiv.querySelector('.result-buttons'); if (existingButtons) existingButtons.remove();
-                const buttonsContainer = document.createElement('div'); buttonsContainer.className = 'result-buttons';
-                if (targetDiv.id === 'output' && lastResult) {
-                    const viewDataBtn = document.createElement('button'); viewDataBtn.className = 'view-data-result-button';
-                    viewDataBtn.innerHTML = '<i class="material-icons">table_chart</i>'; viewDataBtn.title = 'View Raw Data for this TECH ID';
-                    viewDataBtn.addEventListener('click', () => {
-                        if (!activeProjectData || !activeProjectData.data) { showToast('No data loaded for the selected project to view.', 'orange'); return; }
-                        displayDataTableInModal(activeProjectData.data, lastResult.techID);
-                    });
-                    buttonsContainer.appendChild(viewDataBtn);
+            function initializeApp() {
+                console.log("initializeApp() called.");
+
+                // --- Configuration ---
+                // (All your const declarations, function definitions, event listeners,
+                // and Materialize initializations from the previous full script go here)
+
+                const HARDCODED_PROJECTS_JSON_URL = 'https://raw.githubusercontent.com/serhgs/project_data.json/refs/heads/main/update.json';
+                const HARDCODED_TL_CODE_URL = 'https://raw.githubusercontent.com/gmlorenz/gmlorenz.github.io/refs/heads/main/projects_data.json';
+                const PRICES = [
+                    { "3in": 2.19, "9in": 0.99 }, { "3in": 5.86, "9in": 2.08 }, { "3in": 7.44, "9in": 2.78 },
+                    { "3in": 2.29, "9in": 1.57 }, { "3in": 1.55, "9in": 0.60 }, { "3in": 1.84, "9in": 0.78 },
+                    { "3in": 1.00, "9in": 1.00 }, { "3in": 3.74, "9in": 3.74 }, { "3in": 1.73, "9in": 1.73 }
+                ];
+
+                // --- DOM Elements ---
+                const projectSelector = document.getElementById('project-selector');
+                const rawDataInput = document.getElementById('raw-data');
+                // ... (ALL OTHER DOM ELEMENT DEFINITIONS) ...
+                const dbfFileInput = document.getElementById('dbf-file-input');
+                const dbfFileFieldContainer = document.getElementById('dbf-file-upload-field');
+                const darkModeToggle = document.getElementById('dark-mode-toggle'); // Ensure this is defined
+                const mainAppContent = document.getElementById('main-app-content');
+                const loginModalEl = document.getElementById('login-modal');
+                const addProjectModalEl = document.querySelector('#add-project-modal');
+                const viewDataModalEl = document.getElementById('view-data-modal');
+                const confirmationModalEl = document.getElementById('confirmation-modal');
+
+
+                // Global state vars
+                let activeProjectData = '';
+                let allCalculatedResults = [];
+                // ... (ALL OTHER GLOBAL STATE VARS) ...
+                let isLoggedInAsTL = false;
+
+
+                // Utility Functions
+                function showToast(html, classes = '', duration = 4000) { M.toast({ html, classes, displayLength: duration }); }
+                // ... (ALL OTHER FUNCTION DEFINITIONS: showLoader, hideLoader, safeSetLocalStorage, etc. ...
+                // ... calculateDetailsForTechIDInRaw, handleDbfFileSelect, etc. ...
+                // ... applyDarkModePreference etc. )
+
+                // START OF COPIED FUNCTIONS (ensure these are complete from previous version)
+                function showLoader() { const l = document.getElementById('loader-spinner'); if (l) l.style.display = 'block'; }
+                function hideLoader() { const l = document.getElementById('loader-spinner'); if (l) l.style.display = 'none'; }
+
+                if (dbfFileFieldContainer) {
+                    if (!bufferPolyfillLoaded || !dbfLibraryLoaded) {
+                        console.warn("DBF import UI elements will be hidden due to missing dependencies.");
+                        dbfFileFieldContainer.style.display = 'none';
+                        setTimeout(() => {
+                            showToast('DBF import disabled: required components failed to load. Check console (F12).', 'red darken-2', 10000);
+                        }, 500);
+                    } else {
+                        console.log("DBF import UI elements are available and will be shown.");
+                        dbfFileFieldContainer.style.display = 'block';
+                    }
+                } else {
+                     console.error("Could not find the DBF file upload field container ('dbf-file-upload-field') to hide/show.");
                 }
-                const expandBtn = document.createElement('button'); expandBtn.className = 'expand-button';
-                expandBtn.innerHTML = '<i class="material-icons">fullscreen</i>'; expandBtn.title = 'Expand Results';
-                expandBtn.addEventListener('click', () => {
-                    let content = targetDiv.cloneNode(true);
-                    const clonedButtons = content.querySelector('.result-buttons'); if (clonedButtons) clonedButtons.remove();
-                    fullscreenResultsContent.innerHTML = ''; fullscreenResultsContent.appendChild(content);
-                    const closeBtn = document.createElement('button'); closeBtn.classList.add('close-button');
-                    closeBtn.innerHTML = '<i class="material-icons">close</i>'; closeBtn.addEventListener('click', hideFullscreenModal);
-                    fullscreenResultsContent.appendChild(closeBtn); fullscreenResultsModal.style.display = 'flex';
-                });
-                buttonsContainer.appendChild(expandBtn); targetDiv.prepend(buttonsContainer);
-            }
-            
-            function removeResultButtons(containerElement) { const b = containerElement.querySelector('.result-buttons'); if (b) b.remove(); }
-            function hideFullscreenModal() { fullscreenResultsModal.style.display = 'none'; fullscreenResultsContent.innerHTML = ''; }
 
-            function displayDataTableInModal(rawDataString, techIDFilter = '') {
-                viewDataTableContainer.innerHTML = ''; viewDataSpinner.style.display = 'flex';
-                setTimeout(() => {
-                    const rows = String(rawDataString).split(/\r?\n/).filter(r => r.trim() !== "");
-                    if (rows.length === 0) { viewDataTableContainer.innerHTML = '<p>No data available for this project.</p>'; }
-                    else {
-                        const headers = rows.shift()?.split(/[\t,]/).map(h => h.trim()) || [];
-                        const fixIdIndex = headers.map(h => h.toUpperCase()).indexOf("FIX1_ID");
-                        let tableHtml = '<table class="striped"><thead><tr>';
-                        headers.forEach(hText => tableHtml += `<th>${hText}</th>`); tableHtml += '</tr></thead><tbody>';
-                        let foundRows = false;
-                        rows.forEach(row => {
-                            const fields = row.split(/[\t,]/).map(f => f.trim());
-                            if (techIDFilter === '' || fixIdIndex === -1 || (fixIdIndex !== -1 && fields[fixIdIndex]?.toUpperCase() === techIDFilter)) {
-                                foundRows = true; tableHtml += '<tr>';
-                                fields.forEach(f => tableHtml += `<td>${f}</td>`); tableHtml += '</tr>';
+                function safeSetLocalStorage(key, value) {
+                    try {
+                        const compressedValue = LZString.compressToUTF16(value);
+                        if (compressedValue === null) throw new Error("Compression failed.");
+                        localStorage.setItem(key, compressedValue); return true;
+                    } catch (e) {
+                        if (e instanceof DOMException && e.name === 'QuotaExceededError') showToast('Local storage full!', 'red');
+                        else { showToast(`Error saving to local storage. ${e.message}`, 'red'); console.error("LS save error:", e); }
+                        return false;
+                    }
+                }
+
+                function safeGetLocalStorage(key) {
+                    try {
+                        const value = localStorage.getItem(key); if (value === null) return null;
+                        let decompressedValue = LZString.decompressFromUTF16(value);
+                        if (decompressedValue !== null) return decompressedValue;
+                        console.warn(`Decompression failed for key "${key}". Attempting to load as uncompressed data.`); return value;
+                    } catch (e) { console.error(`Error retrieving or decompressing data for key "${key}":`, e); showToast('Error loading project data. Data might be corrupted.', 'red'); return null; }
+                }
+
+                function showCustomConfirm(message, title = 'Confirm Action') {
+                    return new Promise(resolve => {
+                        const confirmationModalTitle = document.getElementById('confirmation-modal-title');
+                        const confirmationModalMessage = document.getElementById('confirmation-modal-message');
+                        confirmationModalTitle.textContent = title; confirmationModalMessage.textContent = message;
+                        M.Modal.getInstance(confirmationModalEl).open(); confirmPromiseResolve = resolve;
+                    });
+                }
+
+                function loadProjectList() {
+                    projectSelector.innerHTML = '<option value="" disabled selected>Select a saved project</option>';
+                    for (let i = 0; i < localStorage.length; i++) {
+                        const key = localStorage.key(i);
+                        if (key.startsWith('tl_project_')) {
+                            const name = key.replace('tl_project_', '');
+                            const option = document.createElement('option'); option.value = name; option.textContent = name;
+                            projectSelector.appendChild(option);
+                        }
+                    }
+                    M.FormSelect.init(projectSelector);
+                }
+
+                function addResultButtons(targetDiv) {
+                    const existingButtons = targetDiv.querySelector('.result-buttons'); if (existingButtons) existingButtons.remove();
+                    const buttonsContainer = document.createElement('div'); buttonsContainer.className = 'result-buttons';
+                    if (targetDiv.id === 'output' && lastResult) {
+                        const viewDataBtn = document.createElement('button'); viewDataBtn.className = 'view-data-result-button';
+                        viewDataBtn.innerHTML = '<i class="material-icons">table_chart</i>'; viewDataBtn.title = 'View Raw Data for this TECH ID';
+                        viewDataBtn.addEventListener('click', () => {
+                            if (!activeProjectData || !activeProjectData.data) { showToast('No data loaded for the selected project to view.', 'orange'); return; }
+                            displayDataTableInModal(activeProjectData.data, lastResult.techID);
+                        });
+                        buttonsContainer.appendChild(viewDataBtn);
+                    }
+                    const expandBtn = document.createElement('button'); expandBtn.className = 'expand-button';
+                    expandBtn.innerHTML = '<i class="material-icons">fullscreen</i>'; expandBtn.title = 'Expand Results';
+                    expandBtn.addEventListener('click', () => {
+                        let content = targetDiv.cloneNode(true);
+                        const clonedButtons = content.querySelector('.result-buttons'); if (clonedButtons) clonedButtons.remove();
+                        const fullscreenResultsContent = document.getElementById('fullscreen-results-content');
+                        fullscreenResultsContent.innerHTML = ''; fullscreenResultsContent.appendChild(content);
+                        const closeBtn = document.createElement('button'); closeBtn.classList.add('close-button');
+                        closeBtn.innerHTML = '<i class="material-icons">close</i>'; closeBtn.addEventListener('click', hideFullscreenModal);
+                        fullscreenResultsContent.appendChild(closeBtn); 
+                        document.getElementById('fullscreen-results-modal').style.display = 'flex';
+                    });
+                    buttonsContainer.appendChild(expandBtn); targetDiv.prepend(buttonsContainer);
+                }
+                
+                function removeResultButtons(containerElement) { const b = containerElement.querySelector('.result-buttons'); if (b) b.remove(); }
+                function hideFullscreenModal() { document.getElementById('fullscreen-results-modal').style.display = 'none'; document.getElementById('fullscreen-results-content').innerHTML = ''; }
+
+                function displayDataTableInModal(rawDataString, techIDFilter = '') {
+                    const viewDataTableContainer = document.getElementById('view-data-table-container');
+                    const viewDataSpinner = document.getElementById('view-data-spinner');
+                    const viewDataModalTitle = document.getElementById('view-data-modal-title');
+
+                    viewDataTableContainer.innerHTML = ''; viewDataSpinner.style.display = 'flex';
+                    setTimeout(() => {
+                        const rows = String(rawDataString).split(/\r?\n/).filter(r => r.trim() !== "");
+                        if (rows.length === 0) { viewDataTableContainer.innerHTML = '<p>No data available for this project.</p>'; }
+                        else {
+                            const headers = rows.shift()?.split(/[\t,]/).map(h => h.trim()) || [];
+                            const fixIdIndex = headers.map(h => h.toUpperCase()).indexOf("FIX1_ID");
+                            let tableHtml = '<table class="striped"><thead><tr>';
+                            headers.forEach(hText => tableHtml += `<th>${hText}</th>`); tableHtml += '</tr></thead><tbody>';
+                            let foundRows = false;
+                            rows.forEach(row => {
+                                const fields = row.split(/[\t,]/).map(f => f.trim());
+                                if (techIDFilter === '' || fixIdIndex === -1 || (fixIdIndex !== -1 && fields[fixIdIndex]?.toUpperCase() === techIDFilter)) {
+                                    foundRows = true; tableHtml += '<tr>';
+                                    fields.forEach(f => tableHtml += `<td>${f}</td>`); tableHtml += '</tr>';
+                                }
+                            });
+                            tableHtml += '</tbody></table>';
+                            if (foundRows || techIDFilter === '') { viewDataTableContainer.innerHTML = tableHtml; }
+                            else { viewDataTableContainer.innerHTML = `<p>No data found for TECH ID: ${techIDFilter}.</p>`; }
+                        }
+                        let modalT = `Data for Project: ${projectSelector.value || 'Loaded Project'}`;
+                        if (techIDFilter) { modalT += ` (Filtered by TECH ID: ${techIDFilter})`; }
+                        viewDataModalTitle.textContent = modalT; viewDataSpinner.style.display = 'none';
+                        M.Modal.getInstance(viewDataModalEl).open();
+                    }, 50);
+                }
+
+                function viewProjectData() {
+                    const selProjName = projectSelector.value; if (!selProjName) { showToast('Please select a project to view data.', 'orange'); return; }
+                    if (!activeProjectData || !activeProjectData.data) { showToast('No data loaded for the selected project.', 'orange'); return; }
+                    displayDataTableInModal(activeProjectData.data);
+                }
+
+                function getBonusPercentage(qualityPercentage) {
+                    if (qualityPercentage < 77.50) return 0; if (qualityPercentage >= 100.00) return 120;
+                    const bonusTiers = [ { quality: 77.50, bonus: 5 }, { quality: 78.00, bonus: 10 }, { quality: 78.50, bonus: 15 }, { quality: 79.00, bonus: 20 }, { quality: 79.50, bonus: 25 }, { quality: 80.00, bonus: 30 }, { quality: 80.50, bonus: 35 }, { quality: 81.00, bonus: 40 }, { quality: 81.50, bonus: 45 }, { quality: 82.00, bonus: 50 }, { quality: 82.50, bonus: 55 }, { quality: 83.00, bonus: 57 }, { quality: 83.50, bonus: 60 }, { quality: 84.00, bonus: 62 }, { quality: 84.50, bonus: 64 }, { quality: 85.00, bonus: 66 }, { quality: 85.50, bonus: 68 }, { quality: 86.00, bonus: 70 }, { quality: 86.50, bonus: 73 }, { quality: 87.00, bonus: 75 }, { quality: 87.50, bonus: 78 }, { quality: 88.00, bonus: 80 }, { quality: 88.50, bonus: 83 }, { quality: 89.00, bonus: 85 }, { quality: 89.50, bonus: 87 }, { quality: 90.00, bonus: 88 }, { quality: 90.50, bonus: 90 }, { quality: 91.00, bonus: 91 }, { quality: 91.50, bonus: 93 }, { quality: 92.00, bonus: 94 }, { quality: 92.50, bonus: 95 }, { quality: 93.00, bonus: 96 }, { quality: 93.50, bonus: 97 }, { quality: 94.00, bonus: 98 }, { quality: 94.50, bonus: 99 }, { quality: 95.00, bonus: 100 }, { quality: 95.50, bonus: 102 }, { quality: 96.00, bonus: 104 }, { quality: 96.50, bonus: 106 }, { quality: 97.00, bonus: 108 }, { quality: 97.50, bonus: 110 }, { quality: 98.00, bonus: 112 }, { quality: 98.50, bonus: 114 }, { quality: 99.00, bonus: 116 }, { quality: 99.50, bonus: 118 } ];
+                    for (let i = bonusTiers.length - 1; i >= 0; i--) { if (qualityPercentage >= bonusTiers[i].quality) return bonusTiers[i].bonus; } return 0;
+                }
+
+                function calculateRowDetails(fields, headers, size, ir) {
+                    const indexes = { category: headers.indexOf("CATEGORY"), i3qa: headers.indexOf("I3QA_CAT"), rv1cat: headers.indexOf("RV1_CAT"), afp1cat: headers.indexOf("AFP1_CAT"), afp2cat: headers.indexOf("AFP2_CAT"), rv2cat: headers.indexOf("RV2_CAT") };
+                    let rowPoints = 0; let categoryCounts = Array(9).fill(0); let categoryPoints = Array(9).fill(0);
+                    [indexes.category, indexes.i3qa, indexes.rv1cat, indexes.afp1cat, indexes.afp2cat, indexes.rv2cat].forEach(idx => {
+                        if (idx !== -1 && fields[idx]) {
+                            const val = parseInt(fields[idx].trim());
+                            if (!isNaN(val) && val >= 1 && val <= 9) {
+                                const price = PRICES[val - 1][size]; let currentCategoryPoints = price;
+                                if (ir) currentCategoryPoints += 1.5;
+                                rowPoints += currentCategoryPoints; categoryCounts[val - 1]++; categoryPoints[val - 1] += currentCategoryPoints;
+                            }
+                        }
+                    }); return { rowPoints, categoryCounts, categoryPoints };
+                }
+
+                function calculateDetailsForTechIDInRaw(raw, techIDValue, size, ir) {
+                    const rows = String(raw).split(/\r?\n/).filter(r => r.trim() !== "");
+                    const headers = rows.shift()?.split(/[\t,]/).map(h => h.trim().toUpperCase()) || [];
+                    const indexes = { fixId: headers.indexOf("FIX1_ID"), afp1stat: headers.indexOf("AFP1_STAT"), rv1label: headers.indexOf("RV1_LABEL"), i3qalabel: headers.indexOf("I3QA_LABEL"), rv2label: headers.indexOf("RV2_LABEL"), category: headers.indexOf("CATEGORY"), i3qa: headers.indexOf("I3QA_CAT"), rv1cat: headers.indexOf("RV1_CAT"), afp1cat: headers.indexOf("AFP1_CAT"), afp2cat: headers.indexOf("AFP2_CAT"), rv2cat: headers.indexOf("RV2_CAT") };
+                    if (indexes.fixId === -1) return null;
+                    let totalPoints = 0, additionalFixPoints = 0, excessiveFixPoints = 0, missFixPoints = 0, incorrectCounting = 0, incorrectPointsValue = 0;
+                    const categoryPoints = Array(9).fill(0); const categoryCounts = Array(9).fill(0);
+                    const matched = rows.filter(row => { const fields = row.split(/[\t,]/); return fields[indexes.fixId]?.trim().toUpperCase() === techIDValue; });
+                    matched.forEach(row => {
+                        const fields = row.split(/[\t,]/);
+                        if (indexes.rv1label !== -1 && fields[indexes.rv1label]) { if (fields[indexes.rv1label].toUpperCase().includes("E")) excessiveFixPoints++; if (fields[indexes.rv1label].toUpperCase().includes("M")) missFixPoints++; if (fields[indexes.rv1label].toUpperCase().includes("I")) incorrectCounting++; }
+                        if (indexes.i3qalabel !== -1 && fields[indexes.i3qalabel] && fields[indexes.i3qalabel].toUpperCase().includes("M")) missFixPoints++;
+                        if (indexes.rv2label !== -1 && fields[indexes.rv2label]) { if (fields[indexes.rv2label].toUpperCase().includes("E")) excessiveFixPoints++; if (fields[indexes.rv2label].toUpperCase().includes("M")) missFixPoints++; if (fields[indexes.rv2label].toUpperCase().includes("I")) incorrectCounting++; }
+                        if (indexes.afp1stat !== -1 && fields[indexes.afp1stat] && fields[indexes.afp1stat].toUpperCase() === "AA") additionalFixPoints++;
+                        const rowDetails = calculateRowDetails(fields, headers, size, ir);
+                        totalPoints += rowDetails.rowPoints; rowDetails.categoryCounts.forEach((count, index) => categoryCounts[index] += count); rowDetails.categoryPoints.forEach((points, index) => categoryPoints[index] += points);
+                        if (indexes.rv1label !== -1 && fields[indexes.rv1label]?.toUpperCase().includes("I")) { const rv1CatValue = parseInt(fields[indexes.rv1cat]?.trim()); if (indexes.rv1cat !== -1 && !isNaN(rv1CatValue) && rv1CatValue >= 1 && rv1CatValue <= 9) { const basePrice = PRICES[rv1CatValue - 1][size]; if (basePrice !== undefined && !isNaN(basePrice)) { let ptsInc = basePrice; if (ir) ptsInc += 1.5; incorrectPointsValue += ptsInc; } } }
+                        if (indexes.rv2label !== -1 && fields[indexes.rv2label]?.toUpperCase().includes("I")) { const rv2CatValue = parseInt(fields[indexes.rv2cat]?.trim()); if (indexes.rv2cat !== -1 && !isNaN(rv2CatValue) && rv2CatValue >= 1 && rv2CatValue <= 9) { const basePrice = PRICES[rv2CatValue - 1][size]; if (basePrice !== undefined && !isNaN(basePrice)) { let ptsInc = basePrice; if (ir) ptsInc += 1.5; incorrectPointsValue += ptsInc; } } }
+                    });
+                    const correctPoints = totalPoints - incorrectPointsValue; const qualityPercentage = (totalPoints > 0) ? (correctPoints / totalPoints) * 100 : 0;
+                    const bonusPercentage = getBonusPercentage(qualityPercentage); const qualityBonus = totalPoints * (bonusPercentage / 100); const estimatedSalary = totalPoints + qualityBonus;
+                    return { techID: techIDValue, totalPoints, additionalFixPoints, excessiveFixPoints, missFixPoints, incorrectCounting, incorrectPointsValue, qualityPercentage, bonusPercentage, qualityBonus, estimatedSalary, categoryPoints, categoryCounts };
+                }
+
+                function saveProject() {
+                    const name = projectNameInput.value.trim(); const data = rawDataInput.value.trim(); const size = modalSizeSelect.value; const ir = modalIrCheck.checked;
+                    if (!name || !data) { showToast('Please enter a project name and data.', 'red'); return; }
+                    const payload = JSON.stringify({ data, size, ir }); const storageKey = `tl_project_${name}`;
+                    if (editingProjectName && editingProjectName !== name) localStorage.removeItem(`tl_project_${editingProjectName}`);
+                    if (safeSetLocalStorage(storageKey, payload)) {
+                        showToast(`Project '${name}' saved!`, 'green'); loadProjectList(); M.Modal.getInstance(addProjectModalEl).close();
+                        projectNameInput.value = ''; rawDataInput.value = ''; modalSizeSelect.value = '3in'; modalIrCheck.checked = false;
+                        if (dbfFileInput) { dbfFileInput.value = null; const filePathInput = dbfFileInput.closest('.file-field').querySelector('.file-path'); if (filePathInput) filePathInput.value = ''; }
+                        M.FormSelect.init(modalSizeSelect); M.updateTextFields(); editingProjectName = null;
+                    }
+                }
+
+                async function deleteSelectedProject() {
+                    const selected = projectSelector.value; if (!selected) { showToast('No project selected.', 'red'); return; }
+                    const confirmed = await showCustomConfirm(`Are you sure you want to delete project '${selected}'?`, 'Delete Project');
+                    if (confirmed) {
+                        localStorage.removeItem(`tl_project_${selected}`); showToast(`Project '${selected}' deleted.`, 'orange');
+                        loadProjectList(); activeProjectData = ''; outputDiv.textContent = ''; allResultsDiv.innerHTML = '';
+                        allCalculatedResults = []; lastResult = ''; allProjectsAggregatedResults = {}; editingProjectName = null;
+                    }
+                }
+
+                function searchTechID() {
+                    const raw = activeProjectData?.data; const techIDValue = techIdInput.value.trim().toUpperCase(); const size = activeProjectData?.size; const ir = activeProjectData?.ir;
+                    outputDiv.innerHTML = ''; allResultsDiv.innerHTML = ''; lastResult = ''; allCalculatedResults = []; allProjectsAggregatedResults = {};
+                    if (!raw || !techIDValue || !size) { outputDiv.innerHTML = '<p>Please load a project first and enter a TECH ID to search.</p>'; addResultButtons(outputDiv); return; }
+                    const result = calculateDetailsForTechIDInRaw(raw, techIDValue, size, ir);
+                    if (result) {
+                        const techIdHighlightClass = result.techID.length < 6 ? 'tech-id-red-highlight' : 'tech-id-highlight';
+                        let outputHtml = `<h5>Search Results for TECH ID: <span class="${techIdHighlightClass}">${result.techID}</span></h5><p><strong>Project Total Points: ${result.totalPoints.toFixed(2)}</strong></p><table class="striped"><thead><tr><th>Metric</th><th>Value</th><th>Count/N/A</th></tr></thead><tbody>`;
+                        result.categoryPoints.forEach((total, i) => outputHtml += `<tr><td>CAT ${i + 1}</td><td>${total.toFixed(2)}</td><td>${result.categoryCounts[i]}</td></tr>`);
+                        outputHtml += `<tr><td>Additional FixPoints</td><td>N/A</td><td>${result.additionalFixPoints}</td></tr><tr><td>Excessive FixPoints</td><td>N/A</td><td>${result.excessiveFixPoints}</td></tr><tr><td>Miss FixPoints</td><td>N/A</td><td>${result.missFixPoints}</td></tr><tr><td>Incorrect Counting</td><td>N/A</td><td>${result.incorrectCounting}</td></tr><tr><td>Incorrect Points Value</td><td>${result.incorrectPointsValue.toFixed(2)}</td><td>N/A</td></tr><tr><td>Total Points</td><td>${result.totalPoints.toFixed(2)}</td><td>N/A</td></tr><tr><td>Quality Percentage</td><td>${result.qualityPercentage.toFixed(2)}%</td><td>N/A</td></tr><tr><td>Bonus Percentage</td><td>${result.bonusPercentage.toFixed(2)}%</td><td>N/A</td></tr><tr><td>Quality Bonus</td><td>${result.qualityBonus.toFixed(2)}</td><td>N/A</td></tr><tr><td class="salary-highlight">Estimated Salary</td><td class="salary-highlight">${result.estimatedSalary.toFixed(2)}</td><td class="salary-highlight">N/A</td></tr></tbody></table>`;
+                        outputDiv.innerHTML = outputHtml; lastResult = result;
+                    } else { outputDiv.innerHTML = `<p>TECH ID '${techIDValue}' not found or error in data in the loaded project.</p>`; }
+                    addResultButtons(outputDiv);
+                }
+
+                function calculateAllTechIDs() {
+                    const raw = activeProjectData?.data; const size = activeProjectData?.size; const ir = activeProjectData?.ir;
+                    if (!raw || !size) { allResultsDiv.innerHTML = '<p>Please load a project first.</p>'; allCalculatedResults = []; allProjectsAggregatedResults = {}; addResultButtons(allResultsDiv); return; }
+                    const rows = String(raw).split(/\r?\n/).filter(r => r.trim() !== ""); const headers = rows.shift()?.split(/[\t,]/).map(h => h.trim().toUpperCase()) || []; const fixIdIndex = headers.indexOf("FIX1_ID");
+                    if (fixIdIndex === -1) { allResultsDiv.innerHTML = '<p>Error: FIX1_ID column not found.</p>'; allCalculatedResults = []; allProjectsAggregatedResults = {}; addResultButtons(allResultsDiv); return; }
+                    const techIDs = new Set(); rows.forEach(row => { const fields = row.split(/[\t,]/); const techID = fields[fixIdIndex]?.trim().toUpperCase(); if (techID) techIDs.add(techID); });
+                    allCalculatedResults = []; let tableHtml = '<table class="striped"><thead><tr>';
+                    const tableHeaders = [ 'TECH ID', ...Array.from({ length: 9 }, (_, i) => `CAT ${i + 1} Points`), ...Array.from({ length: 9 }, (_, i) => `CAT ${i + 1} Count`), 'Additional FixPoints', 'Excessive FixPoints', 'Miss FixPoints', 'Incorrect Counting', 'Incorrect Points Value', 'Total Points', 'Quality %', 'Bonus %', 'Quality Bonus', 'Estimated Salary' ];
+                    tableHeaders.forEach(headerText => tableHtml += `<th>${headerText}</th>`); tableHtml += '</tr></thead><tbody>';
+                    techIDs.forEach(techID => {
+                        const result = calculateDetailsForTechIDInRaw(raw, techID, size, ir);
+                        if (result) {
+                            allCalculatedResults.push(result);
+                            const qualityClass = result.qualityPercentage === 100 ? 'quality-green' : (result.qualityPercentage >= 77.50 ? 'quality-orange' : 'quality-red');
+                            const techIdHighlightClass = result.techID.length < 6 ? 'tech-id-red-highlight' : 'tech-id-highlight';
+                            let bonusClass = result.bonusPercentage >= 100 ? 'quality-green' : (result.bonusPercentage > 0 ? 'quality-orange' : 'quality-red');
+                            tableHtml += `<tr><td class="${techIdHighlightClass}">${techID}</td>`;
+                            result.categoryPoints.forEach(total => tableHtml += `<td>${total.toFixed(2)}</td>`); result.categoryCounts.forEach(count => tableHtml += `<td>${count}</td>`);
+                            tableHtml += `<td>${result.additionalFixPoints}</td><td>${result.excessiveFixPoints}</td><td>${result.missFixPoints}</td><td>${result.incorrectCounting}</td><td>${result.incorrectPointsValue.toFixed(2)}</td><td>${result.totalPoints.toFixed(2)}</td>`;
+                            tableHtml += `<td class="${qualityClass}">${result.qualityPercentage.toFixed(2)}%</td><td class="${bonusClass}">${result.bonusPercentage.toFixed(2)}%</td><td class="${bonusClass}">${result.qualityBonus.toFixed(2)}</td><td class="salary-highlight">${result.estimatedSalary.toFixed(2)}</td></tr>`;
+                        }
+                    }); tableHtml += '</tbody></table>'; allResultsDiv.innerHTML = `<h5>Results for Loaded Project</h5>${tableHtml}`; outputDiv.textContent = ''; allProjectsAggregatedResults = {}; addResultButtons(allResultsDiv);
+                }
+
+                function calculateTotalAcrossAllProjects() {
+                    const multiplier = parseFloat(multiplierInput.value) || 1; allProjectsAggregatedResults = {}; let processingErrors = [];
+                    const allProjectsRawData = [];
+                    for (let i = 0; i < localStorage.length; i++) {
+                        const key = localStorage.key(i);
+                        if (key.startsWith('tl_project_')) {
+                            const projectName = key.replace('tl_project_', ''); const projectDataString = safeGetLocalStorage(key);
+                            if (projectDataString !== null) { try { const project = JSON.parse(projectDataString); if (project && typeof project === 'object' && 'data' in project && 'size' in project && 'ir' in project) { allProjectsRawData.push({ name: projectName, data: String(project.data), size: project.size, ir: project.ir }); } else { processingErrors.push(`Project '${projectName}': Invalid project data structure.`); } } catch (e) { processingErrors.push(`Project '${projectName}': Error processing data - ${e.message}`); console.error(`Error processing project '${projectName}':`, e); } } else { processingErrors.push(`Project '${projectName}': Could not retrieve data.`); }
+                        }
+                    }
+                    const allUniqueTechIDs = new Set();
+                    allProjectsRawData.forEach(project => { const rows = project.data.split(/\r?\n/).filter(r => r.trim() !== ""); if (rows.length > 0) { const headerRow = rows.shift(); const headers = headerRow.split(/[\t,]/).map(h => h.trim().toUpperCase()); const fixIdIndex = headers.indexOf("FIX1_ID"); if (fixIdIndex === -1) return; rows.forEach(row => { const fields = row.split(/[\t,]/); const techID = fields[fixIdIndex]?.trim().toUpperCase(); if (techID) allUniqueTechIDs.add(techID); }); } });
+                    allUniqueTechIDs.forEach(techID => {
+                        allProjectsAggregatedResults[techID] = { baseTotalPoints: 0, incorrectPointsValue: 0, additionalFixPoints: 0, excessiveFixPoints: 0, missFixPoints: 0, incorrectCounting: 0, categoryPoints: Array(9).fill(0), categoryCounts: Array(9).fill(0), totalPoints: 0, qualityPercentage: 0, bonusPercentage: 0, qualityBonus: 0, estimatedSalary: 0 };
+                        allProjectsRawData.forEach(project => {
+                            const projectSpecificResult = calculateDetailsForTechIDInRaw(project.data, techID, project.size, project.ir);
+                            if (projectSpecificResult) {
+                                allProjectsAggregatedResults[techID].baseTotalPoints += projectSpecificResult.totalPoints; allProjectsAggregatedResults[techID].incorrectPointsValue += projectSpecificResult.incorrectPointsValue; allProjectsAggregatedResults[techID].additionalFixPoints += projectSpecificResult.additionalFixPoints; allProjectsAggregatedResults[techID].excessiveFixPoints += projectSpecificResult.excessiveFixPoints; allProjectsAggregatedResults[techID].missFixPoints += projectSpecificResult.missFixPoints; allProjectsAggregatedResults[techID].incorrectCounting += projectSpecificResult.incorrectCounting;
+                                projectSpecificResult.categoryPoints.forEach((points, index) => allProjectsAggregatedResults[techID].categoryPoints[index] += points); projectSpecificResult.categoryCounts.forEach((count, index) => allProjectsAggregatedResults[techID].categoryCounts[index] += count);
                             }
                         });
-                        tableHtml += '</tbody></table>';
-                        if (foundRows || techIDFilter === '') { viewDataTableContainer.innerHTML = tableHtml; }
-                        else { viewDataTableContainer.innerHTML = `<p>No data found for TECH ID: ${techIDFilter}.</p>`; }
-                    }
-                    let modalT = `Data for Project: ${projectSelector.value || 'Loaded Project'}`;
-                    if (techIDFilter) { modalT += ` (Filtered by TECH ID: ${techIDFilter})`; }
-                    viewDataModalTitle.textContent = modalT; viewDataSpinner.style.display = 'none';
-                    M.Modal.getInstance(viewDataModalEl).open();
-                }, 50);
-            }
-
-            function viewProjectData() {
-                const selProjName = projectSelector.value; if (!selProjName) { showToast('Please select a project to view data.', 'orange'); return; }
-                if (!activeProjectData || !activeProjectData.data) { showToast('No data loaded for the selected project.', 'orange'); return; }
-                displayDataTableInModal(activeProjectData.data);
-            }
-
-            function getBonusPercentage(qualityPercentage) {
-                if (qualityPercentage < 77.50) return 0; if (qualityPercentage >= 100.00) return 120;
-                const bonusTiers = [ { quality: 77.50, bonus: 5 }, { quality: 78.00, bonus: 10 }, { quality: 78.50, bonus: 15 }, { quality: 79.00, bonus: 20 }, { quality: 79.50, bonus: 25 }, { quality: 80.00, bonus: 30 }, { quality: 80.50, bonus: 35 }, { quality: 81.00, bonus: 40 }, { quality: 81.50, bonus: 45 }, { quality: 82.00, bonus: 50 }, { quality: 82.50, bonus: 55 }, { quality: 83.00, bonus: 57 }, { quality: 83.50, bonus: 60 }, { quality: 84.00, bonus: 62 }, { quality: 84.50, bonus: 64 }, { quality: 85.00, bonus: 66 }, { quality: 85.50, bonus: 68 }, { quality: 86.00, bonus: 70 }, { quality: 86.50, bonus: 73 }, { quality: 87.00, bonus: 75 }, { quality: 87.50, bonus: 78 }, { quality: 88.00, bonus: 80 }, { quality: 88.50, bonus: 83 }, { quality: 89.00, bonus: 85 }, { quality: 89.50, bonus: 87 }, { quality: 90.00, bonus: 88 }, { quality: 90.50, bonus: 90 }, { quality: 91.00, bonus: 91 }, { quality: 91.50, bonus: 93 }, { quality: 92.00, bonus: 94 }, { quality: 92.50, bonus: 95 }, { quality: 93.00, bonus: 96 }, { quality: 93.50, bonus: 97 }, { quality: 94.00, bonus: 98 }, { quality: 94.50, bonus: 99 }, { quality: 95.00, bonus: 100 }, { quality: 95.50, bonus: 102 }, { quality: 96.00, bonus: 104 }, { quality: 96.50, bonus: 106 }, { quality: 97.00, bonus: 108 }, { quality: 97.50, bonus: 110 }, { quality: 98.00, bonus: 112 }, { quality: 98.50, bonus: 114 }, { quality: 99.00, bonus: 116 }, { quality: 99.50, bonus: 118 } ];
-                for (let i = bonusTiers.length - 1; i >= 0; i--) { if (qualityPercentage >= bonusTiers[i].quality) return bonusTiers[i].bonus; } return 0;
-            }
-
-            function calculateRowDetails(fields, headers, size, ir) {
-                const indexes = { category: headers.indexOf("CATEGORY"), i3qa: headers.indexOf("I3QA_CAT"), rv1cat: headers.indexOf("RV1_CAT"), afp1cat: headers.indexOf("AFP1_CAT"), afp2cat: headers.indexOf("AFP2_CAT"), rv2cat: headers.indexOf("RV2_CAT") };
-                let rowPoints = 0; let categoryCounts = Array(9).fill(0); let categoryPoints = Array(9).fill(0);
-                [indexes.category, indexes.i3qa, indexes.rv1cat, indexes.afp1cat, indexes.afp2cat, indexes.rv2cat].forEach(idx => {
-                    if (idx !== -1 && fields[idx]) {
-                        const val = parseInt(fields[idx].trim());
-                        if (!isNaN(val) && val >= 1 && val <= 9) {
-                            const price = PRICES[val - 1][size]; let currentCategoryPoints = price;
-                            if (ir) currentCategoryPoints += 1.5;
-                            rowPoints += currentCategoryPoints; categoryCounts[val - 1]++; categoryPoints[val - 1] += currentCategoryPoints;
-                        }
-                    }
-                }); return { rowPoints, categoryCounts, categoryPoints };
-            }
-
-            function calculateDetailsForTechIDInRaw(raw, techIDValue, size, ir) {
-                const rows = String(raw).split(/\r?\n/).filter(r => r.trim() !== "");
-                const headers = rows.shift()?.split(/[\t,]/).map(h => h.trim().toUpperCase()) || [];
-                const indexes = { fixId: headers.indexOf("FIX1_ID"), afp1stat: headers.indexOf("AFP1_STAT"), rv1label: headers.indexOf("RV1_LABEL"), i3qalabel: headers.indexOf("I3QA_LABEL"), rv2label: headers.indexOf("RV2_LABEL"), category: headers.indexOf("CATEGORY"), i3qa: headers.indexOf("I3QA_CAT"), rv1cat: headers.indexOf("RV1_CAT"), afp1cat: headers.indexOf("AFP1_CAT"), afp2cat: headers.indexOf("AFP2_CAT"), rv2cat: headers.indexOf("RV2_CAT") };
-                if (indexes.fixId === -1) return null;
-                let totalPoints = 0, additionalFixPoints = 0, excessiveFixPoints = 0, missFixPoints = 0, incorrectCounting = 0, incorrectPointsValue = 0;
-                const categoryPoints = Array(9).fill(0); const categoryCounts = Array(9).fill(0);
-                const matched = rows.filter(row => { const fields = row.split(/[\t,]/); return fields[indexes.fixId]?.trim().toUpperCase() === techIDValue; });
-                matched.forEach(row => {
-                    const fields = row.split(/[\t,]/);
-                    if (indexes.rv1label !== -1 && fields[indexes.rv1label]) { if (fields[indexes.rv1label].toUpperCase().includes("E")) excessiveFixPoints++; if (fields[indexes.rv1label].toUpperCase().includes("M")) missFixPoints++; if (fields[indexes.rv1label].toUpperCase().includes("I")) incorrectCounting++; }
-                    if (indexes.i3qalabel !== -1 && fields[indexes.i3qalabel] && fields[indexes.i3qalabel].toUpperCase().includes("M")) missFixPoints++;
-                    if (indexes.rv2label !== -1 && fields[indexes.rv2label]) { if (fields[indexes.rv2label].toUpperCase().includes("E")) excessiveFixPoints++; if (fields[indexes.rv2label].toUpperCase().includes("M")) missFixPoints++; if (fields[indexes.rv2label].toUpperCase().includes("I")) incorrectCounting++; }
-                    if (indexes.afp1stat !== -1 && fields[indexes.afp1stat] && fields[indexes.afp1stat].toUpperCase() === "AA") additionalFixPoints++;
-                    const rowDetails = calculateRowDetails(fields, headers, size, ir);
-                    totalPoints += rowDetails.rowPoints; rowDetails.categoryCounts.forEach((count, index) => categoryCounts[index] += count); rowDetails.categoryPoints.forEach((points, index) => categoryPoints[index] += points);
-                    if (indexes.rv1label !== -1 && fields[indexes.rv1label]?.toUpperCase().includes("I")) { const rv1CatValue = parseInt(fields[indexes.rv1cat]?.trim()); if (indexes.rv1cat !== -1 && !isNaN(rv1CatValue) && rv1CatValue >= 1 && rv1CatValue <= 9) { const basePrice = PRICES[rv1CatValue - 1][size]; if (basePrice !== undefined && !isNaN(basePrice)) { let ptsInc = basePrice; if (ir) ptsInc += 1.5; incorrectPointsValue += ptsInc; } } }
-                    if (indexes.rv2label !== -1 && fields[indexes.rv2label]?.toUpperCase().includes("I")) { const rv2CatValue = parseInt(fields[indexes.rv2cat]?.trim()); if (indexes.rv2cat !== -1 && !isNaN(rv2CatValue) && rv2CatValue >= 1 && rv2CatValue <= 9) { const basePrice = PRICES[rv2CatValue - 1][size]; if (basePrice !== undefined && !isNaN(basePrice)) { let ptsInc = basePrice; if (ir) ptsInc += 1.5; incorrectPointsValue += ptsInc; } } }
-                });
-                const correctPoints = totalPoints - incorrectPointsValue; const qualityPercentage = (totalPoints > 0) ? (correctPoints / totalPoints) * 100 : 0;
-                const bonusPercentage = getBonusPercentage(qualityPercentage); const qualityBonus = totalPoints * (bonusPercentage / 100); const estimatedSalary = totalPoints + qualityBonus;
-                return { techID: techIDValue, totalPoints, additionalFixPoints, excessiveFixPoints, missFixPoints, incorrectCounting, incorrectPointsValue, qualityPercentage, bonusPercentage, qualityBonus, estimatedSalary, categoryPoints, categoryCounts };
-            }
-
-            function saveProject() {
-                const name = projectNameInput.value.trim(); const data = rawDataInput.value.trim(); const size = modalSizeSelect.value; const ir = modalIrCheck.checked;
-                if (!name || !data) { showToast('Please enter a project name and data.', 'red'); return; }
-                const payload = JSON.stringify({ data, size, ir }); const storageKey = `tl_project_${name}`;
-                if (editingProjectName && editingProjectName !== name) localStorage.removeItem(`tl_project_${editingProjectName}`);
-                if (safeSetLocalStorage(storageKey, payload)) {
-                    showToast(`Project '${name}' saved!`, 'green'); loadProjectList(); M.Modal.getInstance(addProjectModalEl).close();
-                    projectNameInput.value = ''; rawDataInput.value = ''; modalSizeSelect.value = '3in'; modalIrCheck.checked = false;
-                    if (dbfFileInput) { dbfFileInput.value = null; const filePathInput = dbfFileInput.closest('.file-field').querySelector('.file-path'); if (filePathInput) filePathInput.value = ''; }
-                    M.FormSelect.init(modalSizeSelect); M.updateTextFields(); editingProjectName = null;
-                }
-            }
-
-            async function deleteSelectedProject() {
-                const selected = projectSelector.value; if (!selected) { showToast('No project selected.', 'red'); return; }
-                const confirmed = await showCustomConfirm(`Are you sure you want to delete project '${selected}'?`, 'Delete Project');
-                if (confirmed) {
-                    localStorage.removeItem(`tl_project_${selected}`); showToast(`Project '${selected}' deleted.`, 'orange');
-                    loadProjectList(); activeProjectData = ''; outputDiv.textContent = ''; allResultsDiv.innerHTML = '';
-                    allCalculatedResults = []; lastResult = ''; allProjectsAggregatedResults = {}; editingProjectName = null;
-                }
-            }
-
-            function searchTechID() {
-                const raw = activeProjectData?.data; const techIDValue = techIdInput.value.trim().toUpperCase(); const size = activeProjectData?.size; const ir = activeProjectData?.ir;
-                outputDiv.innerHTML = ''; allResultsDiv.innerHTML = ''; lastResult = ''; allCalculatedResults = []; allProjectsAggregatedResults = {};
-                if (!raw || !techIDValue || !size) { outputDiv.innerHTML = '<p>Please load a project first and enter a TECH ID to search.</p>'; addResultButtons(outputDiv); return; }
-                const result = calculateDetailsForTechIDInRaw(raw, techIDValue, size, ir);
-                if (result) {
-                    const techIdHighlightClass = result.techID.length < 6 ? 'tech-id-red-highlight' : 'tech-id-highlight';
-                    let outputHtml = `<h5>Search Results for TECH ID: <span class="${techIdHighlightClass}">${result.techID}</span></h5><p><strong>Project Total Points: ${result.totalPoints.toFixed(2)}</strong></p><table class="striped"><thead><tr><th>Metric</th><th>Value</th><th>Count/N/A</th></tr></thead><tbody>`;
-                    result.categoryPoints.forEach((total, i) => outputHtml += `<tr><td>CAT ${i + 1}</td><td>${total.toFixed(2)}</td><td>${result.categoryCounts[i]}</td></tr>`);
-                    outputHtml += `<tr><td>Additional FixPoints</td><td>N/A</td><td>${result.additionalFixPoints}</td></tr><tr><td>Excessive FixPoints</td><td>N/A</td><td>${result.excessiveFixPoints}</td></tr><tr><td>Miss FixPoints</td><td>N/A</td><td>${result.missFixPoints}</td></tr><tr><td>Incorrect Counting</td><td>N/A</td><td>${result.incorrectCounting}</td></tr><tr><td>Incorrect Points Value</td><td>${result.incorrectPointsValue.toFixed(2)}</td><td>N/A</td></tr><tr><td>Total Points</td><td>${result.totalPoints.toFixed(2)}</td><td>N/A</td></tr><tr><td>Quality Percentage</td><td>${result.qualityPercentage.toFixed(2)}%</td><td>N/A</td></tr><tr><td>Bonus Percentage</td><td>${result.bonusPercentage.toFixed(2)}%</td><td>N/A</td></tr><tr><td>Quality Bonus</td><td>${result.qualityBonus.toFixed(2)}</td><td>N/A</td></tr><tr><td class="salary-highlight">Estimated Salary</td><td class="salary-highlight">${result.estimatedSalary.toFixed(2)}</td><td class="salary-highlight">N/A</td></tr></tbody></table>`;
-                    outputDiv.innerHTML = outputHtml; lastResult = result;
-                } else { outputDiv.innerHTML = `<p>TECH ID '${techIDValue}' not found or error in data in the loaded project.</p>`; }
-                addResultButtons(outputDiv);
-            }
-
-            function calculateAllTechIDs() {
-                const raw = activeProjectData?.data; const size = activeProjectData?.size; const ir = activeProjectData?.ir;
-                if (!raw || !size) { allResultsDiv.innerHTML = '<p>Please load a project first.</p>'; allCalculatedResults = []; allProjectsAggregatedResults = {}; addResultButtons(allResultsDiv); return; }
-                const rows = String(raw).split(/\r?\n/).filter(r => r.trim() !== ""); const headers = rows.shift()?.split(/[\t,]/).map(h => h.trim().toUpperCase()) || []; const fixIdIndex = headers.indexOf("FIX1_ID");
-                if (fixIdIndex === -1) { allResultsDiv.innerHTML = '<p>Error: FIX1_ID column not found.</p>'; allCalculatedResults = []; allProjectsAggregatedResults = {}; addResultButtons(allResultsDiv); return; }
-                const techIDs = new Set(); rows.forEach(row => { const fields = row.split(/[\t,]/); const techID = fields[fixIdIndex]?.trim().toUpperCase(); if (techID) techIDs.add(techID); });
-                allCalculatedResults = []; let tableHtml = '<table class="striped"><thead><tr>';
-                const tableHeaders = [ 'TECH ID', ...Array.from({ length: 9 }, (_, i) => `CAT ${i + 1} Points`), ...Array.from({ length: 9 }, (_, i) => `CAT ${i + 1} Count`), 'Additional FixPoints', 'Excessive FixPoints', 'Miss FixPoints', 'Incorrect Counting', 'Incorrect Points Value', 'Total Points', 'Quality %', 'Bonus %', 'Quality Bonus', 'Estimated Salary' ];
-                tableHeaders.forEach(headerText => tableHtml += `<th>${headerText}</th>`); tableHtml += '</tr></thead><tbody>';
-                techIDs.forEach(techID => {
-                    const result = calculateDetailsForTechIDInRaw(raw, techID, size, ir);
-                    if (result) {
-                        allCalculatedResults.push(result);
-                        const qualityClass = result.qualityPercentage === 100 ? 'quality-green' : (result.qualityPercentage >= 77.50 ? 'quality-orange' : 'quality-red');
-                        const techIdHighlightClass = result.techID.length < 6 ? 'tech-id-red-highlight' : 'tech-id-highlight';
-                        let bonusClass = result.bonusPercentage >= 100 ? 'quality-green' : (result.bonusPercentage > 0 ? 'quality-orange' : 'quality-red');
-                        tableHtml += `<tr><td class="${techIdHighlightClass}">${techID}</td>`;
-                        result.categoryPoints.forEach(total => tableHtml += `<td>${total.toFixed(2)}</td>`); result.categoryCounts.forEach(count => tableHtml += `<td>${count}</td>`);
-                        tableHtml += `<td>${result.additionalFixPoints}</td><td>${result.excessiveFixPoints}</td><td>${result.missFixPoints}</td><td>${result.incorrectCounting}</td><td>${result.incorrectPointsValue.toFixed(2)}</td><td>${result.totalPoints.toFixed(2)}</td>`;
-                        tableHtml += `<td class="${qualityClass}">${result.qualityPercentage.toFixed(2)}%</td><td class="${bonusClass}">${result.bonusPercentage.toFixed(2)}%</td><td class="${bonusClass}">${result.qualityBonus.toFixed(2)}</td><td class="salary-highlight">${result.estimatedSalary.toFixed(2)}</td></tr>`;
-                    }
-                }); tableHtml += '</tbody></table>'; allResultsDiv.innerHTML = `<h5>Results for Loaded Project</h5>${tableHtml}`; outputDiv.textContent = ''; allProjectsAggregatedResults = {}; addResultButtons(allResultsDiv);
-            }
-
-            function calculateTotalAcrossAllProjects() {
-                const multiplier = parseFloat(multiplierInput.value) || 1; allProjectsAggregatedResults = {}; let processingErrors = [];
-                const allProjectsRawData = [];
-                for (let i = 0; i < localStorage.length; i++) {
-                    const key = localStorage.key(i);
-                    if (key.startsWith('tl_project_')) {
-                        const projectName = key.replace('tl_project_', ''); const projectDataString = safeGetLocalStorage(key);
-                        if (projectDataString !== null) { try { const project = JSON.parse(projectDataString); if (project && typeof project === 'object' && 'data' in project && 'size' in project && 'ir' in project) { allProjectsRawData.push({ name: projectName, data: String(project.data), size: project.size, ir: project.ir }); } else { processingErrors.push(`Project '${projectName}': Invalid project data structure.`); } } catch (e) { processingErrors.push(`Project '${projectName}': Error processing data - ${e.message}`); console.error(`Error processing project '${projectName}':`, e); } } else { processingErrors.push(`Project '${projectName}': Could not retrieve data.`); }
-                    }
-                }
-                const allUniqueTechIDs = new Set();
-                allProjectsRawData.forEach(project => { const rows = project.data.split(/\r?\n/).filter(r => r.trim() !== ""); if (rows.length > 0) { const headerRow = rows.shift(); const headers = headerRow.split(/[\t,]/).map(h => h.trim().toUpperCase()); const fixIdIndex = headers.indexOf("FIX1_ID"); if (fixIdIndex === -1) return; rows.forEach(row => { const fields = row.split(/[\t,]/); const techID = fields[fixIdIndex]?.trim().toUpperCase(); if (techID) allUniqueTechIDs.add(techID); }); } });
-                allUniqueTechIDs.forEach(techID => {
-                    allProjectsAggregatedResults[techID] = { baseTotalPoints: 0, incorrectPointsValue: 0, additionalFixPoints: 0, excessiveFixPoints: 0, missFixPoints: 0, incorrectCounting: 0, categoryPoints: Array(9).fill(0), categoryCounts: Array(9).fill(0), totalPoints: 0, qualityPercentage: 0, bonusPercentage: 0, qualityBonus: 0, estimatedSalary: 0 };
-                    allProjectsRawData.forEach(project => {
-                        const projectSpecificResult = calculateDetailsForTechIDInRaw(project.data, techID, project.size, project.ir);
-                        if (projectSpecificResult) {
-                            allProjectsAggregatedResults[techID].baseTotalPoints += projectSpecificResult.totalPoints; allProjectsAggregatedResults[techID].incorrectPointsValue += projectSpecificResult.incorrectPointsValue; allProjectsAggregatedResults[techID].additionalFixPoints += projectSpecificResult.additionalFixPoints; allProjectsAggregatedResults[techID].excessiveFixPoints += projectSpecificResult.excessiveFixPoints; allProjectsAggregatedResults[techID].missFixPoints += projectSpecificResult.missFixPoints; allProjectsAggregatedResults[techID].incorrectCounting += projectSpecificResult.incorrectCounting;
-                            projectSpecificResult.categoryPoints.forEach((points, index) => allProjectsAggregatedResults[techID].categoryPoints[index] += points); projectSpecificResult.categoryCounts.forEach((count, index) => allProjectsAggregatedResults[techID].categoryCounts[index] += count);
-                        }
+                        const aggregatedResult = allProjectsAggregatedResults[techID]; aggregatedResult.totalPoints = aggregatedResult.baseTotalPoints * multiplier; const correctPointsAggregated = aggregatedResult.baseTotalPoints - aggregatedResult.incorrectPointsValue;
+                        aggregatedResult.qualityPercentage = (aggregatedResult.baseTotalPoints > 0) ? (correctPointsAggregated / aggregatedResult.baseTotalPoints) * 100 : 0; aggregatedResult.bonusPercentage = getBonusPercentage(aggregatedResult.qualityPercentage);
+                        aggregatedResult.qualityBonus = aggregatedResult.baseTotalPoints * (aggregatedResult.bonusPercentage / 100); aggregatedResult.estimatedSalary = aggregatedResult.totalPoints + aggregatedResult.qualityBonus;
                     });
-                    const aggregatedResult = allProjectsAggregatedResults[techID]; aggregatedResult.totalPoints = aggregatedResult.baseTotalPoints * multiplier; const correctPointsAggregated = aggregatedResult.baseTotalPoints - aggregatedResult.incorrectPointsValue;
-                    aggregatedResult.qualityPercentage = (aggregatedResult.baseTotalPoints > 0) ? (correctPointsAggregated / aggregatedResult.baseTotalPoints) * 100 : 0; aggregatedResult.bonusPercentage = getBonusPercentage(aggregatedResult.qualityPercentage);
-                    aggregatedResult.qualityBonus = aggregatedResult.baseTotalPoints * (aggregatedResult.bonusPercentage / 100); aggregatedResult.estimatedSalary = aggregatedResult.totalPoints + aggregatedResult.qualityBonus;
-                });
-                let grandTotal = 0; Object.values(allProjectsAggregatedResults).forEach(result => grandTotal += result.totalPoints);
-                let tableHtml = `<h5>Totals Across All Projects (Multiplier: ${multiplier.toFixed(2)})</h5>`;
-                if (Object.keys(allProjectsAggregatedResults).length === 0) { tableHtml += '<p>No TECH IDs found across all projects.</p>'; }
-                else {
-                    tableHtml += '<table class="striped"><thead><tr>'; const aggregatedHeaders = [ 'TECH ID', ...Array.from({ length: 9 }, (_, i) => `CAT ${i + 1} Points`), ...Array.from({ length: 9 }, (_, i) => `CAT ${i + 1} Count`), 'Additional FixPoints', 'Excessive FixPoints', 'Miss FixPoints', 'Incorrect Counting', 'Incorrect Points Value', 'Total Points (w/ Multiplier)', 'Quality %', 'Bonus %', 'Quality Bonus', 'Estimated Salary' ];
-                    aggregatedHeaders.forEach(headerText => tableHtml += `<th>${headerText}</th>`); tableHtml += '</tr></thead><tbody>';
-                    Object.entries(allProjectsAggregatedResults).sort((a, b) => a[0].localeCompare(b[0])).forEach(([techID, result]) => {
-                        const qualityClass = result.qualityPercentage === 100 ? 'quality-green' : (result.qualityPercentage >= 77.50 ? 'quality-orange' : 'quality-red'); const techIdHighlightClass = techID.length < 6 ? 'tech-id-red-highlight' : 'tech-id-highlight'; let bonusClass = result.bonusPercentage >= 100 ? 'quality-green' : (result.bonusPercentage > 0 ? 'quality-orange' : 'quality-red');
-                        tableHtml += `<tr><td class="${techIdHighlightClass}">${techID}</td>`; result.categoryPoints.forEach(total => tableHtml += `<td>${total.toFixed(2)}</td>`); result.categoryCounts.forEach(count => tableHtml += `<td>${count}</td>`);
-                        tableHtml += `<td>${result.additionalFixPoints}</td><td>${result.excessiveFixPoints}</td><td>${result.missFixPoints}</td><td>${result.incorrectCounting}</td><td>${result.incorrectPointsValue.toFixed(2)}</td><td>${result.totalPoints.toFixed(2)}</td>`;
-                        tableHtml += `<td class="${qualityClass}">${result.qualityPercentage.toFixed(2)}%</td><td class="${bonusClass}">${result.bonusPercentage.toFixed(2)}%</td><td class="${bonusClass}">${result.qualityBonus.toFixed(2)}</td><td class="salary-highlight">${result.estimatedSalary.toFixed(2)}</td></tr>`;
-                    }); tableHtml += '</tbody></table>'; tableHtml += `<h4 style="margin-top: 20px;">Team Total Points: ${grandTotal.toFixed(2)} points</h4>`;
-                }
-                if (processingErrors.length > 0) { tableHtml += '<div class="card red lighten-5"><div class="card-content red-text text-darken-4"><span class="card-title">Processing Warnings/Errors</span><ul>'; processingErrors.forEach(error => tableHtml += `<li>${error}</li>`); tableHtml += '</ul></div></div>'; }
-                allResultsDiv.innerHTML = tableHtml; outputDiv.textContent = ''; allCalculatedResults = []; addResultButtons(allResultsDiv); M.Modal.getInstance(document.getElementById('multiplier-modal')).close();
-            }
-
-            function exportToCsv(filename, data) {
-                if (!data || (Array.isArray(data) && data.length === 0)) { showToast('No data to export.', 'red'); return; }
-                let csvContent = "data:text/csv;charset=utf-8,"; let headers = [];
-                if (Array.isArray(data)) { headers = [ 'TECH ID', ...Array.from({ length: 9 }, (_, i) => `CAT ${i + 1} Points`), ...Array.from({ length: 9 }, (_, i) => `CAT ${i + 1} Count`), 'Additional FixPoints', 'Excessive FixPoints', 'Miss FixPoints', 'Incorrect Counting', 'Incorrect Points Value', 'Total Points (w/ Multiplier)', 'Quality %', 'Bonus %', 'Quality Bonus', 'Estimated Salary' ]; } else { headers = ['Metric', 'Value', 'Count/N/A']; }
-                csvContent += headers.join(",") + "\n";
-                if (Array.isArray(data)) { data.forEach(item => { let row = [ item.techID, ...item.categoryPoints.map(p => p.toFixed(2)), ...item.categoryCounts, item.additionalFixPoints, item.excessiveFixPoints, item.missFixPoints, item.incorrectCounting, item.incorrectPointsValue.toFixed(2), item.totalPoints.toFixed(2), item.qualityPercentage.toFixed(2) + '%', item.bonusPercentage.toFixed(2) + '%', item.qualityBonus.toFixed(2), item.estimatedSalary.toFixed(2) ]; csvContent += row.join(",") + "\n"; }); }
-                else { csvContent += `"Total Points",${data.totalPoints.toFixed(2)},N/A\n`; data.categoryPoints.forEach((total, i) => csvContent += `"CAT ${i + 1}",${total.toFixed(2)},${data.categoryCounts[i]}\n`); csvContent += `"Additional FixPoints",N/A,${data.additionalFixPoints}\n`; csvContent += `"Excessive FixPoints",N/A,${data.excessiveFixPoints}\n`; csvContent += `"Miss FixPoints",N/A,${data.missFixPoints}\n`; csvContent += `"Incorrect Counting",N/A,${data.incorrectCounting}\n`; csvContent += `"Incorrect Points Value",${data.incorrectPointsValue.toFixed(2)},N/A\n`; csvContent += `"Quality Percentage",${data.qualityPercentage.toFixed(2)}%,N/A\n`; csvContent += `"Bonus Percentage",${data.bonusPercentage.toFixed(2)}%,N/A\n`; csvContent += `"Quality Bonus",${data.qualityBonus.toFixed(2)},N/A\n`; csvContent += `"Estimated Salary",${data.estimatedSalary.toFixed(2)},N/A\n`; }
-                const encodedUri = encodeURI(csvContent); const link = document.createElement("a"); link.setAttribute("href", encodedUri); link.setAttribute("download", filename); document.body.appendChild(link); link.click(); document.body.removeChild(link); showToast('CSV exported successfully!', 'green');
-            }
-
-            async function autoFetchExternalJson() {
-                showLoader(); showToast('Attempting to update projects online...', 'blue');
-                try {
-                    const response = await fetch(HARDCODED_PROJECTS_JSON_URL); if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-                    const compressedText = await response.text(); const decompressedText = LZString.decompressFromBase64(compressedText); if (decompressedText === null) throw new Error("Decompression failed.");
-                    const externalProjects = JSON.parse(decompressedText); if (!Array.isArray(externalProjects)) throw new Error("External JSON is not an array.");
-                    let updatedCount = 0, addedCount = 0;
-                    for (const project of externalProjects) { if (project.name && typeof project.data === 'object' && project.data !== null && 'data' in project.data && 'size' in project.data && 'ir' in project.data) { const storageKey = `tl_project_${project.name}`; const newPayload = JSON.stringify(project.data); const existingStoredString = safeGetLocalStorage(storageKey); let existingParsedData = null; if (existingStoredString) { try { existingParsedData = JSON.parse(existingStoredString); } catch (parseError) { console.warn(`Error parsing existing project '${project.name}' during auto-fetch:`, parseError); } } if (!existingParsedData || JSON.stringify(existingParsedData) !== newPayload) { if (safeSetLocalStorage(storageKey, newPayload)) { if (existingParsedData) updatedCount++; else addedCount++; } } } else { console.warn("Skipping invalid project entry from online source:", project); } }
-                    loadProjectList(); showToast(`Projects updated! Added: ${addedCount}, Updated: ${updatedCount}`, 'green');
-                } catch (e) { showToast(`Failed to update projects: ${e.message}`, 'red'); console.error("Auto-fetch error:", e); } finally { hideLoader(); }
-            }
-
-            async function verifyTlLoginCode(enteredCode) {
-                try { const response = await fetch(HARDCODED_TL_CODE_URL); if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`); const tlCodeData = await response.json(); return tlCodeData.code === enteredCode; }
-                catch (e) { showToast(`Error fetching TL login code: ${e.message}`, 'red'); console.error("TL code fetch error:", e); return false; }
-            }
-
-            function updateButtonVisibility() {
-                const tlButtons = [addProjectButton, document.getElementById('edit-project'), document.getElementById('delete-project'), document.getElementById('copy-all-projects-json')];
-                tlButtons.forEach(button => { if (button) button.style.display = isLoggedInAsTL ? 'inline-block' : 'none'; });
-                const commonButtons = [ 'calculate-all-button', 'calculate-all-projects-button', 'export-button', 'search-button', 'view-project-data-button', 'auto-fetch-external-json', 'clear-data-button' ];
-                commonButtons.forEach(id => { const btn = document.getElementById(id); if (btn) btn.style.display = 'inline-block'; });
-            }
-
-            async function handleDbfFileSelect(event) {
-                const file = event.target.files[0];
-                const filePathInput = event.target.closest('.file-field').querySelector('.file-path'); 
-
-                if (!file) {
-                    if (filePathInput && filePathInput.value !== '') filePathInput.value = '';
-                    event.target.value = null; return;
-                }
-                if (!file.name.toLowerCase().endsWith('.dbf')) {
-                    showToast('Please select a .DBF file.', 'red');
-                    event.target.value = null; if (filePathInput) filePathInput.value = ''; return;
+                    let grandTotal = 0; Object.values(allProjectsAggregatedResults).forEach(result => grandTotal += result.totalPoints);
+                    let tableHtml = `<h5>Totals Across All Projects (Multiplier: ${multiplier.toFixed(2)})</h5>`;
+                    if (Object.keys(allProjectsAggregatedResults).length === 0) { tableHtml += '<p>No TECH IDs found across all projects.</p>'; }
+                    else {
+                        tableHtml += '<table class="striped"><thead><tr>'; const aggregatedHeaders = [ 'TECH ID', ...Array.from({ length: 9 }, (_, i) => `CAT ${i + 1} Points`), ...Array.from({ length: 9 }, (_, i) => `CAT ${i + 1} Count`), 'Additional FixPoints', 'Excessive FixPoints', 'Miss FixPoints', 'Incorrect Counting', 'Incorrect Points Value', 'Total Points (w/ Multiplier)', 'Quality %', 'Bonus %', 'Quality Bonus', 'Estimated Salary' ];
+                        aggregatedHeaders.forEach(headerText => tableHtml += `<th>${headerText}</th>`); tableHtml += '</tr></thead><tbody>';
+                        Object.entries(allProjectsAggregatedResults).sort((a, b) => a[0].localeCompare(b[0])).forEach(([techID, result]) => {
+                            const qualityClass = result.qualityPercentage === 100 ? 'quality-green' : (result.qualityPercentage >= 77.50 ? 'quality-orange' : 'quality-red'); const techIdHighlightClass = techID.length < 6 ? 'tech-id-red-highlight' : 'tech-id-highlight'; let bonusClass = result.bonusPercentage >= 100 ? 'quality-green' : (result.bonusPercentage > 0 ? 'quality-orange' : 'quality-red');
+                            tableHtml += `<tr><td class="${techIdHighlightClass}">${techID}</td>`; result.categoryPoints.forEach(total => tableHtml += `<td>${total.toFixed(2)}</td>`); result.categoryCounts.forEach(count => tableHtml += `<td>${count}</td>`);
+                            tableHtml += `<td>${result.additionalFixPoints}</td><td>${result.excessiveFixPoints}</td><td>${result.missFixPoints}</td><td>${result.incorrectCounting}</td><td>${result.incorrectPointsValue.toFixed(2)}</td><td>${result.totalPoints.toFixed(2)}</td>`;
+                            tableHtml += `<td class="${qualityClass}">${result.qualityPercentage.toFixed(2)}%</td><td class="${bonusClass}">${result.bonusPercentage.toFixed(2)}%</td><td class="${bonusClass}">${result.qualityBonus.toFixed(2)}</td><td class="salary-highlight">${result.estimatedSalary.toFixed(2)}</td></tr>`;
+                        }); tableHtml += '</tbody></table>'; tableHtml += `<h4 style="margin-top: 20px;">Team Total Points: ${grandTotal.toFixed(2)} points</h4>`;
+                    }
+                    if (processingErrors.length > 0) { tableHtml += '<div class="card red lighten-5"><div class="card-content red-text text-darken-4"><span class="card-title">Processing Warnings/Errors</span><ul>'; processingErrors.forEach(error => tableHtml += `<li>${error}</li>`); tableHtml += '</ul></div></div>'; }
+                    allResultsDiv.innerHTML = tableHtml; outputDiv.textContent = ''; allCalculatedResults = []; addResultButtons(allResultsDiv); M.Modal.getInstance(document.getElementById('multiplier-modal')).close();
                 }
 
-                if (typeof window.Buffer !== 'function') {
-                    showToast('DBF Error: Buffer component not available. Cannot process file.', 'red', 6000);
-                    console.error("handleDbfFileSelect: window.Buffer is not a function. This should have been caught by initial checks in DOMContentLoaded.");
-                    return;
-                }
-                if (typeof Dbf !== 'object' || typeof Dbf.read !== 'function') {
-                    showToast('DBF Error: DBF reader library not available. Cannot process file.', 'red', 6000);
-                    console.error("handleDbfFileSelect: Dbf object or Dbf.read is not available. This should have been caught by initial checks in DOMContentLoaded.");
-                    return;
+                function exportToCsv(filename, data) {
+                    if (!data || (Array.isArray(data) && data.length === 0)) { showToast('No data to export.', 'red'); return; }
+                    let csvContent = "data:text/csv;charset=utf-8,"; let headers = [];
+                    if (Array.isArray(data)) { headers = [ 'TECH ID', ...Array.from({ length: 9 }, (_, i) => `CAT ${i + 1} Points`), ...Array.from({ length: 9 }, (_, i) => `CAT ${i + 1} Count`), 'Additional FixPoints', 'Excessive FixPoints', 'Miss FixPoints', 'Incorrect Counting', 'Incorrect Points Value', 'Total Points (w/ Multiplier)', 'Quality %', 'Bonus %', 'Quality Bonus', 'Estimated Salary' ]; } else { headers = ['Metric', 'Value', 'Count/N/A']; }
+                    csvContent += headers.join(",") + "\n";
+                    if (Array.isArray(data)) { data.forEach(item => { let row = [ item.techID, ...item.categoryPoints.map(p => p.toFixed(2)), ...item.categoryCounts, item.additionalFixPoints, item.excessiveFixPoints, item.missFixPoints, item.incorrectCounting, item.incorrectPointsValue.toFixed(2), item.totalPoints.toFixed(2), item.qualityPercentage.toFixed(2) + '%', item.bonusPercentage.toFixed(2) + '%', item.qualityBonus.toFixed(2), item.estimatedSalary.toFixed(2) ]; csvContent += row.join(",") + "\n"; }); }
+                    else { csvContent += `"Total Points",${data.totalPoints.toFixed(2)},N/A\n`; data.categoryPoints.forEach((total, i) => csvContent += `"CAT ${i + 1}",${total.toFixed(2)},${data.categoryCounts[i]}\n`); csvContent += `"Additional FixPoints",N/A,${data.additionalFixPoints}\n`; csvContent += `"Excessive FixPoints",N/A,${data.excessiveFixPoints}\n`; csvContent += `"Miss FixPoints",N/A,${data.missFixPoints}\n`; csvContent += `"Incorrect Counting",N/A,${data.incorrectCounting}\n`; csvContent += `"Incorrect Points Value",${data.incorrectPointsValue.toFixed(2)},N/A\n`; csvContent += `"Quality Percentage",${data.qualityPercentage.toFixed(2)}%,N/A\n`; csvContent += `"Bonus Percentage",${data.bonusPercentage.toFixed(2)}%,N/A\n`; csvContent += `"Quality Bonus",${data.qualityBonus.toFixed(2)},N/A\n`; csvContent += `"Estimated Salary",${data.estimatedSalary.toFixed(2)},N/A\n`; }
+                    const encodedUri = encodeURI(csvContent); const link = document.createElement("a"); link.setAttribute("href", encodedUri); link.setAttribute("download", filename); document.body.appendChild(link); link.click(); document.body.removeChild(link); showToast('CSV exported successfully!', 'green');
                 }
 
-                showLoader();
-                const reader = new FileReader();
-                reader.onload = async function(e) {
+                async function autoFetchExternalJson() {
+                    showLoader(); showToast('Attempting to update projects online...', 'blue');
                     try {
-                        const arrayBuffer = e.target.result;
-                        const datatable = Dbf.read(Buffer.from(arrayBuffer)); // Uses window.Buffer
-                        if (datatable && datatable.rows && datatable.columns) {
-                            let outputString = datatable.columns.map(col => col.name).join("\t") + "\n";
-                            datatable.rows.forEach(row => {
-                                const rowValues = datatable.columns.map(col => {
-                                    const value = row[col.name];
-                                    return (value !== undefined && value !== null) ? String(value).replace(/\r?\n|\r/g, ' ') : "";
-                                });
-                                outputString += rowValues.join("\t") + "\n";
-                            });
-                            rawDataInput.value = outputString;
-                            M.textareaAutoResize(rawDataInput); M.updateTextFields(); 
-                            showToast('DBF file imported successfully!', 'green');
-                        } else { showToast('Could not parse DBF data. File empty, corrupted, or unsupported.', 'red'); }
-                    } catch (error) { console.error("Error parsing DBF file:", error); showToast(`Error parsing DBF: ${error.message}`, 'red');
-                    } finally {
-                        hideLoader(); event.target.value = null; 
-                        if (filePathInput) filePathInput.value = ''; 
-                    }
-                };
-                reader.onerror = function() {
-                    hideLoader(); showToast('Error reading file.', 'red');
-                    event.target.value = null; if (filePathInput) filePathInput.value = '';
-                };
-                reader.readAsArrayBuffer(file);
-            }
-
-            // --- Event Listeners Setup ---
-            document.getElementById('search-button').addEventListener('click', searchTechID);
-            document.getElementById('calculate-all-button').addEventListener('click', calculateAllTechIDs);
-            document.getElementById('calculate-all-projects-button').addEventListener('click', () => M.Modal.getInstance(document.getElementById('multiplier-modal')).open());
-            applyMultiplierButton.addEventListener('click', calculateTotalAcrossAllProjects);
-            projectSelector.addEventListener('change', () => {
-                const selectedProjectName = projectSelector.value; const projectDataString = safeGetLocalStorage(`tl_project_${selectedProjectName}`);
-                if (projectDataString) { try { activeProjectData = JSON.parse(projectDataString); showToast(`Project '${selectedProjectName}' loaded.`, 'blue'); outputDiv.textContent = ''; allResultsDiv.innerHTML = ''; lastResult = ''; allCalculatedResults = []; allProjectsAggregatedResults = {}; if (isLoggedInAsTL) { rawDataInput.value = activeProjectData.data; projectNameInput.value = selectedProjectName; modalSizeSelect.value = activeProjectData.size; modalIrCheck.checked = activeProjectData.ir; M.updateTextFields(); M.FormSelect.init(modalSizeSelect); editingProjectName = selectedProjectName; } } catch (e) { showToast(`Error parsing project data for '${selectedProjectName}'.`, 'red'); console.error("Project data parse error:", e); activeProjectData = ''; } }
-                else { activeProjectData = ''; outputDiv.textContent = ''; allResultsDiv.innerHTML = ''; lastResult = ''; allCalculatedResults = []; allProjectsAggregatedResults = {}; if (isLoggedInAsTL) { projectNameInput.value = ''; rawDataInput.value = ''; modalSizeSelect.value = '3in'; modalIrCheck.checked = false; M.updateTextFields(); M.FormSelect.init(modalSizeSelect); } editingProjectName = null; }
-            });
-            document.getElementById('edit-project').addEventListener('click', () => {
-                const selectedProjectName = projectSelector.value; if (!selectedProjectName) { showToast('Please select a project to edit.', 'red'); return; }
-                const projectDataString = safeGetLocalStorage(`tl_project_${selectedProjectName}`);
-                if (projectDataString) { try { const project = JSON.parse(projectDataString); projectNameInput.value = selectedProjectName; rawDataInput.value = project.data; modalSizeSelect.value = project.size; modalIrCheck.checked = project.ir; if (dbfFileInput) { dbfFileInput.value = null; const filePathInput = dbfFileInput.closest('.file-field').querySelector('.file-path'); if (filePathInput) filePathInput.value = ''; } M.updateTextFields(); M.FormSelect.init(modalSizeSelect); modalTitle.textContent = 'Edit Project'; saveProjectModalButton.textContent = 'Update Project'; editingProjectName = selectedProjectName; M.Modal.getInstance(addProjectModalEl).open(); } catch (e) { showToast(`Error loading project data for editing '${selectedProjectName}'.`, 'red'); console.error("Edit project data load error:", e); } } else { showToast('Error: Could not load project data for editing.', 'red'); }
-            });
-            document.getElementById('delete-project').addEventListener('click', deleteSelectedProject);
-            addProjectButton.addEventListener('click', () => { 
-                modalTitle.textContent = 'Add New Project'; saveProjectModalButton.textContent = 'Save Project'; projectNameInput.value = ''; rawDataInput.value = ''; modalSizeSelect.value = '3in'; modalIrCheck.checked = false; if (dbfFileInput) { dbfFileInput.value = null; const filePathInput = dbfFileInput.closest('.file-field').querySelector('.file-path'); if (filePathInput) filePathInput.value = ''; } M.updateTextFields(); M.FormSelect.init(modalSizeSelect); editingProjectName = null; 
-            });
-            saveProjectModalButton.addEventListener('click', saveProject);
-            clearDataButton.addEventListener('click', async () => { const confirmed = await showCustomConfirm('Are you sure you want to clear ALL saved projects? This cannot be undone.', 'Clear All Data'); if (confirmed) { for (let i = localStorage.length - 1; i >= 0; i--) { const key = localStorage.key(i); if (key.startsWith('tl_project_')) localStorage.removeItem(key); } loadProjectList(); activeProjectData = ''; outputDiv.textContent = ''; allResultsDiv.innerHTML = ''; allCalculatedResults = []; lastResult = ''; allProjectsAggregatedResults = {}; showToast('All projects cleared!', 'green'); } });
-            document.getElementById('export-button').addEventListener('click', () => { if (Object.keys(allProjectsAggregatedResults).length > 0) { exportToCsv('all_projects_summary.csv', Object.values(allProjectsAggregatedResults)); } else if (allCalculatedResults.length > 0) { exportToCsv('per_project_summary.csv', allCalculatedResults); } else if (lastResult) { exportToCsv(`tech_id_${lastResult.techID}_details.csv`, lastResult); } else { showToast('No results to export.', 'red'); } });
-            document.getElementById('copy-all-projects-json').addEventListener('click', () => { const allProjectsDataForExport = []; for (let i = 0; i < localStorage.length; i++) { const key = localStorage.key(i); if (key.startsWith('tl_project_')) { const projectName = key.replace('tl_project_', ''); const projectDataString = safeGetLocalStorage(key); if (projectDataString !== null) { try { allProjectsDataForExport.push({ name: projectName, data: JSON.parse(projectDataString) }); } catch (e) { console.error(`Error parsing project JSON for key ${key} during copy:`, e); showToast(`Error copying project '${projectName}'.`, 'red'); } } } } if (allProjectsDataForExport.length === 0) { showToast('No saved projects to copy.', 'orange'); return; } try { const compressed = LZString.compressToBase64(JSON.stringify(allProjectsDataForExport)); navigator.clipboard.writeText(compressed).then(() => showToast('All project data (compressed) copied!', 'green')).catch(err => { showToast('Failed to copy.', 'red'); console.error('Copy fail: ', err); }); } catch (e) { showToast('Compression error during copy.', 'red'); console.error('Copy compression error:', e); } });
-            autoFetchButton.addEventListener('click', autoFetchExternalJson);
-            loginRoleSelect.addEventListener('change', () => { tlCodeInputDiv.style.display = loginRoleSelect.value === 'tl' ? 'block' : 'none'; if (loginRoleSelect.value === 'tl') tlLoginCodeInput.setAttribute('required', 'required'); else tlLoginCodeInput.removeAttribute('required'); M.updateTextFields(); });
-            loginButtonElement.addEventListener('click', async () => { const selectedRole = loginRoleSelect.value; if (selectedRole === 'tl') { if (await verifyTlLoginCode(tlLoginCodeInput.value)) { isLoggedInAsTL = true; showToast('Logged in as TL!', 'green'); M.Modal.getInstance(loginModalEl).close(); mainAppContent.style.display = 'block'; loadProjectList(); updateButtonVisibility(); } else { showToast('Incorrect TL code.', 'red'); isLoggedInAsTL = false; } } else if (selectedRole === 'tech') { isLoggedInAsTL = false; showToast('Logged in as Tech!', 'green'); M.Modal.getInstance(loginModalEl).close(); mainAppContent.style.display = 'block'; loadProjectList(); updateButtonVisibility(); } else { showToast('Please select a role.', 'orange'); } });
-            logoutButton.addEventListener('click', () => { isLoggedInAsTL = false; showToast('Logged out.', 'blue'); mainAppContent.style.display = 'none'; outputDiv.textContent = ''; allResultsDiv.innerHTML = ''; lastResult = ''; allCalculatedResults = []; allProjectsAggregatedResults = {}; loginRoleSelect.value = ''; tlLoginCodeInput.value = ''; tlCodeInputDiv.style.display = 'none'; M.FormSelect.init(loginRoleSelect); M.updateTextFields(); M.Modal.getInstance(loginModalEl).open(); });
-            if (fullscreenCloseButton) fullscreenCloseButton.addEventListener('click', hideFullscreenModal);
-            fullscreenResultsModal.addEventListener('click', (event) => { if (event.target === fullscreenResultsModal) hideFullscreenModal(); });
-            if (viewProjectDataButton) viewProjectDataButton.addEventListener('click', viewProjectData);
-            if (dbfFileInput) dbfFileInput.addEventListener('change', handleDbfFileSelect);
-            
-            function applyDarkModePreference() {
-                let isDarkMode = localStorage.getItem('darkMode') || 'disabled'; 
-                if (localStorage.getItem('darkMode') === null) localStorage.setItem('darkMode', 'disabled');
-                if (isDarkMode === 'enabled') { document.body.classList.add('dark-mode'); darkModeToggle.querySelector('i').textContent = 'brightness_4'; } 
-                else { document.body.classList.remove('dark-mode'); darkModeToggle.querySelector('i').textContent = 'brightness_high'; }
-            }
-            darkModeToggle.addEventListener('click', () => { localStorage.setItem('darkMode', document.body.classList.contains('dark-mode') ? 'disabled' : 'enabled'); applyDarkModePreference(); });
-            
-            // --- Materialize Initializations & App Start ---
-            document.body.style.display = 'none'; 
-            applyDarkModePreference(); 
-
-            M.Modal.init(document.querySelectorAll('.modal'), {
-                dismissible: false, 
-                onOpenEnd: (modalEl_instance) => { 
-                    if (modalEl_instance.id === 'add-project-modal') {
-                        M.textareaAutoResize(rawDataInput); 
-                        if (dbfFileInput) { 
-                            dbfFileInput.value = null;
-                            const filePathInput = dbfFileInput.closest('.file-field').querySelector('.file-path');
-                            if (filePathInput) filePathInput.value = '';
-                        }
-                         M.updateTextFields(); 
-                    }
+                        const response = await fetch(HARDCODED_PROJECTS_JSON_URL); if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                        const compressedText = await response.text(); const decompressedText = LZString.decompressFromBase64(compressedText); if (decompressedText === null) throw new Error("Decompression failed.");
+                        const externalProjects = JSON.parse(decompressedText); if (!Array.isArray(externalProjects)) throw new Error("External JSON is not an array.");
+                        let updatedCount = 0, addedCount = 0;
+                        for (const project of externalProjects) { if (project.name && typeof project.data === 'object' && project.data !== null && 'data' in project.data && 'size' in project.data && 'ir' in project.data) { const storageKey = `tl_project_${project.name}`; const newPayload = JSON.stringify(project.data); const existingStoredString = safeGetLocalStorage(storageKey); let existingParsedData = null; if (existingStoredString) { try { existingParsedData = JSON.parse(existingStoredString); } catch (parseError) { console.warn(`Error parsing existing project '${project.name}' during auto-fetch:`, parseError); } } if (!existingParsedData || JSON.stringify(existingParsedData) !== newPayload) { if (safeSetLocalStorage(storageKey, newPayload)) { if (existingParsedData) updatedCount++; else addedCount++; } } } else { console.warn("Skipping invalid project entry from online source:", project); } }
+                        loadProjectList(); showToast(`Projects updated! Added: ${addedCount}, Updated: ${updatedCount}`, 'green');
+                    } catch (e) { showToast(`Failed to update projects: ${e.message}`, 'red'); console.error("Auto-fetch error:", e); } finally { hideLoader(); }
                 }
-            });
-            const loginModalInstance = M.Modal.getInstance(loginModalEl); 
-            if (loginModalInstance) loginModalInstance.options.dismissible = false;
 
-            confirmationConfirmButton.addEventListener('click', () => { if (confirmPromiseResolve) { confirmPromiseResolve(true); confirmPromiseResolve = null; } });
-            confirmationCancelButton.addEventListener('click', () => { if (confirmPromiseResolve) { confirmPromiseResolve(false); confirmPromiseResolve = null; } });
+                async function verifyTlLoginCode(enteredCode) {
+                    try { const response = await fetch(HARDCODED_TL_CODE_URL); if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`); const tlCodeData = await response.json(); return tlCodeData.code === enteredCode; }
+                    catch (e) { showToast(`Error fetching TL login code: ${e.message}`, 'red'); console.error("TL code fetch error:", e); return false; }
+                }
 
-            M.FormSelect.init(projectSelector); 
-            M.FormSelect.init(loginRoleSelect); 
-            M.FormSelect.init(modalSizeSelect); 
-            
-            document.body.style.display = 'block'; 
+                function updateButtonVisibility() {
+                    const tlButtons = [addProjectButton, document.getElementById('edit-project'), document.getElementById('delete-project'), document.getElementById('copy-all-projects-json')];
+                    tlButtons.forEach(button => { if (button) button.style.display = isLoggedInAsTL ? 'inline-block' : 'none'; });
+                    const commonButtons = [ 'calculate-all-button', 'calculate-all-projects-button', 'export-button', 'search-button', 'view-project-data-button', 'auto-fetch-external-json', 'clear-data-button' ];
+                    commonButtons.forEach(id => { const btn = document.getElementById(id); if (btn) btn.style.display = 'inline-block'; });
+                }
 
-            if (loginModalInstance) loginModalInstance.open();
-            else {
-                console.error("Login modal not found/initialized.");
-                if (mainAppContent) mainAppContent.style.display = 'block'; 
-                loadProjectList(); updateButtonVisibility();
-            }
+                async function handleDbfFileSelect(event) {
+                    const file = event.target.files[0];
+                    const filePathInput = event.target.closest('.file-field').querySelector('.file-path'); 
+
+                    if (!file) {
+                        if (filePathInput && filePathInput.value !== '') filePathInput.value = '';
+                        event.target.value = null; return;
+                    }
+                    if (!file.name.toLowerCase().endsWith('.dbf')) {
+                        showToast('Please select a .DBF file.', 'red');
+                        event.target.value = null; if (filePathInput) filePathInput.value = ''; return;
+                    }
+
+                    if (typeof window.Buffer !== 'function') {
+                        showToast('DBF Error: Buffer component not available. Cannot process file.', 'red', 6000);
+                        console.error("handleDbfFileSelect: window.Buffer is not a function. This should have been caught by initial checks in DOMContentLoaded.");
+                        return;
+                    }
+                    if (typeof Dbf !== 'object' || typeof Dbf.read !== 'function') {
+                        showToast('DBF Error: DBF reader library not available. Cannot process file.', 'red', 6000);
+                        console.error("handleDbfFileSelect: Dbf object or Dbf.read is not available. This should have been caught by initial checks in DOMContentLoaded.");
+                        return;
+                    }
+
+                    showLoader();
+                    const reader = new FileReader();
+                    reader.onload = async function(e) {
+                        try {
+                            const arrayBuffer = e.target.result;
+                            const datatable = Dbf.read(Buffer.from(arrayBuffer)); // Uses window.Buffer
+                            if (datatable && datatable.rows && datatable.columns) {
+                                let outputString = datatable.columns.map(col => col.name).join("\t") + "\n";
+                                datatable.rows.forEach(row => {
+                                    const rowValues = datatable.columns.map(col => {
+                                        const value = row[col.name];
+                                        return (value !== undefined && value !== null) ? String(value).replace(/\r?\n|\r/g, ' ') : "";
+                                    });
+                                    outputString += rowValues.join("\t") + "\n";
+                                });
+                                rawDataInput.value = outputString;
+                                M.textareaAutoResize(rawDataInput); M.updateTextFields(); 
+                                showToast('DBF file imported successfully!', 'green');
+                            } else { showToast('Could not parse DBF data. File empty, corrupted, or unsupported.', 'red'); }
+                        } catch (error) { console.error("Error parsing DBF file:", error); showToast(`Error parsing DBF: ${error.message}`, 'red');
+                        } finally {
+                            hideLoader(); event.target.value = null; 
+                            if (filePathInput) filePathInput.value = ''; 
+                        }
+                    };
+                    reader.onerror = function() {
+                        hideLoader(); showToast('Error reading file.', 'red');
+                        event.target.value = null; if (filePathInput) filePathInput.value = '';
+                    };
+                    reader.readAsArrayBuffer(file);
+                }
+                function applyDarkModePreference() {
+                    let isDarkMode = localStorage.getItem('darkMode') || 'disabled'; 
+                    if (localStorage.getItem('darkMode') === null) localStorage.setItem('darkMode', 'disabled');
+                    if (isDarkMode === 'enabled') { document.body.classList.add('dark-mode'); darkModeToggle.querySelector('i').textContent = 'brightness_4'; } 
+                    else { document.body.classList.remove('dark-mode'); darkModeToggle.querySelector('i').textContent = 'brightness_high'; }
+                }
+
+
+                // --- Event Listeners Setup ---
+                document.getElementById('search-button').addEventListener('click', searchTechID);
+                document.getElementById('calculate-all-button').addEventListener('click', calculateAllTechIDs);
+                document.getElementById('calculate-all-projects-button').addEventListener('click', () => M.Modal.getInstance(document.getElementById('multiplier-modal')).open());
+                applyMultiplierButton.addEventListener('click', calculateTotalAcrossAllProjects);
+                projectSelector.addEventListener('change', () => { /* ... */ }); // Full function from previous version
+                document.getElementById('edit-project').addEventListener('click', () => { /* ... */ });
+                document.getElementById('delete-project').addEventListener('click', deleteSelectedProject);
+                addProjectButton.addEventListener('click', () => { /* ... */ });
+                saveProjectModalButton.addEventListener('click', saveProject);
+                clearDataButton.addEventListener('click', async () => { /* ... */ });
+                document.getElementById('export-button').addEventListener('click', () => { /* ... */ });
+                document.getElementById('copy-all-projects-json').addEventListener('click', () => { /* ... */ });
+                autoFetchButton.addEventListener('click', autoFetchExternalJson);
+                loginRoleSelect.addEventListener('change', () => { /* ... */ });
+                loginButtonElement.addEventListener('click', async () => { /* ... */ });
+                logoutButton.addEventListener('click', () => { /* ... */ });
+                if (fullscreenCloseButton) fullscreenCloseButton.addEventListener('click', hideFullscreenModal);
+                fullscreenResultsModal.addEventListener('click', (event) => { if (event.target === fullscreenResultsModal) hideFullscreenModal(); });
+                if (viewProjectDataButton) viewProjectDataButton.addEventListener('click', viewProjectData);
+                if (dbfFileInput) dbfFileInput.addEventListener('change', handleDbfFileSelect);
+                darkModeToggle.addEventListener('click', () => { localStorage.setItem('darkMode', document.body.classList.contains('dark-mode') ? 'disabled' : 'enabled'); applyDarkModePreference(); });
+                
+
+                // --- Materialize Initializations & App Start ---
+                document.body.style.display = 'none'; 
+                applyDarkModePreference(); 
+
+                M.Modal.init(document.querySelectorAll('.modal'), {
+                    dismissible: false, 
+                    onOpenEnd: (modalEl_instance) => { 
+                        if (modalEl_instance.id === 'add-project-modal') {
+                            M.textareaAutoResize(rawDataInput); 
+                            if (dbfFileInput) { 
+                                dbfFileInput.value = null;
+                                const filePathInput = dbfFileInput.closest('.file-field').querySelector('.file-path');
+                                if (filePathInput) filePathInput.value = '';
+                            }
+                             M.updateTextFields(); 
+                        }
+                    }
+                });
+                const loginModalInstance = M.Modal.getInstance(loginModalEl); 
+                if (loginModalInstance) loginModalInstance.options.dismissible = false;
+
+                confirmationConfirmButton.addEventListener('click', () => { if (confirmPromiseResolve) { confirmPromiseResolve(true); confirmPromiseResolve = null; } });
+                confirmationCancelButton.addEventListener('click', () => { if (confirmPromiseResolve) { confirmPromiseResolve(false); confirmPromiseResolve = null; } });
+
+                M.FormSelect.init(projectSelector); 
+                M.FormSelect.init(loginRoleSelect); 
+                M.FormSelect.init(modalSizeSelect); 
+                
+                document.body.style.display = 'block'; 
+
+                if (loginModalInstance) loginModalInstance.open();
+                else {
+                    console.error("Login modal not found/initialized.");
+                    if (mainAppContent) mainAppContent.style.display = 'block'; 
+                    loadProjectList(); updateButtonVisibility();
+                }
+                // END OF COPIED FUNCTIONS
+            } // End of initializeApp function
+
+            // Start checking for dependencies
+            checkDependenciesAndInit();
+
         }); // End of main DOMContentLoaded listener
     </script>
 </body>
