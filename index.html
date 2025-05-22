@@ -8,7 +8,711 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@400;700&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css"> </head>
+    <style>
+        :root {
+            /* Define your eye-friendly purple palette (Light Mode) */
+            --primary-purple: #8E7DBF; /* Muted Purple */
+            --primary-purple-dark: #5B4A8C; /* Deeper Muted Purple */
+            --primary-purple-light: #F5F2F9; /* Very light purple for backgrounds */
+            --accent-purple: #9C7CDA; /* Slightly brighter accent purple */
+
+            --light-bg: #F8F7FB; /* Soft, almost white background */
+            --medium-bg: #EFEFEF; /* Light neutral grey */
+            --dark-text: #444444; /* Dark charcoal grey for main text */
+            --light-text: #FFFFFF; /* White text */
+
+            /* Softer action colors */
+            --info-blue: #64b5f6; /* Light Blue 300 */
+            --success-green: #81c784; /* Light Green 300 */
+            --warning-orange: #ffb74d; /* Amber 300 */
+            --danger-red: #e57373; /* Red 300 */
+        }
+
+        /* Dark Mode Colors */
+        body.dark-mode {
+            --primary-purple: #9C7CDA; /* Brighter muted purple for dark mode */
+            --primary-purple-dark: #8E7DBF; /* Still a deep purple, slightly lighter than light mode's dark */
+            --primary-purple-light: #3A305D; /* Darker purple for elements */
+            --accent-purple: #B08FD9; /* A bit brighter accent */
+
+            --light-bg: #2C273B; /* Deep dark purple background */
+            --medium-bg: #443C5C; /* Medium dark purple for elements */
+            --dark-text: #E0E0E0; /* Light grey for text */
+            --light-text: #222222; /* Dark text for contrast on light elements (e.g. table headers) */
+
+            /* Adjusted action colors for dark mode */
+            --info-blue: #64b5f6; /* Keep light blue for visibility */
+            --success-green: #81c784; /* Keep light green for visibility */
+            --warning-orange: #ffb74d; /* Keep amber for visibility */
+            --danger-red: #e57373; /* Keep red for visibility */
+        }
+
+        body {
+            padding: 20px;
+            background-color: var(--light-bg); /* Soft light background */
+            font-family: 'Open Sans', sans-serif;
+            color: var(--dark-text); /* Dark charcoal text */
+            transition: background-color 0.3s ease, color 0.3s ease; /* Smooth transition for dark mode */
+        }
+        h5, h4 {
+            font-family: 'Roboto Slab', serif;
+            color: var(--primary-purple-dark); /* Deeper muted purple for headings */
+            transition: color 0.3s ease; /* Smooth transition for dark mode */
+        }
+        .container {
+            background-color: var(--light-text); /* White in light, dark grey in dark */
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.08);
+            transition: background-color 0.3s ease, box-shadow 0.3s ease;
+        }
+        body.dark-mode .container {
+            background-color: #3A305D; /* Darker background for container in dark mode */
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+        }
+        .container:hover {
+            box-shadow: 0 6px 15px rgba(0,0,0,0.12);
+        }
+        body.dark-mode .container:hover {
+            box-shadow: 0 6px 15px rgba(0,0,0,0.4);
+        }
+        .result {
+            background: var(--primary-purple-light);
+            padding: 20px;
+            margin-top: 20px;
+            white-space: pre-wrap;
+            border-left: 4px solid var(--primary-purple);
+            font-family: 'Courier New', monospace;
+            min-height: 100px;
+            border-radius: 8px;
+            overflow-x: auto;
+            position: relative;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            transition: background-color 0.3s ease, border-color 0.3s ease;
+        }
+        body.dark-mode .result {
+            background: #443C5C; /* Darker background for results in dark mode */
+            border-left-color: var(--primary-purple);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        .result-buttons {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            z-index: 1;
+        }
+        .result-buttons .expand-button,
+        .result-buttons .view-data-result-button {
+            background-color: rgba(0, 0, 0, 0.05);
+            border: none;
+            border-radius: 50%;
+            width: 34px;
+            height: 34px;
+            cursor: pointer;
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+            padding: 0;
+            transition: background-color 0.3s ease, transform 0.2s ease;
+            margin-left: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+        }
+        body.dark-mode .result-buttons .expand-button,
+        body.dark-mode .result-buttons .view-data-result-button {
+            background-color: rgba(255, 255, 255, 0.1);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        }
+        .result-buttons .expand-button:hover,
+        .result-buttons .view-data-result-button:hover {
+            background-color: rgba(0, 0, 0, 0.1);
+            transform: translateY(-2px);
+        }
+        body.dark-mode .result-buttons .expand-button:hover,
+        body.dark-mode .result-buttons .view-data-result-button:hover {
+            background-color: rgba(255, 255, 255, 0.15);
+        }
+        .result-buttons .expand-button i.material-icons,
+        .result-buttons .view-data-result-button i.material-icons {
+            font-size: 20px;
+            color: var(--dark-text);
+        }
+        .result table.striped tbody tr:nth-child(odd) {
+            background-color: var(--primary-purple-light);
+        }
+        body.dark-mode .result table.striped tbody tr:nth-child(odd) {
+            background-color: #443C5C; /* Darker odd rows */
+        }
+        .result table.striped tbody tr:nth-child(even) {
+            background-color: #ede7f6;
+        }
+        body.dark-mode .result table.striped tbody tr:nth-child(even) {
+            background-color: #3A305D; /* Darker even rows */
+        }
+        .result table th {
+            background-color: var(--primary-purple-dark);
+            color: var(--light-text);
+            padding: 14px 18px;
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+        body.dark-mode .result table th {
+            background-color: var(--primary-purple-dark);
+            color: var(--dark-text); /* Dark text on light header */
+        }
+        .result table td, .result table th {
+            padding: 12px 15px;
+            border: 1px solid #d1c4e9;
+            transition: border-color 0.3s ease;
+        }
+        body.dark-mode .result table td, body.dark-mode .result table th {
+            border-color: #5B4A8C; /* Darker border */
+        }
+        .result table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+        .modal textarea {
+            height: 150px; /* Default height */
+            min-height: 80px; /* Minimum height */
+            overflow-y: auto;
+            resize: vertical; /* Allow vertical resize */
+        }
+        .modal-content textarea.materialize-textarea { /* Specific to Materialize */
+            height: 150px !important;
+            min-height: 80px !important;
+            overflow-y: auto;
+            resize: vertical;
+        }
+        .input-field {
+            margin-top: 25px;
+            margin-bottom: 20px;
+        }
+        .input-field input:focus + label,
+        .input-field textarea:focus + label {
+            color: var(--primary-purple) !important;
+        }
+        .input-field input:focus,
+        .input-field textarea:focus {
+            border-bottom: 1px solid var(--primary-purple) !important;
+            box-shadow: 0 1px 0 0 var(--primary-purple) !important;
+        }
+        .input-field select:focus {
+            outline: 1px solid var(--primary-purple);
+        }
+        /* Dark Mode Input Field adjustments */
+        body.dark-mode .input-field label {
+            color: var(--dark-text) !important; /* Light label text */
+        }
+        body.dark-mode .input-field input,
+        body.dark-mode .input-field textarea {
+            color: var(--dark-text); /* Light input text */
+            border-bottom-color: var(--primary-purple-dark) !important;
+        }
+        body.dark-mode .input-field input:focus,
+        body.dark-mode .input-field textarea:focus {
+            border-bottom: 1px solid var(--accent-purple) !important;
+            box-shadow: 0 1px 0 0 var(--accent-purple) !important;
+        }
+        body.dark-mode .input-field input[type=text]:not(.browser-default):focus:not([readonly]) + label,
+        body.dark-mode .input-field input[type=password]:not(.browser-default):focus:not([readonly]) + label,
+        body.dark-mode .input-field textarea.materialize-textarea:focus:not([readonly]) + label {
+            color: var(--accent-purple) !important;
+        }
+        body.dark-mode .input-field .caret { /* For select dropdown arrow */
+            fill: var(--dark-text);
+        }
+        body.dark-mode .select-wrapper input.select-dropdown {
+            color: var(--dark-text);
+        }
+        body.dark-mode .dropdown-content li > a,
+        body.dark-mode .dropdown-content li > span {
+            color: var(--dark-text);
+        }
+        body.dark-mode .dropdown-content {
+            background-color: var(--medium-bg);
+        }
+
+        /* Button Styling - Modern, subtle shadows, consistent hover */
+        .btn, .btn-large, .btn-small, .btn-flat {
+            border-radius: 6px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            transition: background-color 0.3s ease, box-shadow 0.3s ease, transform 0.2s ease;
+            margin-top: 15px;
+            margin-bottom: 15px;
+            margin-right: 12px;
+            text-transform: none;
+            font-weight: 600;
+            color: var(--light-text); /* Ensure text color is light for all buttons */
+            display: inline-flex; /* For icon alignment */
+            align-items: center; /* For icon alignment */
+            justify-content: center; /* For icon alignment */
+        }
+        .btn:hover, .btn-large:hover, .btn-small:hover {
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            transform: translateY(-2px);
+            opacity: 1;
+        }
+        .btn i.material-icons.left {
+            margin-right: 8px;
+            line-height: inherit;
+        }
+         .btn i.material-icons.right {
+            margin-left: 8px;
+            margin-right: 0;
+            line-height: inherit;
+        }
+
+
+        /* Specific Button Colors - Eye-Friendly Purple Theme Mapping */
+        .btn.blue, .btn.blue.darken-1 { background-color: var(--primary-purple) !important; }
+        .btn.blue:hover, .btn.blue.darken-1:hover { background-color: var(--primary-purple-dark) !important; }
+
+        .btn.green { background-color: var(--success-green) !important; }
+        .btn.green:hover { background-color: #66bb6a !important; }
+
+        .btn.orange.darken-2 { background-color: var(--warning-orange) !important; }
+        .btn.orange.darken-2:hover { background-color: #ffa726 !important; }
+        .btn.orange { background-color: var(--warning-orange) !important; } /* For export button */
+        .btn.orange:hover { background-color: #ffa726 !important; }
+
+
+        .btn.red, .btn.red.darken-2 { background-color: var(--danger-red) !important; }
+        .btn.red:hover, .btn.red.darken-2:hover { background-color: #ef5350 !important; }
+
+        .btn.purple.darken-2 { background-color: var(--primary-purple-dark) !important; }
+        .btn.purple.darken-2:hover { background-color: #4527a0 !important; }
+
+        .btn.deep-purple.darken-2 { background-color: var(--primary-purple-dark) !important; }
+        .btn.deep-purple.darken-2:hover { background-color: #4527a0 !important; }
+
+        .btn.grey.darken-1 { background-color: #9e9e9e !important; }
+        .btn.grey.darken-1:hover { background-color: #757575 !important; }
+        .btn.grey { background-color: #bdbdbd !important; color: #424242 !important} /* Added for cancel button */
+        .btn.grey:hover { background-color: #9e9e9e !important; } /* Added for cancel button */
+        .btn.grey.darken-3 { background-color: #616161 !important; } /* For settings button */
+        .btn.grey.darken-3:hover { background-color: #424242 !important; }
+
+
+        /* Floating Action Button specific */
+        .btn-floating.btn-large.green {
+            background-color: var(--accent-purple) !important;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+        .btn-floating.btn-large.green:hover {
+            background-color: #8367d3 !important;
+            box-shadow: 0 6px 12px rgba(0,0,0,0.3);
+            transform: translateY(-3px);
+        }
+
+        /* Dark Mode Toggle Button */
+        #dark-mode-toggle {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background-color: var(--medium-bg); /* Use a neutral background */
+            color: var(--dark-text); /* Text color changes with theme */
+            border-radius: 50%;
+            width: 44px; /* Larger touch target */
+            height: 44px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            cursor: pointer;
+            transition: background-color 0.3s ease, color 0.3s ease, box-shadow 0.3s ease;
+            z-index: 999; /* Ensure it's on top */
+        }
+        #dark-mode-toggle:hover {
+            background-color: var(--primary-purple-light); /* Subtle hover effect */
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        }
+        body.dark-mode #dark-mode-toggle {
+            background-color: #5B4A8C; /* Darker background in dark mode */
+            color: var(--dark-text); /* Light icon */
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+        }
+        body.dark-mode #dark-mode-toggle:hover {
+            background-color: #6A5B9C;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.4);
+        }
+        #dark-mode-toggle i.material-icons {
+            font-size: 24px;
+        }
+
+        .right-align {
+            margin-bottom: 20px;
+        }
+        .center-align {
+            margin-top: 25px;
+            margin-bottom: 25px;
+        }
+        #all-results {
+            max-height: 600px;
+            overflow-y: auto;
+            margin-top: 30px;
+        }
+        #all-results h5 {
+            margin-bottom: 15px;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 10px;
+        }
+        body.dark-mode #all-results h5 {
+            border-bottom-color: #555; /* Darker border in dark mode */
+        }
+        .modal-content h5 {
+            margin-bottom: 20px;
+        }
+        .modal-content .input-field {
+            margin-top: 15px;
+            margin-bottom: 15px;
+        }
+        .modal-footer a {
+            margin-left: 10px;
+        }
+        /* Modal specific styling for dark mode */
+        .modal {
+            background-color: #ffffff; /* Default light background */
+            transition: background-color 0.3s ease;
+        }
+        body.dark-mode .modal {
+            background-color: #3A305D; /* Dark modal background */
+        }
+        body.dark-mode .modal .modal-content {
+            color: var(--dark-text); /* Light text in modal */
+        }
+        body.dark-mode .modal .modal-footer {
+            background-color: #443C5C; /* Darker footer in dark mode */
+            border-top-color: #5B4A8C;
+        }
+
+        #login-modal {
+            max-width: 450px;
+            border-radius: 12px;
+            margin: auto;
+            overflow: hidden;
+        }
+        #login-modal .modal-content {
+            padding: 35px;
+            text-align: center;
+            background-color: #ffffff;
+        }
+        body.dark-mode #login-modal .modal-content {
+            background-color: #3A305D; /* Dark mode login modal content */
+        }
+        #login-modal .modal-content h5 {
+            margin-bottom: 30px;
+            color: var(--primary-purple-dark);
+        }
+        #login-modal .input-field {
+            margin-bottom: 25px;
+        }
+        #login-modal .modal-footer {
+            padding: 20px;
+            text-align: center;
+            background-color: var(--primary-purple-light);
+            border-top: 1px solid #d1c4e9;
+            border-bottom-left-radius: 12px;
+            border-bottom-right-radius: 12px;
+        }
+        body.dark-mode #login-modal .modal-footer {
+            background-color: #443C5C;
+            border-top-color: #5B4A8C;
+        }
+        #login-modal .btn {
+            width: 100%;
+            margin-right: 0;
+            background-color: var(--primary-purple) !important;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        }
+        #login-modal .btn:hover {
+            background-color: var(--primary-purple-dark) !important;
+            box-shadow: 0 6px 12px rgba(0,0,0,0.25);
+        }
+        #logout-button {
+            margin-left: auto;
+        }
+        #fullscreen-results-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            z-index: 1000;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            overflow-y: auto;
+        }
+        #fullscreen-results-content {
+            background-color: #ffffff;
+            padding: 20px;
+            border-radius: 12px;
+            max-width: 95%;
+            max-height: 95%;
+            overflow: auto;
+            position: relative;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.25);
+        }
+        body.dark-mode #fullscreen-results-content {
+            background-color: #3A305D;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.5);
+        }
+        #fullscreen-results-content .close-button {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background-color: rgba(255, 255, 255, 0.85);
+            border: none;
+            border-radius: 50%;
+            width: 38px;
+            height: 38px;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 0;
+            transition: background-color 0.3s ease, transform 0.2s ease;
+            z-index: 2;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.15);
+        }
+        body.dark-mode #fullscreen-results-content .close-button {
+            background-color: rgba(0, 0, 0, 0.3);
+            color: var(--dark-text);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.4);
+        }
+        #fullscreen-results-content .close-button:hover {
+            background-color: rgba(255, 255, 255, 0.95);
+            transform: rotate(90deg);
+        }
+        body.dark-mode #fullscreen-results-content .close-button:hover {
+            background-color: rgba(0, 0, 0, 0.4);
+        }
+        #fullscreen-results-content .close-button i.material-icons {
+            font-size: 22px;
+            color: var(--dark-text);
+        }
+        #view-data-modal {
+            max-width: 95%;
+            max-height: 95%;
+            width: 95%;
+            height: 95%;
+            top: 2.5% !important;
+            transform: translate(-50%, 0%) !important;
+            left: 50% !important;
+            border-radius: 12px;
+        }
+        #view-data-modal .modal-content {
+            overflow-y: auto;
+            max-height: calc(100% - 70px);
+            padding-bottom: 0;
+        }
+        #view-data-modal table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+        #view-data-modal table th,
+        #view-data-modal table td {
+            border: 1px solid #e0e0e0;
+            padding: 10px;
+            text-align: left;
+            white-space: nowrap;
+        }
+        body.dark-mode #view-data-modal table th,
+        body.dark-mode #view-data-modal table td {
+            border-color: #5B4A8C;
+        }
+        #view-data-modal table th {
+            background-color: var(--primary-purple-light);
+            color: var(--dark-text);
+            font-weight: bold;
+        }
+        body.dark-mode #view-data-modal table th {
+            background-color: var(--primary-purple-dark);
+            color: var(--dark-text);
+        }
+        #view-data-table-container .spinner-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 200px;
+        }
+        @media (max-width: 600px) {
+            body {
+                padding: 10px;
+            }
+            .container {
+                padding: 20px;
+            }
+            .btn {
+                margin-right: 8px;
+                margin-bottom: 12px;
+            }
+            .center-align {
+                margin-top: 15px;
+                margin-bottom: 15px;
+            }
+            #all-results {
+                max-height: 400px;
+            }
+            #fullscreen-results-content {
+                max-width: 95%;
+                max-height: 95%;
+            }
+            #view-data-modal {
+                max-width: 95%;
+                width: 95%;
+                height: 95%;
+                top: 2.5% !important;
+                transform: translate(-50%, 0%) !important;
+                left: 50% !important;
+            }
+            #dark-mode-toggle {
+                top: 10px;
+                right: 10px;
+                width: 40px;
+                height: 40px;
+            }
+            #dark-mode-toggle i.material-icons {
+                font-size: 20px;
+            }
+        }
+        /* Custom styles for Quality and Bonus */
+        .quality-green {
+            background-color: #e8f5e9;
+            color: #2e7d32;
+            font-weight: bold;
+            padding: 4px 8px;
+            border-radius: 4px;
+        }
+        body.dark-mode .quality-green {
+            background-color: #2e7d32; /* Darker green background */
+            color: #e8f5e9; /* Lighter text */
+        }
+        .quality-orange {
+            background-color: #fff3e0;
+            color: #ef6c00;
+            font-weight: bold;
+            padding: 4px 8px;
+            border-radius: 4px;
+        }
+        body.dark-mode .quality-orange {
+            background-color: #ef6c00; /* Darker orange background */
+            color: #fff3e0; /* Lighter text */
+        }
+        .quality-red {
+            background-color: #ffebee;
+            color: #c62828;
+            font-weight: bold;
+            padding: 4px 8px;
+            border-radius: 4px;
+        }
+        body.dark-mode .quality-red {
+            background-color: #c62828; /* Darker red background */
+            color: #ffebee; /* Lighter text */
+        }
+        .tech-id-highlight {
+            font-weight: bold;
+            color: var(--primary-purple-dark);
+        }
+        .salary-highlight {
+            background-color: #f0f0f0;
+            color: #333;
+            font-weight: bold;
+            padding: 4px 8px;
+            border-radius: 4px;
+        }
+        body.dark-mode .salary-highlight {
+            background-color: #5B4A8C; /* Darker background for salary */
+            color: var(--dark-text); /* Light text */
+        }
+        .tech-id-red-highlight {
+            background-color: #ffebee;
+            color: #c62828;
+            font-weight: bold;
+            padding: 4px 8px;
+            border-radius: 4px;
+        }
+        body.dark-mode .tech-id-red-highlight {
+            background-color: #c62828;
+            color: #ffebee;
+        }
+
+        /* Spinner color */
+        .spinner-layer.spinner-blue-only .circle-clipper .circle,
+        .spinner-layer.spinner-blue-only .gap-patch .circle {
+            border-color: var(--primary-purple) !important;
+        }
+        .preloader-wrapper.active .spinner-layer.spinner-blue-only .circle-clipper.left,
+        .preloader-wrapper.active .spinner-layer.spinner-blue-only .circle-clipper.right {
+            border-color: var(--primary-purple) !important;
+        }
+
+        /* Styles for new features */
+        .ir-indicator-tag {
+            background-color: var(--accent-purple);
+            color: var(--light-text);
+            padding: 3px 6px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            margin-left: 8px;
+            font-weight: normal;
+        }
+        body.dark-mode .ir-indicator-tag {
+            color: #FFFFFF; /* Ensure contrast on dark purple */
+        }
+        #project-status-display {
+            padding: 8px;
+            border-radius: 4px;
+            margin-bottom: 5px;
+            font-size: 0.95em;
+        }
+        #project-metadata-display {
+            margin-top: 0px;
+            margin-bottom: 15px;
+            font-size: 0.85em;
+            color: #555;
+            line-height: 1.4;
+        }
+        body.dark-mode #project-metadata-display {
+            color: #bbb;
+        }
+        #project-metadata-display em {
+            display: block;
+            margin-top: 4px;
+            font-style: italic;
+        }
+        /* Settings Modal Specific Styles */
+        #settings-modal .input-field { /* Reduce margins for denser layout */
+            margin-top: 10px;
+            margin-bottom: 5px;
+        }
+        #settings-modal table input[type=number].browser-default { /* Style inputs in table */
+            max-width: 100px;
+            height: 2.5rem !important;
+            padding: 0 0.5rem !important;
+            text-align: right;
+            border: 1px solid #9e9e9e;
+            border-radius: 3px;
+        }
+        body.dark-mode #settings-modal table input[type=number].browser-default {
+             border-color: var(--primary-purple-dark);
+             background-color: var(--medium-bg);
+             color: var(--dark-text);
+        }
+        #settings-modal .bonus-tier-row .input-field {
+            margin-top: 0;
+        }
+        #settings-modal .bonus-tier-row .btn-small {
+            margin-top: 5px; /* Adjusted for better alignment */
+        }
+        #settings-modal input[type=number].browser-default:focus {
+            border-color: var(--primary-purple) !important;
+            box-shadow: 0 0 0 1px var(--primary-purple) !important;
+        }
+
+    </style>
+</head>
 <body>
     <button id="dark-mode-toggle">
         <i class="material-icons">brightness_high</i>
@@ -25,8 +729,7 @@
                 </select>
                 <label for="login-role">Select Role</label>
             </div>
-            <div class="input-field" id="tl-code-input" style="display: none;">
-                <input id="tl-login-code" type="password">
+            <div class="input-field" id="tl-code-input" style="display: none;"> <input id="tl-login-code" type="password">
                 <label for="tl-login-code">TL Login Code</label>
             </div>
         </div>
@@ -48,6 +751,9 @@
             </select>
             <label for="project-selector">Load Project</label>
         </div>
+        <div id="project-status-display" class="center-align" style="font-weight: bold;"></div>
+        <div id="project-metadata-display" class="center-align"></div>
+
         <div class="center-align">
             <button class="btn orange darken-2" id="edit-project">
                 <i class="material-icons left">edit</i>Edit Project
@@ -90,6 +796,12 @@
                 <i class="material-icons left">cloud_download</i>Update Projects Online
             </button>
         </div>
+         <div class="center-align" style="margin-top: 10px;">
+            <button class="btn grey darken-3 modal-trigger" href="#settings-modal" id="app-settings-button" style="display: none;">
+                <i class="material-icons left">settings</i>App Settings
+            </button>
+        </div>
+
         <div id="output" class="result z-depth-1">
         </div>
         <div id="all-results" class="result z-depth-1" style="margin-top: 20px; max-height: 600px; overflow-y: auto;">
@@ -117,6 +829,10 @@
                 <div class="input-field">
                     <textarea id="raw-data" class="materialize-textarea" placeholder="Paste your fixpoints data here..."></textarea>
                     <label for="raw-data">Fixpoints Data</label>
+                </div>
+                <div class="input-field">
+                    <textarea id="project-version-note" class="materialize-textarea" placeholder="Optional: Add a note for this version/update (e.g., 'Initial upload', 'Corrected week 5 data')"></textarea>
+                    <label for="project-version-note">Version Note</label>
                 </div>
                 <div class="row">
                     <div class="input-field col s6">
@@ -189,6 +905,46 @@
         </div>
     </div>
 
+    <div id="settings-modal" class="modal modal-fixed-footer">
+        <div class="modal-content">
+            <h4>Application Settings (TL Only)</h4>
+            <p>Changes made here will be saved locally in your browser. Default values will be used if not configured.</p>
+
+            <h5>Category Point Values</h5>
+            <p>Define points for each category (currently fixed at 9 categories) and project size.</p>
+            <div id="prices-config-table-container" style="max-height: 300px; overflow-y: auto;">
+                <table class="striped highlight responsive-table">
+                    <thead>
+                        <tr>
+                            <th>Category</th>
+                            <th>3IN Points</th>
+                            <th>9IN Points</th>
+                        </tr>
+                    </thead>
+                    <tbody id="prices-config-tbody">
+                        </tbody>
+                </table>
+            </div>
+            <div class="right-align" style="margin-top: 15px;">
+                <button class="btn blue" id="save-prices-config"><i class="material-icons left">save</i>Save Point Values</button>
+            </div>
+            <div class="divider" style="margin-top:20px; margin-bottom:20px;"></div>
+
+            <h5>Quality Bonus Tiers</h5>
+            <p>Define bonus percentages based on quality scores. Tiers are applied from highest quality downwards. Ensure tiers are logical.</p>
+            <div id="bonus-tiers-config-container" style="max-height: 300px; overflow-y: auto;">
+                </div>
+            <button class="btn-small green" id="add-bonus-tier-button" style="margin-top:10px;"><i class="material-icons left">add</i>Add Tier</button>
+            <div class="right-align" style="margin-top: 15px;">
+                 <button class="btn blue" id="save-bonus-tiers-config"><i class="material-icons left">save</i>Save Bonus Tiers</button>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <a href="#!" class="modal-close waves-effect waves-green btn-flat">Close</a>
+        </div>
+    </div>
+
+
     <div id="loader-spinner" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); z-index:1000;">
         <div class="preloader-wrapper active">
             <div class="spinner-layer spinner-blue-only">
@@ -207,5 +963,1001 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js"></script>
-    <script src="script.js"></script> </body>
+    <script>
+        // --- Configuration ---
+        const HARDCODED_PROJECTS_JSON_URL = 'https://raw.githubusercontent.com/serhgs/project_data.json/refs/heads/main/update.json';
+        const HARDCODED_TL_CODE_URL = 'https://raw.githubusercontent.com/gmlorenz/gmlorenz.github.io/refs/heads/main/projects_data.json';
+        
+        const DEFAULT_PRICES = [
+            { "3in": 2.19, "9in": 0.99 }, { "3in": 5.86, "9in": 2.08 }, { "3in": 7.44, "9in": 2.78 },
+            { "3in": 2.29, "9in": 1.57 }, { "3in": 1.55, "9in": 0.60 }, { "3in": 1.84, "9in": 0.78 },
+            { "3in": 1.00, "9in": 1.00 }, { "3in": 3.74, "9in": 3.74 }, { "3in": 1.73, "9in": 1.73 }
+        ];
+
+        const DEFAULT_BONUS_TIERS = [ // Must be sorted descending by quality for getBonusPercentage logic
+            { quality: 100.00, bonus: 120}, { quality: 99.50, bonus: 118 }, { quality: 99.00, bonus: 116 },
+            { quality: 98.50, bonus: 114 }, { quality: 98.00, bonus: 112 }, { quality: 97.50, bonus: 110 },
+            { quality: 97.00, bonus: 108 }, { quality: 96.50, bonus: 106 }, { quality: 96.00, bonus: 104 },
+            { quality: 95.50, bonus: 102 }, { quality: 95.00, bonus: 100 }, { quality: 94.50, bonus: 99 },
+            { quality: 94.00, bonus: 98 },  { quality: 93.50, bonus: 97 },  { quality: 93.00, bonus: 96 },
+            { quality: 92.50, bonus: 95 },  { quality: 92.00, bonus: 94 },  { quality: 91.50, bonus: 93 },
+            { quality: 91.00, bonus: 91 },  { quality: 90.50, bonus: 90 },  { quality: 90.00, bonus: 88 },
+            { quality: 89.50, bonus: 87 },  { quality: 89.00, bonus: 85 },  { quality: 88.50, bonus: 83 },
+            { quality: 88.00, bonus: 80 },  { quality: 87.50, bonus: 78 },  { quality: 87.00, bonus: 75 },
+            { quality: 86.50, bonus: 73 },  { quality: 86.00, bonus: 70 },  { quality: 85.50, bonus: 68 },
+            { quality: 85.00, bonus: 66 },  { quality: 84.50, bonus: 64 },  { quality: 84.00, bonus: 62 },
+            { quality: 83.50, bonus: 60 },  { quality: 83.00, bonus: 57 },  { quality: 82.50, bonus: 55 },
+            { quality: 82.00, bonus: 50 },  { quality: 81.50, bonus: 45 },  { quality: 81.00, bonus: 40 },
+            { quality: 80.50, bonus: 35 },  { quality: 80.00, bonus: 30 },  { quality: 79.50, bonus: 25 },
+            { quality: 79.00, bonus: 20 },  { quality: 78.50, bonus: 15 },  { quality: 78.00, bonus: 10 },
+            { quality: 77.50, bonus: 5 }
+        ];
+
+        let currentPrices = JSON.parse(JSON.stringify(DEFAULT_PRICES));
+        let currentBonusTiers = JSON.parse(JSON.stringify(DEFAULT_BONUS_TIERS));
+
+        // --- DOM Elements ---
+        const projectSelector = document.getElementById('project-selector');
+        const rawDataInput = document.getElementById('raw-data');
+        const projectNameInput = document.getElementById('project-name');
+        const projectVersionNoteInput = document.getElementById('project-version-note');
+        const techIdInput = document.getElementById('tech-id');
+        const outputDiv = document.getElementById('output');
+        const allResultsDiv = document.getElementById('all-results');
+        const addProjectModal = document.querySelector('#add-project-modal');
+        const modalTitle = document.getElementById('modal-title');
+        const saveProjectModalButton = document.getElementById('save-project-modal-button');
+        const clearDataButton = document.getElementById('clear-data-button');
+        const addProjectButton = document.getElementById('add-project-button');
+        const mainAppContent = document.getElementById('main-app-content');
+        const logoutButton = document.getElementById('logout-button');
+        const loginModal = document.getElementById('login-modal');
+        const loginRoleSelect = document.getElementById('login-role');
+        const tlCodeInputDiv = document.getElementById('tl-code-input');
+        const tlLoginCodeInput = document.getElementById('tl-login-code');
+        const loginButtonElement = document.getElementById('login-button');
+        const fullscreenResultsModal = document.getElementById('fullscreen-results-modal');
+        const fullscreenResultsContent = document.getElementById('fullscreen-results-content');
+        const fullscreenCloseButton = fullscreenResultsContent.querySelector('.close-button');
+        const viewDataModal = document.getElementById('view-data-modal');
+        const viewDataTableContainer = document.getElementById('view-data-table-container');
+        const viewDataModalTitle = document.getElementById('view-data-modal-title');
+        const viewDataSpinner = document.getElementById('view-data-spinner');
+        const multiplierInput = document.getElementById('total-multiplier');
+        const applyMultiplierButton = document.getElementById('apply-multiplier');
+        const modalSizeSelect = document.getElementById('modal-size');
+        const modalIrCheck = document.getElementById('modal-ir-check');
+        const viewProjectDataButton = document.getElementById('view-project-data-button');
+        const autoFetchButton = document.getElementById('auto-fetch-external-json');
+        const darkModeToggle = document.getElementById('dark-mode-toggle');
+        const projectStatusDisplay = document.getElementById('project-status-display');
+        const projectMetadataDisplay = document.getElementById('project-metadata-display');
+
+        const confirmationModal = document.getElementById('confirmation-modal');
+        const confirmationModalTitle = document.getElementById('confirmation-modal-title');
+        const confirmationModalMessage = document.getElementById('confirmation-modal-message');
+        const confirmationConfirmButton = document.getElementById('confirmation-confirm-button');
+        const confirmationCancelButton = document.getElementById('confirmation-cancel-button');
+
+        const appSettingsButton = document.getElementById('app-settings-button');
+        const settingsModal = document.getElementById('settings-modal');
+        const pricesConfigTbody = document.getElementById('prices-config-tbody');
+        const savePricesConfigButton = document.getElementById('save-prices-config');
+        const bonusTiersConfigContainer = document.getElementById('bonus-tiers-config-container');
+        const addBonusTierButton = document.getElementById('add-bonus-tier-button');
+        const saveBonusTiersConfigButton = document.getElementById('save-bonus-tiers-config');
+
+        let activeProjectData = '';
+        let allCalculatedResults = [];
+        let lastResult = '';
+        let allProjectsAggregatedResults = {};
+        let editingProjectName = null;
+        let isLoggedInAsTL = false;
+        let confirmPromiseResolve = null;
+
+        function showToast(html, classes = '') { M.toast({ html, classes }); }
+        function showLoader() { document.getElementById('loader-spinner').style.display = 'block'; }
+        function hideLoader() { document.getElementById('loader-spinner').style.display = 'none'; }
+
+        function safeSetLocalStorage(key, value) {
+            try {
+                const compressedValue = LZString.compressToUTF16(value);
+                if (compressedValue === null) throw new Error("Compression failed for " + key);
+                localStorage.setItem(key, compressedValue);
+                return true;
+            } catch (e) {
+                const message = e.name === 'QuotaExceededError' ? 'Local storage full!' : `Error saving to LS: ${e.message}`;
+                showToast(message, 'red'); console.error("LS save error:", key, e);
+                return false;
+            }
+        }
+
+        function safeGetLocalStorage(key) {
+            try {
+                const value = localStorage.getItem(key);
+                if (value === null) return null;
+                let decompressedValue = LZString.decompressFromUTF16(value);
+                if (decompressedValue !== null) return decompressedValue;
+                console.warn(`Decompression failed for key "${key}". Trying as uncompressed.`);
+                return value;
+            } catch (e) {
+                console.error(`Error retrieving/decompressing for key "${key}":`, e);
+                showToast('Error loading data. Possible corruption.', 'red');
+                return null;
+            }
+        }
+
+        function showCustomConfirm(message, title = 'Confirm Action') {
+            return new Promise(resolve => {
+                confirmationModalTitle.textContent = title;
+                confirmationModalMessage.textContent = message;
+                M.Modal.getInstance(confirmationModal).open();
+                confirmPromiseResolve = resolve;
+            });
+        }
+        
+        function loadConfigurations() {
+            const storedPricesStr = safeGetLocalStorage('app_config_prices');
+            if (storedPricesStr) {
+                try {
+                    const parsedPrices = JSON.parse(storedPricesStr);
+                    if (Array.isArray(parsedPrices) && parsedPrices.length === DEFAULT_PRICES.length &&
+                        parsedPrices.every(p => typeof p === 'object' && '3in' in p && '9in' in p &&
+                                            typeof p['3in'] === 'number' && typeof p['9in'] === 'number')) {
+                        currentPrices = parsedPrices;
+                    } else {
+                        console.warn("Stored prices config is invalid. Using defaults & resetting.");
+                        currentPrices = JSON.parse(JSON.stringify(DEFAULT_PRICES));
+                        safeSetLocalStorage('app_config_prices', JSON.stringify(currentPrices)); 
+                    }
+                } catch (e) {
+                    console.error("Error parsing stored prices. Using defaults.", e);
+                    currentPrices = JSON.parse(JSON.stringify(DEFAULT_PRICES));
+                }
+            } else {
+                currentPrices = JSON.parse(JSON.stringify(DEFAULT_PRICES));
+            }
+
+            const storedBonusTiersStr = safeGetLocalStorage('app_config_bonus_tiers');
+            if (storedBonusTiersStr) {
+                try {
+                    const parsedTiers = JSON.parse(storedBonusTiersStr);
+                    if (Array.isArray(parsedTiers) && parsedTiers.every(t => typeof t === 'object' && 
+                        'quality' in t && 'bonus' in t && typeof t.quality === 'number' && typeof t.bonus === 'number')) {
+                        currentBonusTiers = parsedTiers.sort((a, b) => b.quality - a.quality);
+                    } else {
+                        console.warn("Stored bonus tiers config is invalid. Using defaults & resetting.");
+                        currentBonusTiers = JSON.parse(JSON.stringify(DEFAULT_BONUS_TIERS));
+                        safeSetLocalStorage('app_config_bonus_tiers', JSON.stringify(currentBonusTiers));
+                    }
+                } catch (e) {
+                    console.error("Error parsing stored bonus tiers. Using defaults.", e);
+                    currentBonusTiers = JSON.parse(JSON.stringify(DEFAULT_BONUS_TIERS));
+                }
+            } else {
+                currentBonusTiers = JSON.parse(JSON.stringify(DEFAULT_BONUS_TIERS));
+            }
+        }
+
+        function loadProjectList() {
+            projectSelector.innerHTML = '<option value="" disabled selected>Select a saved project</option>';
+            const keys = [];
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key.startsWith('tl_project_')) {
+                    keys.push(key.replace('tl_project_', ''));
+                }
+            }
+            keys.sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase())).forEach(name => {
+                 const option = document.createElement('option');
+                 option.value = name;
+                 option.textContent = name;
+                 projectSelector.appendChild(option);
+            });
+            M.FormSelect.init(projectSelector);
+        }
+
+        function addResultButtons(targetDiv) {
+            const existingButtons = targetDiv.querySelector('.result-buttons');
+            if (existingButtons) existingButtons.remove();
+            const buttonsContainer = document.createElement('div');
+            buttonsContainer.className = 'result-buttons';
+            if (targetDiv.id === 'output' && lastResult) {
+                const viewDataButton = document.createElement('button');
+                viewDataButton.className = 'view-data-result-button tooltipped';
+                viewDataButton.setAttribute('data-position', 'left');
+                viewDataButton.setAttribute('data-tooltip', 'View Raw Data for this TECH ID');
+                viewDataButton.innerHTML = '<i class="material-icons">table_chart</i>';
+                viewDataButton.addEventListener('click', () => {
+                    if (!activeProjectData || !activeProjectData.data) {
+                        showToast('No data loaded for project to view.', 'orange'); return;
+                    }
+                    displayDataTableInModal(activeProjectData.data, lastResult.techID);
+                });
+                buttonsContainer.appendChild(viewDataButton);
+                M.Tooltip.init(viewDataButton);
+            }
+            const expandButton = document.createElement('button');
+            expandButton.className = 'expand-button tooltipped';
+            expandButton.setAttribute('data-position', 'left');
+            expandButton.setAttribute('data-tooltip', 'Expand Results');
+            expandButton.innerHTML = '<i class="material-icons">fullscreen</i>';
+            expandButton.addEventListener('click', () => {
+                let contentToExpand = targetDiv.cloneNode(true);
+                contentToExpand.querySelector('.result-buttons')?.remove();
+                fullscreenResultsContent.innerHTML = '';
+                fullscreenResultsContent.appendChild(contentToExpand);
+                const closeBtn = document.createElement('button');
+                closeBtn.classList.add('close-button');
+                closeBtn.innerHTML = '<i class="material-icons">close</i>';
+                closeBtn.addEventListener('click', hideFullscreenModal);
+                fullscreenResultsContent.appendChild(closeBtn);
+                fullscreenResultsModal.style.display = 'flex';
+            });
+            buttonsContainer.appendChild(expandButton);
+            M.Tooltip.init(expandButton);
+            targetDiv.prepend(buttonsContainer);
+        }
+        function removeResultButtons(containerElement) { containerElement.querySelector('.result-buttons')?.remove(); }
+        function hideFullscreenModal() { fullscreenResultsModal.style.display = 'none'; fullscreenResultsContent.innerHTML = '';}
+        function displayDataTableInModal(rawDataString, techIDFilter = '') { /* ... (existing code, unchanged) ... */ }
+        function viewProjectData() { /* ... (existing code, unchanged) ... */ }
+
+        function getBonusPercentage(qualityPercentage) {
+            if (currentBonusTiers.length === 0) {
+                 if (qualityPercentage >= 100) return 120;
+                 if (qualityPercentage >= 77.5) return 5;
+                 return 0;
+            }
+            const hundredPercentTier = currentBonusTiers.find(tier => tier.quality >= 100.00);
+            if (qualityPercentage >= 100.00 && hundredPercentTier) return hundredPercentTier.bonus;
+            for (const tier of currentBonusTiers) { // Assumes currentBonusTiers is sorted descending by quality
+                if (qualityPercentage >= tier.quality) return tier.bonus;
+            }
+            return 0;
+        }
+
+        function calculateRowDetails(fields, headers, size, ir) {
+            const indexes = {
+                category: headers.indexOf("CATEGORY"), i3qa: headers.indexOf("I3QA_CAT"),
+                rv1cat: headers.indexOf("RV1_CAT"), afp1cat: headers.indexOf("AFP1_CAT"),
+                afp2cat: headers.indexOf("AFP2_CAT"), rv2cat: headers.indexOf("RV2_CAT")
+            };
+            let rowPoints = 0;
+            let categoryCounts = Array(currentPrices.length).fill(0);
+            let categoryPoints = Array(currentPrices.length).fill(0);
+            [indexes.category, indexes.i3qa, indexes.rv1cat, indexes.afp1cat, indexes.afp2cat, indexes.rv2cat].forEach(idx => {
+                if (idx !== -1 && fields[idx]) {
+                    const val = parseInt(fields[idx].trim());
+                    if (!isNaN(val) && val >= 1 && val <= currentPrices.length) {
+                        const priceConfig = currentPrices[val - 1];
+                        if (!priceConfig || priceConfig[size] === undefined || isNaN(parseFloat(priceConfig[size]))) {
+                            console.warn(`Price not configured/invalid for Cat ${val}, Size ${size}.`); return;
+                        }
+                        const basePrice = parseFloat(priceConfig[size]);
+                        let currentCategoryPoints = basePrice;
+                        if (ir) currentCategoryPoints += 1.5;
+                        rowPoints += currentCategoryPoints;
+                        categoryCounts[val - 1]++;
+                        categoryPoints[val - 1] += currentCategoryPoints;
+                    }
+                }
+            });
+            return { rowPoints, categoryCounts, categoryPoints };
+        }
+
+        function calculateDetailsForTechIDInRaw(raw, techIDValue, size, ir) {
+            const rows = String(raw).split(/\r?\n/).filter(r => r.trim() !== "");
+            if (rows.length === 0) return null;
+            const headers = rows.shift()?.split(/[\t,]/).map(h => h.trim().toUpperCase()) || [];
+            const indexes = {
+                fixId: headers.indexOf("FIX1_ID"), afp1stat: headers.indexOf("AFP1_STAT"),
+                rv1label: headers.indexOf("RV1_LABEL"), i3qalabel: headers.indexOf("I3QA_LABEL"),
+                rv2label: headers.indexOf("RV2_LABEL"), category: headers.indexOf("CATEGORY"),
+                i3qa: headers.indexOf("I3QA_CAT"), rv1cat: headers.indexOf("RV1_CAT"),
+                afp1cat: headers.indexOf("AFP1_CAT"), afp2cat: headers.indexOf("AFP2_CAT"),
+                rv2cat: headers.indexOf("RV2_CAT")
+            };
+            if (indexes.fixId === -1) return null;
+
+            let totalPoints = 0, additionalFixPoints = 0, excessiveFixPoints = 0, missFixPoints = 0, incorrectCounting = 0, incorrectPointsValue = 0;
+            const categoryPoints = Array(currentPrices.length).fill(0);
+            const categoryCounts = Array(currentPrices.length).fill(0);
+            const matched = rows.filter(row => row.split(/[\t,]/)[indexes.fixId]?.trim().toUpperCase() === techIDValue);
+
+            matched.forEach(row => {
+                const fields = row.split(/[\t,]/);
+                if (indexes.rv1label !== -1 && fields[indexes.rv1label]) {
+                    const rv1LabelUpper = fields[indexes.rv1label].toUpperCase();
+                    if (rv1LabelUpper.includes("E")) excessiveFixPoints++;
+                    if (rv1LabelUpper.includes("M")) missFixPoints++;
+                    if (rv1LabelUpper.includes("I")) incorrectCounting++;
+                }
+                if (indexes.i3qalabel !== -1 && fields[indexes.i3qalabel]?.toUpperCase().includes("M")) missFixPoints++;
+                if (indexes.rv2label !== -1 && fields[indexes.rv2label]) {
+                    const rv2LabelUpper = fields[indexes.rv2label].toUpperCase();
+                    if (rv2LabelUpper.includes("E")) excessiveFixPoints++;
+                    if (rv2LabelUpper.includes("M")) missFixPoints++;
+                    if (rv2LabelUpper.includes("I")) incorrectCounting++;
+                }
+                if (indexes.afp1stat !== -1 && fields[indexes.afp1stat]?.toUpperCase() === "AA") additionalFixPoints++;
+
+                const rowDetails = calculateRowDetails(fields, headers, size, ir);
+                totalPoints += rowDetails.rowPoints;
+                rowDetails.categoryCounts.forEach((count, i) => categoryCounts[i] += count);
+                rowDetails.categoryPoints.forEach((points, i) => categoryPoints[i] += points);
+                
+                const processIncorrectPoints = (labelIdx, catIdx) => {
+                    if (labelIdx !== -1 && catIdx !== -1 && fields[labelIdx]?.toUpperCase().includes("I")) {
+                        const catValue = parseInt(fields[catIdx]?.trim());
+                        if (!isNaN(catValue) && catValue >= 1 && catValue <= currentPrices.length) {
+                            const priceConfig = currentPrices[catValue - 1];
+                            if (priceConfig && priceConfig[size] !== undefined && !isNaN(parseFloat(priceConfig[size]))) {
+                                let points = parseFloat(priceConfig[size]);
+                                if (ir) points += 1.5;
+                                incorrectPointsValue += points;
+                            }
+                        }
+                    }
+                };
+                processIncorrectPoints(indexes.rv1label, indexes.rv1cat);
+                processIncorrectPoints(indexes.rv2label, indexes.rv2cat);
+            });
+
+            const correctPoints = totalPoints - incorrectPointsValue;
+            const qualityPercentage = (totalPoints > 0) ? Math.max(0, (correctPoints / totalPoints) * 100) : 0;
+            const bonusPercentage = getBonusPercentage(qualityPercentage);
+            const qualityBonus = totalPoints * (bonusPercentage / 100);
+            const estimatedSalary = totalPoints + qualityBonus;
+
+            return {
+                techID: techIDValue, totalPoints, additionalFixPoints, excessiveFixPoints, missFixPoints,
+                incorrectCounting, incorrectPointsValue, qualityPercentage, bonusPercentage,
+                qualityBonus, estimatedSalary, categoryPoints, categoryCounts
+            };
+        }
+
+        function saveProject() {
+            const name = projectNameInput.value.trim();
+            const data = rawDataInput.value.trim();
+            const size = modalSizeSelect.value;
+            const ir = modalIrCheck.checked;
+            const versionNote = projectVersionNoteInput.value.trim();
+            if (!name || !data) { showToast('Project name and data are required.', 'red'); return; }
+
+            const storageKey = `tl_project_${name}`;
+            const nowISO = new Date().toISOString();
+            let projectToSave = { data, size, ir, updatedAt: nowISO, versionNote };
+            const existingProjectString = safeGetLocalStorage(storageKey);
+
+            if (editingProjectName && editingProjectName !== name) {
+                const oldProjectString = safeGetLocalStorage(`tl_project_${editingProjectName}`);
+                if (oldProjectString) {
+                    try { projectToSave.createdAt = JSON.parse(oldProjectString).createdAt || nowISO; } catch (e) { projectToSave.createdAt = nowISO; }
+                } else { projectToSave.createdAt = nowISO; }
+                localStorage.removeItem(`tl_project_${editingProjectName}`);
+            } else if (existingProjectString) {
+                try { projectToSave.createdAt = JSON.parse(existingProjectString).createdAt || nowISO; } catch (e) { projectToSave.createdAt = nowISO; }
+            } else { projectToSave.createdAt = nowISO; }
+            
+            const payload = JSON.stringify(projectToSave);
+            if (safeSetLocalStorage(storageKey, payload)) {
+                showToast(`Project '${name}' saved!`, 'green');
+                loadProjectList();
+                M.Modal.getInstance(addProjectModal).close();
+                projectNameInput.value = ''; rawDataInput.value = ''; projectVersionNoteInput.value = '';
+                M.textareaAutoResize(rawDataInput); M.textareaAutoResize(projectVersionNoteInput);
+                modalSizeSelect.value = '3in'; M.FormSelect.init(modalSizeSelect);
+                modalIrCheck.checked = false; M.updateTextFields();
+                editingProjectName = null;
+                if (projectSelector.value === name) { projectSelector.dispatchEvent(new Event('change')); }
+                else { projectSelector.value = name; M.FormSelect.init(projectSelector); projectSelector.dispatchEvent(new Event('change'));}
+            }
+        }
+
+        async function deleteSelectedProject() { /* ... (Code from previous full example, with display clear for new metadata divs) ... */
+            const selected = projectSelector.value;
+            if (!selected) { showToast('No project selected.', 'red'); return; }
+            const confirmed = await showCustomConfirm(`Delete project '${selected}'? This cannot be undone.`, 'Delete Project');
+            if (confirmed) {
+                localStorage.removeItem(`tl_project_${selected}`);
+                showToast(`Project '${selected}' deleted.`, 'orange');
+                loadProjectList(); 
+                activeProjectData = '';
+                outputDiv.innerHTML = ''; allResultsDiv.innerHTML = '';
+                if(projectStatusDisplay) projectStatusDisplay.innerHTML = '';
+                if(projectMetadataDisplay) projectMetadataDisplay.innerHTML = '';
+                lastResult = ''; allCalculatedResults = []; allProjectsAggregatedResults = {};
+                editingProjectName = null;
+            }
+        }
+        function searchTechID() { /* ... (Code from previous full example) ... */
+            const raw = activeProjectData?.data;
+            const techIDValue = techIdInput.value.trim().toUpperCase();
+            const size = activeProjectData?.size;
+            const ir = activeProjectData?.ir;
+
+            outputDiv.innerHTML = ''; allResultsDiv.innerHTML = '';
+            lastResult = ''; allCalculatedResults = []; allProjectsAggregatedResults = {};
+
+            if (!raw || !techIDValue || !size) {
+                outputDiv.innerHTML = '<p>Please load a project first and enter a TECH ID to search.</p>';
+                addResultButtons(outputDiv); return;
+            }
+            const result = calculateDetailsForTechIDInRaw(raw, techIDValue, size, ir);
+
+            if (result) {
+                const techIdHighlightClass = result.techID.length < 6 ? 'tech-id-red-highlight' : 'tech-id-highlight';
+                const irActive = activeProjectData && activeProjectData.ir;
+
+                let outputHtml = `<h5>Search Results for TECH ID: <span class="${techIdHighlightClass}">${result.techID}</span>`;
+                if (activeProjectData && projectSelector.value) {
+                    outputHtml += ` (Project: ${projectSelector.value}${irActive ? ` <span class="ir-indicator-tag">IR Active</span>` : ''})`;
+                }
+                outputHtml += `</h5>`;
+                outputHtml += `<p><strong>Project Total Points: ${result.totalPoints.toFixed(2)}</strong></p>`;
+                outputHtml += '<table class="striped"><thead><tr><th>Metric</th><th>Value</th><th>Count/N/A</th></tr></thead><tbody>';
+
+                result.categoryPoints.slice(0, currentPrices.length).forEach((total, i) => {
+                    outputHtml += `<tr><td>CAT ${i + 1}</td><td>${total.toFixed(2)}</td><td>${result.categoryCounts[i]}</td></tr>`;
+                });
+
+                outputHtml += `<tr><td>Additional FixPoints</td><td>N/A</td><td>${result.additionalFixPoints}</td></tr>`;
+                outputHtml += `<tr><td>Excessive FixPoints</td><td>N/A</td><td>${result.excessiveFixPoints}</td></tr>`;
+                outputHtml += `<tr><td>Miss FixPoints</td><td>N/A</td><td>${result.missFixPoints}</td></tr>`;
+                outputHtml += `<tr><td>Incorrect Counting</td><td>N/A</td><td>${result.incorrectCounting}</td></tr>`;
+                outputHtml += `<tr><td>Incorrect Points Value</td><td>${result.incorrectPointsValue.toFixed(2)}</td><td>N/A</td></tr>`;
+                outputHtml += `<tr><td>Total Points</td><td>${result.totalPoints.toFixed(2)}</td><td>N/A</td></tr>`;
+                outputHtml += `<tr><td>Quality Percentage</td><td>${result.qualityPercentage.toFixed(2)}%</td><td>N/A</td></tr>`;
+                outputHtml += `<tr><td>Bonus Percentage</td><td>${result.bonusPercentage.toFixed(2)}%</td><td>N/A</td></tr>`;
+                outputHtml += `<tr><td>Quality Bonus</td><td>${result.qualityBonus.toFixed(2)}</td><td>N/A</td></tr>`;
+                outputHtml += `<tr><td class="salary-highlight">Estimated Salary</td><td class="salary-highlight">${result.estimatedSalary.toFixed(2)}</td><td class="salary-highlight">N/A</td></tr>`;
+                outputHtml += '</tbody></table>';
+                outputDiv.innerHTML = outputHtml;
+                lastResult = result;
+            } else {
+                outputDiv.innerHTML = `<p>TECH ID '${techIDValue}' not found or error in data in the loaded project.</p>`;
+            }
+            addResultButtons(outputDiv);
+        }
+        function calculateAllTechIDs() { /* ... (Code from previous full example) ... */
+            const raw = activeProjectData?.data;
+            const size = activeProjectData?.size;
+            const ir = activeProjectData?.ir;
+
+            if (!raw || !size) {
+                allResultsDiv.innerHTML = '<p>Please load a project first.</p>';
+                allCalculatedResults = []; allProjectsAggregatedResults = {};
+                addResultButtons(allResultsDiv); return;
+            }
+            const rows = String(raw).split(/\r?\n/).filter(r => r.trim() !== "");
+            if(rows.length === 0) { allResultsDiv.innerHTML = '<p>No data rows in project.</p>'; addResultButtons(allResultsDiv); return; }
+            const headers = rows.shift()?.split(/[\t,]/).map(h => h.trim().toUpperCase()) || [];
+            const fixIdIndex = headers.indexOf("FIX1_ID");
+
+            if (fixIdIndex === -1) {
+                allResultsDiv.innerHTML = '<p>Error: FIX1_ID column not found.</p>';
+                addResultButtons(allResultsDiv); return;
+            }
+            const techIDs = new Set(rows.map(row => row.split(/[\t,]/)[fixIdIndex]?.trim().toUpperCase()).filter(Boolean));
+            allCalculatedResults = [];
+            const irActive = activeProjectData && activeProjectData.ir;
+            let tableHtml = `<h5>Results for Loaded Project: ${projectSelector.value || 'Current Project'}${irActive ? ` <span class="ir-indicator-tag">IR Active</span>` : ''}</h5>`;
+            
+            tableHtml += '<table class="striped responsive-table"><thead><tr>';
+            const tableHeaders = ['TECH ID', ...Array.from({ length: currentPrices.length }, (_, i) => `CAT ${i + 1} Pts`),
+                                  ...Array.from({ length: currentPrices.length }, (_, i) => `CAT ${i + 1} Cnt`),
+                                  'Add.Fix', 'Exc.Fix', 'Miss.Fix', 'Inc.Cnt', 'Inc.PtsVal', 'Total Pts', 'Qual %', 'Bonus %', 'Qual Bonus', 'Est. Salary'];
+            tableHeaders.forEach(headerText => tableHtml += `<th>${headerText}</th>`);
+            tableHtml += '</tr></thead><tbody>';
+
+            techIDs.forEach(techID => {
+                const result = calculateDetailsForTechIDInRaw(raw, techID, size, ir);
+                if (result) {
+                    allCalculatedResults.push(result);
+                    const qualityClass = result.qualityPercentage >= 100 ? 'quality-green' : (result.qualityPercentage >= 77.50 ? 'quality-orange' : 'quality-red');
+                    const techIdHighlightClass = result.techID.length < 6 ? 'tech-id-red-highlight' : 'tech-id-highlight';
+                    let bonusClass = result.bonusPercentage >= 100 ? 'quality-green' : (result.bonusPercentage > 0 ? 'quality-orange' : 'quality-red');
+
+                    tableHtml += `<tr><td class="${techIdHighlightClass}">${techID}</td>`;
+                    result.categoryPoints.slice(0, currentPrices.length).forEach(total => tableHtml += `<td>${total.toFixed(2)}</td>`);
+                    result.categoryCounts.slice(0, currentPrices.length).forEach(count => tableHtml += `<td>${count}</td>`);
+                    tableHtml += `<td>${result.additionalFixPoints}</td><td>${result.excessiveFixPoints}</td><td>${result.missFixPoints}</td>`;
+                    tableHtml += `<td>${result.incorrectCounting}</td><td>${result.incorrectPointsValue.toFixed(2)}</td>`;
+                    tableHtml += `<td>${result.totalPoints.toFixed(2)}</td><td class="${qualityClass}">${result.qualityPercentage.toFixed(2)}%</td>`;
+                    tableHtml += `<td class="${bonusClass}">${result.bonusPercentage.toFixed(2)}%</td><td class="${bonusClass}">${result.qualityBonus.toFixed(2)}</td>`;
+                    tableHtml += `<td class="salary-highlight">${result.estimatedSalary.toFixed(2)}</td></tr>`;
+                }
+            });
+            tableHtml += '</tbody></table>';
+            allResultsDiv.innerHTML = tableHtml;
+            outputDiv.textContent = ''; allProjectsAggregatedResults = {};
+            addResultButtons(allResultsDiv);
+        }
+        function calculateTotalAcrossAllProjects() { /* ... (Code from previous full example) ... */
+            const multiplier = parseFloat(multiplierInput.value) || 1;
+            allProjectsAggregatedResults = {};
+            let processingErrors = [];
+
+            const allProjectsRawData = [];
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key.startsWith('tl_project_')) {
+                    const projectName = key.replace('tl_project_', '');
+                    const projectDataString = safeGetLocalStorage(key);
+                    if (projectDataString !== null) {
+                        try {
+                            const project = JSON.parse(projectDataString);
+                            if (project && typeof project === 'object' && 'data' in project && 'size' in project && 'ir' in project) {
+                                allProjectsRawData.push({ name: projectName, data: String(project.data), size: project.size, ir: project.ir });
+                            } else { processingErrors.push(`Project '${projectName}': Invalid data structure.`); }
+                        } catch (e) { processingErrors.push(`Project '${projectName}': Error processing - ${e.message}`); }
+                    } else { processingErrors.push(`Project '${projectName}': Could not retrieve.`); }
+                }
+            }
+
+            const allUniqueTechIDs = new Set();
+            allProjectsRawData.forEach(project => {
+                const rows = project.data.split(/\r?\n/).filter(r => r.trim() !== "");
+                if (rows.length > 0) {
+                    const headerRow = rows.shift();
+                    const headers = headerRow.split(/[\t,]/).map(h => h.trim().toUpperCase());
+                    const fixIdIndex = headers.indexOf("FIX1_ID");
+                    if (fixIdIndex === -1) return;
+                    rows.forEach(row => {
+                        const fields = row.split(/[\t,]/);
+                        const techID = fields[fixIdIndex]?.trim().toUpperCase();
+                        if (techID) allUniqueTechIDs.add(techID);
+                    });
+                }
+            });
+
+            allUniqueTechIDs.forEach(techID => {
+                allProjectsAggregatedResults[techID] = {
+                    baseTotalPoints: 0, incorrectPointsValue: 0, additionalFixPoints: 0,
+                    excessiveFixPoints: 0, missFixPoints: 0, incorrectCounting: 0,
+                    categoryPoints: Array(currentPrices.length).fill(0), 
+                    categoryCounts: Array(currentPrices.length).fill(0), 
+                    totalPoints: 0, qualityPercentage: 0, bonusPercentage: 0,
+                    qualityBonus: 0, estimatedSalary: 0
+                };
+                allProjectsRawData.forEach(project => {
+                    const projectSpecificResult = calculateDetailsForTechIDInRaw(project.data, techID, project.size, project.ir);
+                    if (projectSpecificResult) {
+                        allProjectsAggregatedResults[techID].baseTotalPoints += projectSpecificResult.totalPoints;
+                        allProjectsAggregatedResults[techID].incorrectPointsValue += projectSpecificResult.incorrectPointsValue;
+                        allProjectsAggregatedResults[techID].additionalFixPoints += projectSpecificResult.additionalFixPoints;
+                        allProjectsAggregatedResults[techID].excessiveFixPoints += projectSpecificResult.excessiveFixPoints;
+                        allProjectsAggregatedResults[techID].missFixPoints += projectSpecificResult.missFixPoints;
+                        allProjectsAggregatedResults[techID].incorrectCounting += projectSpecificResult.incorrectCounting;
+                        projectSpecificResult.categoryPoints.slice(0, currentPrices.length).forEach((points, index) => allProjectsAggregatedResults[techID].categoryPoints[index] += points);
+                        projectSpecificResult.categoryCounts.slice(0, currentPrices.length).forEach((count, index) => allProjectsAggregatedResults[techID].categoryCounts[index] += count);
+                    }
+                });
+                const aggregatedResult = allProjectsAggregatedResults[techID];
+                aggregatedResult.totalPoints = aggregatedResult.baseTotalPoints * multiplier;
+                const correctPointsAggregated = aggregatedResult.baseTotalPoints - aggregatedResult.incorrectPointsValue;
+                aggregatedResult.qualityPercentage = (aggregatedResult.baseTotalPoints > 0) ? Math.max(0, (correctPointsAggregated / aggregatedResult.baseTotalPoints) * 100) : 0;
+                aggregatedResult.bonusPercentage = getBonusPercentage(aggregatedResult.qualityPercentage);
+                aggregatedResult.qualityBonus = aggregatedResult.baseTotalPoints * (aggregatedResult.bonusPercentage / 100);
+                aggregatedResult.estimatedSalary = aggregatedResult.totalPoints + aggregatedResult.qualityBonus;
+            });
+
+            let grandTotal = 0;
+            Object.values(allProjectsAggregatedResults).forEach(result => grandTotal += result.totalPoints);
+
+            let tableHtml = `<h5>Totals Across All Projects (Multiplier: ${multiplier.toFixed(2)})</h5>`;
+            if (Object.keys(allProjectsAggregatedResults).length === 0) {
+                tableHtml += '<p>No TECH IDs found.</p>';
+            } else {
+                tableHtml += '<table class="striped responsive-table"><thead><tr>';
+                const aggregatedHeaders = ['TECH ID', ...Array.from({ length: currentPrices.length }, (_, i) => `CAT ${i + 1} Pts`),
+                                           ...Array.from({ length: currentPrices.length }, (_, i) => `CAT ${i + 1} Cnt`),
+                                           'Add.Fix', 'Exc.Fix', 'Miss.Fix', 'Inc.Cnt', 'Inc.PtsVal', 'Total Pts (w/ Multi)', 'Qual %', 'Bonus %', 'Qual Bonus', 'Est. Salary'];
+                aggregatedHeaders.forEach(headerText => tableHtml += `<th>${headerText}</th>`);
+                tableHtml += '</tr></thead><tbody>';
+                Object.entries(allProjectsAggregatedResults).sort((a, b) => a[0].localeCompare(b[0])).forEach(([techID, result]) => {
+                    const qualityClass = result.qualityPercentage >= 100 ? 'quality-green' : (result.qualityPercentage >= 77.50 ? 'quality-orange' : 'quality-red');
+                    const techIdHighlightClass = techID.length < 6 ? 'tech-id-red-highlight' : 'tech-id-highlight';
+                    let bonusClass = result.bonusPercentage >= 100 ? 'quality-green' : (result.bonusPercentage > 0 ? 'quality-orange' : 'quality-red');
+                    tableHtml += `<tr><td class="${techIdHighlightClass}">${techID}</td>`;
+                    result.categoryPoints.slice(0, currentPrices.length).forEach(total => tableHtml += `<td>${total.toFixed(2)}</td>`);
+                    result.categoryCounts.slice(0, currentPrices.length).forEach(count => tableHtml += `<td>${count}</td>`);
+                    tableHtml += `<td>${result.additionalFixPoints}</td><td>${result.excessiveFixPoints}</td><td>${result.missFixPoints}</td>`;
+                    tableHtml += `<td>${result.incorrectCounting}</td><td>${result.incorrectPointsValue.toFixed(2)}</td><td>${result.totalPoints.toFixed(2)}</td>`;
+                    tableHtml += `<td class="${qualityClass}">${result.qualityPercentage.toFixed(2)}%</td><td class="${bonusClass}">${result.bonusPercentage.toFixed(2)}%</td>`;
+                    tableHtml += `<td class="${bonusClass}">${result.qualityBonus.toFixed(2)}</td><td class="salary-highlight">${result.estimatedSalary.toFixed(2)}</td></tr>`;
+                });
+                tableHtml += '</tbody></table>';
+                tableHtml += `<h4 style="margin-top: 20px;">Team Total Points (w/ Multiplier): ${grandTotal.toFixed(2)}</h4>`;
+            }
+            if (processingErrors.length > 0) {
+                tableHtml += '<div class="card red lighten-5" style="margin-top:15px;"><div class="card-content red-text text-darken-4"><span class="card-title">Processing Warnings</span><ul>';
+                processingErrors.forEach(error => tableHtml += `<li>${error}</li>`);
+                tableHtml += '</ul></div></div>';
+            }
+            allResultsDiv.innerHTML = tableHtml;
+            outputDiv.textContent = ''; allCalculatedResults = [];
+            addResultButtons(allResultsDiv);
+            M.Modal.getInstance(document.getElementById('multiplier-modal')).close();
+        }
+        function exportToCsv(filename, data) { /* ... (Code from previous full example) ... */
+            if (!data || (Array.isArray(data) && data.length === 0)) {
+                showToast('No data to export.', 'red'); return;
+            }
+            let csvContent = "data:text/csv;charset=utf-8,";
+            let headers = [];
+            if (Array.isArray(data)) { 
+                headers = ['TECH ID', ...Array.from({ length: currentPrices.length }, (_, i) => `CAT ${i + 1} Points`),
+                           ...Array.from({ length: currentPrices.length }, (_, i) => `CAT ${i + 1} Count`),
+                           'Additional FixPoints', 'Excessive FixPoints', 'Miss FixPoints', 'Incorrect Counting', 'Incorrect Points Value',
+                           'Total Points', 'Quality %', 'Bonus %', 'Quality Bonus', 'Estimated Salary'];
+                csvContent += headers.join(",") + "\n";
+                data.forEach(item => {
+                    let row = [item.techID, ...item.categoryPoints.slice(0, currentPrices.length).map(p => p.toFixed(2)),
+                               ...item.categoryCounts.slice(0, currentPrices.length), item.additionalFixPoints, item.excessiveFixPoints,
+                               item.missFixPoints, item.incorrectCounting, item.incorrectPointsValue.toFixed(2),
+                               item.totalPoints.toFixed(2), item.qualityPercentage.toFixed(2) + '%',
+                               item.bonusPercentage.toFixed(2) + '%', item.qualityBonus.toFixed(2),
+                               item.estimatedSalary.toFixed(2)];
+                    csvContent += row.join(",") + "\n";
+                });
+            } else { 
+                headers = ['Metric', 'Value', 'Count/N/A'];
+                csvContent += headers.join(",") + "\n";
+                csvContent += `"Total Points",${data.totalPoints.toFixed(2)},N/A\n`;
+                data.categoryPoints.slice(0, currentPrices.length).forEach((total, i) => {
+                    csvContent += `"CAT ${i + 1}",${total.toFixed(2)},${data.categoryCounts[i]}\n`;
+                });
+                csvContent += `"Additional FixPoints",N/A,${data.additionalFixPoints}\n`;
+                csvContent += `"Excessive FixPoints",N/A,${data.excessiveFixPoints}\n`;
+                csvContent += `"Miss FixPoints",N/A,${data.missFixPoints}\n`;
+                csvContent += `"Incorrect Counting",N/A,${data.incorrectCounting}\n`;
+                csvContent += `"Incorrect Points Value",${data.incorrectPointsValue.toFixed(2)},N/A\n`;
+                csvContent += `"Quality Percentage",${data.qualityPercentage.toFixed(2)}%,N/A\n`;
+                csvContent += `"Bonus Percentage",${data.bonusPercentage.toFixed(2)}%,N/A\n`;
+                csvContent += `"Quality Bonus",${data.qualityBonus.toFixed(2)},N/A\n`;
+                csvContent += `"Estimated Salary",${data.estimatedSalary.toFixed(2)},N/A\n`;
+            }
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri); link.setAttribute("download", filename);
+            document.body.appendChild(link); link.click(); document.body.removeChild(link);
+            showToast('CSV exported!', 'green');
+        }
+        async function autoFetchExternalJson() { /* ... (Code from previous full example) ... */ }
+        async function verifyTlLoginCode(enteredCode) { /* ... (Code from previous full example) ... */ }
+
+        function updateButtonVisibility() {
+            const tlButtons = [
+                document.getElementById('add-project-button'), document.getElementById('edit-project'),
+                document.getElementById('delete-project'), document.getElementById('copy-all-projects-json'),
+                appSettingsButton
+            ];
+            tlButtons.forEach(button => {
+                if (button) button.style.display = isLoggedInAsTL ? 'inline-flex' : 'none';
+            });
+        }
+
+        function populatePricesConfigTable() {
+            pricesConfigTbody.innerHTML = '';
+            currentPrices.forEach((priceCategory, index) => {
+                const row = pricesConfigTbody.insertRow();
+                row.innerHTML = `
+                    <td>Category ${index + 1}</td>
+                    <td><input type="number" class="price-input browser-default" data-category-index="${index}" data-size="3in" value="${priceCategory['3in']}" step="0.01" required></td>
+                    <td><input type="number" class="price-input browser-default" data-category-index="${index}" data-size="9in" value="${priceCategory['9in']}" step="0.01" required></td>`;
+            });
+        }
+
+        function renderBonusTierRow(tier = { quality: '', bonus: '' }) {
+            const tierDiv = document.createElement('div');
+            tierDiv.className = 'row bonus-tier-row valign-wrapper';
+            tierDiv.style.marginBottom = '8px';
+            tierDiv.innerHTML = `
+                <div class="input-field col s5" style="margin-top:0; margin-bottom:0;">
+                    <input type="number" class="bonus-quality-input browser-default" placeholder="e.g. 77.5" value="${tier.quality}" step="0.01" required>
+                    <label class="${tier.quality !== '' ? 'active' : ''}">Min Quality (%)</label>
+                </div>
+                <div class="input-field col s5" style="margin-top:0; margin-bottom:0;">
+                    <input type="number" class="bonus-value-input browser-default" placeholder="e.g. 5" value="${tier.bonus}" step="0.1" required>
+                    <label class="${tier.bonus !== '' ? 'active' : ''}">Bonus (%)</label>
+                </div>
+                <div class="col s2 center-align" style="padding-top: 15px;">
+                    <button type="button" class="btn-small red remove-bonus-tier-button"><i class="material-icons">remove_circle</i></button>
+                </div>`;
+            tierDiv.querySelector('.remove-bonus-tier-button').addEventListener('click', () => tierDiv.remove());
+            return tierDiv;
+        }
+
+        function populateBonusTiersConfig() {
+            bonusTiersConfigContainer.innerHTML = '';
+            const displayTiers = [...currentBonusTiers].sort((a,b) => a.quality - b.quality); // Sort ascending for editing
+            if (displayTiers.length === 0) {
+                bonusTiersConfigContainer.appendChild(renderBonusTierRow()); // Add one empty if none exist
+            } else {
+                displayTiers.forEach(tier => bonusTiersConfigContainer.appendChild(renderBonusTierRow(tier)));
+            }
+            M.updateTextFields();
+        }
+
+        // --- Event Listeners ---
+        document.getElementById('search-button').addEventListener('click', searchTechID);
+        document.getElementById('calculate-all-button').addEventListener('click', calculateAllTechIDs);
+        document.getElementById('calculate-all-projects-button').addEventListener('click', () => M.Modal.getInstance(document.getElementById('multiplier-modal')).open());
+        applyMultiplierButton.addEventListener('click', calculateTotalAcrossAllProjects);
+
+        projectSelector.addEventListener('change', () => {
+            const selectedProjectName = projectSelector.value;
+            const projectDataString = safeGetLocalStorage(`tl_project_${selectedProjectName}`);
+            
+            if (projectStatusDisplay) projectStatusDisplay.textContent = '';
+            if (projectMetadataDisplay) projectMetadataDisplay.innerHTML = '';
+
+            if (projectDataString) {
+                try {
+                    activeProjectData = JSON.parse(projectDataString);
+                    showToast(`Project '${selectedProjectName}' loaded.`, 'blue');
+                    outputDiv.textContent = ''; allResultsDiv.innerHTML = '';
+                    lastResult = ''; allCalculatedResults = []; allProjectsAggregatedResults = {};
+
+                    if (projectStatusDisplay) {
+                        const irStatusText = activeProjectData.ir ? 'IR Additive: YES (1.5pts)' : 'IR Additive: NO';
+                        projectStatusDisplay.innerHTML = `Selected: <strong>${selectedProjectName}</strong> | ${irStatusText}`;
+                        projectStatusDisplay.style.color = activeProjectData.ir ? 'var(--success-green)' : 'var(--warning-orange)';
+                    }
+                    if (projectMetadataDisplay) {
+                        let metaHtml = '';
+                        if (activeProjectData.createdAt) metaHtml += `Created: ${new Date(activeProjectData.createdAt).toLocaleString()}`;
+                        if (activeProjectData.updatedAt) metaHtml += `${metaHtml ? ' | ' : ''}Updated: ${new Date(activeProjectData.updatedAt).toLocaleString()}`;
+                        if (activeProjectData.versionNote) metaHtml += `<br><em>Note: ${activeProjectData.versionNote.replace(/\n/g, '<br>')}</em>`;
+                        projectMetadataDisplay.innerHTML = metaHtml || 'No metadata available.';
+                    }
+
+                    if (isLoggedInAsTL) {
+                        rawDataInput.value = activeProjectData.data;
+                        projectNameInput.value = selectedProjectName;
+                        modalSizeSelect.value = activeProjectData.size || '3in';
+                        modalIrCheck.checked = activeProjectData.ir || false;
+                        projectVersionNoteInput.value = activeProjectData.versionNote || '';
+                        M.FormSelect.init(modalSizeSelect); // Re-init after setting value
+                        M.textareaAutoResize(rawDataInput); M.textareaAutoResize(projectVersionNoteInput);
+                        M.updateTextFields();
+                        editingProjectName = selectedProjectName;
+                    }
+                } catch (e) {
+                    showToast(`Error parsing project '${selectedProjectName}'.`, 'red'); console.error("Parse error:", e); activeProjectData = '';
+                }
+            } else {
+                activeProjectData = ''; outputDiv.textContent = ''; allResultsDiv.innerHTML = '';
+                lastResult = ''; allCalculatedResults = []; allProjectsAggregatedResults = {};
+                if (isLoggedInAsTL) {
+                    projectNameInput.value = ''; rawDataInput.value = ''; projectVersionNoteInput.value = '';
+                    modalSizeSelect.value = '3in'; M.FormSelect.init(modalSizeSelect);
+                    modalIrCheck.checked = false;
+                    M.updateTextFields();
+                }
+                editingProjectName = null;
+            }
+        });
+
+        document.getElementById('edit-project').addEventListener('click', () => {
+            const selectedProjectName = projectSelector.value;
+            if (!selectedProjectName) { showToast('Select project to edit.', 'red'); return; }
+            const projectDataString = safeGetLocalStorage(`tl_project_${selectedProjectName}`);
+            if (projectDataString) {
+                try {
+                    const project = JSON.parse(projectDataString);
+                    projectNameInput.value = selectedProjectName;
+                    rawDataInput.value = project.data;
+                    modalSizeSelect.value = project.size || '3in';
+                    modalIrCheck.checked = project.ir || false;
+                    projectVersionNoteInput.value = project.versionNote || '';
+                    M.FormSelect.init(modalSizeSelect); // Re-init after setting value
+                    M.updateTextFields();
+                    M.textareaAutoResize(rawDataInput); M.textareaAutoResize(projectVersionNoteInput);
+                    modalTitle.textContent = 'Edit Project';
+                    saveProjectModalButton.textContent = 'Update Project';
+                    editingProjectName = selectedProjectName;
+                    M.Modal.getInstance(addProjectModal).open();
+                } catch (e) { showToast(`Error loading project for editing.`, 'red'); console.error("Edit load error:", e); }
+            } else { showToast('Could not load project data for editing.', 'red'); }
+        });
+
+        document.getElementById('delete-project').addEventListener('click', deleteSelectedProject);
+
+        addProjectButton.addEventListener('click', () => {
+            modalTitle.textContent = 'Add New Project';
+            saveProjectModalButton.textContent = 'Save Project';
+            projectNameInput.value = ''; rawDataInput.value = ''; projectVersionNoteInput.value = '';
+            modalSizeSelect.value = '3in'; M.FormSelect.init(modalSizeSelect);
+            modalIrCheck.checked = false;
+            M.updateTextFields();
+            M.textareaAutoResize(rawDataInput); M.textareaAutoResize(projectVersionNoteInput);
+            editingProjectName = null;
+        });
+
+        saveProjectModalButton.addEventListener('click', saveProject);
+        clearDataButton.addEventListener('click', async () => {
+            const confirmed = await showCustomConfirm('Are you sure you want to clear ALL saved projects? This cannot be undone.', 'Clear All Data');
+            if (confirmed) {
+                const keysToRemove = [];
+                for (let i = 0; i < localStorage.length; i++) {
+                    if (localStorage.key(i).startsWith('tl_project_')) keysToRemove.push(localStorage.key(i));
+                }
+                keysToRemove.forEach(key => localStorage.removeItem(key));
+                loadProjectList(); activeProjectData = '';
+                outputDiv.innerHTML = ''; allResultsDiv.innerHTML = '';
+                if(projectStatusDisplay) projectStatusDisplay.innerHTML = '';
+                if(projectMetadataDisplay) projectMetadataDisplay.innerHTML = '';
+                allCalculatedResults = []; lastResult = ''; allProjectsAggregatedResults = {};
+                showToast('All projects cleared!', 'green');
+            }
+        });
+        document.getElementById('export-button').addEventListener('click', () => { /* ... (Code from previous full example) ... */
+            if (Object.keys(allProjectsAggregatedResults).length > 0) {
+                exportToCsv('all_projects_summary.csv', Object.values(allProjectsAggregatedResults));
+            } else if (allCalculatedResults.length > 0) {
+                exportToCsv('per_project_summary.csv', allCalculatedResults);
+            } else if (lastResult) {
+                exportToCsv(`tech_id_${lastResult.techID}_details.csv`, lastResult);
+            } else {
+                showToast('No results to export.', 'red');
+            }
+        });
+        document.getElementById('copy-all-projects-json').addEventListener('click', () => { /* ... (Code from previous full example) ... */ });
+        autoFetchButton.addEventListener('click', autoFetchExternalJson);
+
+        loginRoleSelect.addEventListener('change', () => {
+            const selectedRole = loginRoleSelect.value;
+            tlCodeInputDiv.style.display = selectedRole === 'tl' ? 'block' : 'none';
+            if (selectedRole === 'tl') tlLoginCodeInput.setAttribute('required', 'required');
+            else tlLoginCodeInput.removeAttribute('required');
+            M.updateTextFields();
+        });
+
+        loginButtonElement.addEventListener('click', async () => {
+            const selectedRole = loginRoleSelect.value;
+            if (selectedRole === 'tl') {
+                if (!tlLoginCodeInput.value) { showToast('Please enter TL Login Code.', 'orange'); return; }
+                showLoader();
+                const isValidTL = await verifyTlLoginCode(tlLoginCodeInput.value);
+                hideLoader();
+                if (isValidTL) {
+                    isLoggedInAsTL = true; showToast('Logged in as TL!', 'green');
+                    M.Modal.getInstance(loginModal).close(); mainAppContent.style.display = 'block';
+                    loadProjectList(); updateButtonVisibility();
+                } else { showToast('Incorrect TL code.', 'red'); isLoggedInAsTL = false; }
+            } else if (selectedRole === 'tech') {
+                isLoggedInAsTL = false; showToast('Logged in as Tech!', 'green');
+                M.Modal.getInstance(loginModal).close(); mainAppContent.style.display = 'block';
+                loadProjectList(); updateButtonVisibility();
+            } else { showToast('Please select a role.', 'orange'); }
+        });
+
+        logoutButton.addEventListener('click', () => {
+            isLoggedInAsTL = false; showToast('Logged out.', 'blue');
+            mainAppContent.style.display = 'none';
+            outputDiv.innerHTML = ''; allResultsDiv.innerHTML = '';
+            if(projectStatusDisplay) projectStatusDisplay.innerHTML = '';
+            if(projectMetadataDisplay) projectMetadataDisplay.innerHTML = '';
+            lastResult = ''; allCalculatedResults = []; allProjectsAggregatedResults = {};
+            loginRoleSelect.value = ''; tlLoginCodeInput.value = '';
+            tlCodeInputDiv.style.display = 'none';
+            M.FormSelect.init(loginRoleSelect); M.updateTextFields(); // Crucial to reset select and labels
+            M.Modal.getInstance(loginModal).open();
+        });
+
+        if (fullscreenCloseButton) fullscreenCloseButton.addEventListener('click', hideFullscreenModal);
+        fullscreenResultsModal.addEventListener('click', (event) => { if (event.target === fullscreenResultsModal) hideFullscreenModal(); });
+        if (viewProjectDataButton) viewProjectDataButton.addEventListener('click', viewProjectData);
+        
+        darkModeToggle.addEventListener('click', () => {
+            const isCurrentlyDark = document.body.classList.contains('dark-mode');
+            localStorage.setItem('darkMode', isCurrentlyDark ? 'disabled' : 'enabled');
+            applyDarkModePreference();
+        });
+        
+        savePricesConfigButton.addEventListener('click', () => {
+            const newPrices = [];
+            const rows = pricesConfigTbody.querySelectorAll('tr');
+            let isValid = true;
+            rows.forEach((row, index) => {
+                const inputs = row.querySelectorAll('.price-input');
+                const price3in = parseFloat(inputs[0].value);
+                const price9in = parseFloat(inputs[1].value);
+                if (isNaN(price3in) || isNaN(price9in) || price3in < 0 || price9in < 0) isValid = false;
+                newPrices[index] = { "3in": price3in, "9in": price9in };
+            });
+            if (!isValid || newPrices.length !== DEFAULT_PRICES.length || newPrices.some(p => p === undefined)) {
+                showToast('Invalid price values. Ensure all ' + DEFAULT_PRICES.length + ' categories have valid numbers.', 'red'); return;
+            }
+            currentPrices = newPrices;
+            if(safeSetLocalStorage('app_config_prices', JSON.stringify(currentPrices))) showToast('Point values saved!', 'green');
+        });
+
+        addBonusTierButton.addEventListener('click', () => {
+            bonusTiersConfigContainer.appendChild(renderBonusTierRow());
+            M.updateTextFields();
+        });
+
+        saveBonusTiersConfigButton.addEventListener('click', () => {
+            const newBonusTiers = [];
+            const tierRows = bonusTiersConfigContainer.querySelectorAll('.bonus-tier-row');
+            let isValid = true;
+            tierRows.forEach(row => {
+                const qualityInput = row.querySelector('.bonus-quality-input');
+                const bonusInput = row.querySelector('.bonus-value-input');
+                const quality = parseFloat(qualityInput.value);
+                const bonus = parseFloat(bonusInput.value);
+                if (isNaN(quality) || isNaN(bonus) || quality < 0 || bonus < 0 || quality > 200 || bonus > 500) isValid = false;
+                else newBonusTiers.push({ quality, bonus });
+            });
+            if (!isValid) { showToast('Invalid bonus tier values (ensure numbers, quality < 200, bonus < 500).', 'red'); return; }
+            currentBonusTiers = newBonusTiers.sort((a, b) => b.quality - a.quality);
+            if(safeSetLocalStorage('app_config_bonus_tiers', JSON.stringify(currentBonusTiers))) showToast('Bonus tiers saved!', 'green');
+        });
+
+        function applyDarkModePreference() {
+            let isDarkMode = localStorage.getItem('darkMode');
+            if (isDarkMode === null) { // First time visit
+                isDarkMode = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'enabled' : 'disabled';
+                localStorage.setItem('darkMode', isDarkMode);
+            }
+            if (isDarkMode === 'enabled') {
+                document.body.classList.add('dark-mode');
+                darkModeToggle.querySelector('i').textContent = 'brightness_4';
+            } else {
+                document.body.classList.remove('dark-mode');
+                darkModeToggle.querySelector('i').textContent = 'brightness_high';
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            document.body.style.display = 'none';
+            applyDarkModePreference();
+            loadConfigurations();
+
+            M.Modal.init(document.querySelectorAll('.modal'), {
+                dismissible: false, 
+                onOpenEnd: (modalEl) => {
+                    if (modalEl.id === 'add-project-modal') {
+                        M.textareaAutoResize(rawDataInput);
+                        M.textareaAutoResize(projectVersionNoteInput);
+                    }
+                    M.updateTextFields();
+                }
+            });
+            const loginModalInstance = M.Modal.getInstance(loginModal);
+            if (loginModalInstance) loginModalInstance.options.dismissible = false;
+
+            const settingsModalInstance = M.Modal.getInstance(settingsModal);
+            if(settingsModalInstance) {
+                settingsModalInstance.options.onOpenStart = () => {
+                    populatePricesConfigTable();
+                    populateBonusTiersConfig();
+                    M.updateTextFields();
+                };
+            }
+
+            confirmationConfirmButton.addEventListener('click', () => { if (confirmPromiseResolve) { confirmPromiseResolve(true); confirmPromiseResolve = null; }});
+            confirmationCancelButton.addEventListener('click', () => { if (confirmPromiseResolve) { confirmPromiseResolve(false); confirmPromiseResolve = null; }});
+
+            M.FormSelect.init(document.querySelectorAll('select'));
+            
+            document.body.style.display = 'block';
+            if (loginModalInstance) {
+                 loginModalInstance.open();
+                 // Crucial: Ensure Materialize select is ready and labels updated after modal opens
+                 setTimeout(() => { // Timeout gives modal time to render fully
+                    M.FormSelect.init(loginRoleSelect); // Re-initialize specifically if needed
+                    M.updateTextFields(); // Update all text fields within the modal
+                 }, 100);
+            } else {
+                console.error("Login modal instance not found.");
+                mainAppContent.style.display = 'block'; loadProjectList(); updateButtonVisibility();
+            }
+        });
+    </script>
+</body>
 </html>
