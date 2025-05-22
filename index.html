@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Buffer Test</title>
+    <script src="./buffer.js"></script> <script>
+        console.log("HEAD SCRIPT: After local buffer.js execution attempt.");
+        if (typeof buffer !== 'undefined' && typeof buffer.Buffer === 'function') {
+            window.Buffer = buffer.Buffer;
+            console.log("HEAD SCRIPT: window.Buffer SET from global 'buffer.Buffer'.", window.Buffer);
+            alert("SUCCESS: 'buffer' global FOUND, window.Buffer is SET!");
+        } else if (typeof window.buffer !== 'undefined' && typeof window.buffer.Buffer === 'function') {
+            window.Buffer = window.buffer.Buffer;
+            console.log("HEAD SCRIPT: window.Buffer SET from 'window.buffer.Buffer'.", window.Buffer);
+            alert("SUCCESS: 'window.buffer' global FOUND, window.Buffer is SET!");
+        }
+        else {
+            console.error("HEAD SCRIPT: CRITICAL - 'buffer' global (from local buffer.js) or its 'Buffer' property NOT FOUND.");
+            alert("FAILURE: 'buffer' global NOT found by HEAD script. Check console and ensure buffer.js is the correct UMD version and loaded.");
+        }
+    </script>
+    </head>
+<body>
+    <h1>Buffer Test Page</h1>
+    <p>Check the browser console (F12) for messages and see the alert.</p>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log("DOMContentLoaded: Checking window.Buffer state.");
+            if (typeof window.Buffer === 'function') {
+                console.log("DOMContentLoaded: window.Buffer is DEFINED.", window.Buffer);
+                alert("DOMContentLoaded: window.Buffer is DEFINED!");
+            } else {
+                console.error("DOMContentLoaded: window.Buffer is STILL UNDEFINED.");
+                alert("DOMContentLoaded: window.Buffer is STILL UNDEFINED! This means the head script failed or buffer.js did not execute correctly.");
+            }
+        });
+    </script>
+</body>
+</html>
