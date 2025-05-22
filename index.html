@@ -9,7 +9,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@400;700&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600&display=swap" rel="stylesheet">
 
-    <script src="buffer.min.js"></script>
+    <script src="./buffer.min.js"></script> 
 
     <script>
         console.log("HEAD SCRIPT (using local buffer.min.js): Attempting to set window.Buffer...");
@@ -20,11 +20,11 @@
             window.Buffer = buffer.Buffer;
             console.log("HEAD SCRIPT: window.Buffer has been SET successfully from global 'buffer.Buffer'.");
         } else {
-            console.error("HEAD SCRIPT (local buffer.min.js): CRITICAL - The 'buffer' global (from buffer.min.js) or its 'Buffer' property was NOT found. window.Buffer could not be set here.");
+            console.error("HEAD SCRIPT (local buffer.min.js): CRITICAL - The 'buffer' global (from local buffer.min.js) or its 'Buffer' property was NOT found. window.Buffer could not be set here. Ensure buffer.min.js is in the root directory and loaded correctly.");
         }
     </script>
 
-    <script src="dbf.min.js"></script>
+    <script src="./dbf.min.js"></script>
 
     <style>
         :root {
@@ -749,16 +749,14 @@
             </div>
         </div>
 
-        <div id="add-project-modal" class="modal">
-            <div class="modal-content">
+        <div id="add-project-modal" class="modal"> <div class="modal-content">
                 <h5 id="modal-title">Add New Project</h5>
                 <div class="input-field">
                     <input id="project-name" type="text">
                     <label for="project-name">Project Name</label>
                 </div>
 
-                <div class="file-field input-field">
-                    <div class="btn blue"> 
+                <div class="file-field input-field" id="dbf-file-upload-field"> <div class="btn blue"> 
                         <span>Import DBF</span>
                         <input type="file" id="dbf-file-input" accept=".dbf">
                     </div>
@@ -869,8 +867,8 @@
                 console.log("DOMContentLoaded: window.Buffer IS correctly defined and available.");
                 bufferPolyfillLoaded = true;
             } else {
-                console.error("DOMContentLoaded: CRITICAL - window.Buffer is STILL NOT DEFINED. The inline script in <head> likely failed to set it because 'buffer.min.js' did not properly define 'buffer' or 'window.buffer' globally. DBF import will fail.");
-                alert("Error: A critical component (Buffer polyfill) required for DBF files failed to load or initialize correctly. DBF import functionality will not work. Please check your internet connection, browser console (F12) for errors related to 'buffer.min.js' (ensure it's loading with status 200 OK and content is not empty), and try disabling browser extensions or ad blockers.");
+                console.error("DOMContentLoaded: CRITICAL - window.Buffer is STILL NOT DEFINED. The inline script in <head> likely failed to set it because 'buffer.min.js' (local) did not properly define 'buffer' or 'window.buffer' globally. DBF import will fail.");
+                alert("Error: A critical component (Buffer polyfill) required for DBF files failed to load or initialize correctly. DBF import functionality will not work. Please ensure 'buffer.min.js' is in the same directory as index.html, check your browser console (F12) for errors related to 'buffer.min.js' (ensure it's loading with status 200 OK and content is not empty), and try disabling browser extensions or ad blockers.");
             }
 
             let dbfLibraryLoaded = false;
@@ -878,8 +876,8 @@
                 console.log("DOMContentLoaded: Dbf library IS correctly defined and available.");
                 dbfLibraryLoaded = true;
             } else {
-                console.error("DOMContentLoaded: CRITICAL - Dbf library (dbf.min.js / local dbf.js) is NOT available or Dbf.read is not a function. DBF import will fail.");
-                alert("Error: The DBF reading library (dbf.min.js / local dbf.js) failed to load or initialize correctly. DBF import functionality will not work. Please check your internet connection or browser console for related errors.");
+                console.error("DOMContentLoaded: CRITICAL - Dbf library (dbf.min.js - local) is NOT available or Dbf.read is not a function. DBF import will fail.");
+                alert("Error: The DBF reading library (dbf.min.js - local) failed to load or initialize correctly. DBF import functionality will not work. Ensure 'dbf.min.js' is in the same directory as index.html and check your browser console for related errors.");
             }
 
             // --- Configuration ---
@@ -925,6 +923,7 @@
             const autoFetchButton = document.getElementById('auto-fetch-external-json');
             const darkModeToggle = document.getElementById('dark-mode-toggle');
             const dbfFileInput = document.getElementById('dbf-file-input'); 
+            const dbfFileFieldContainer = document.getElementById('dbf-file-upload-field'); // Container for the DBF input field
             const confirmationModalEl = document.getElementById('confirmation-modal');
             const confirmationModalTitle = document.getElementById('confirmation-modal-title');
             const confirmationModalMessage = document.getElementById('confirmation-modal-message');
@@ -943,21 +942,20 @@
             function showLoader() { const l = document.getElementById('loader-spinner'); if (l) l.style.display = 'block'; }
             function hideLoader() { const l = document.getElementById('loader-spinner'); if (l) l.style.display = 'none'; }
 
-            // Conditionally enable DBF functionality UI (placed after showToast is defined)
-            if (dbfFileInput) {
-                const dbfFileField = dbfFileInput.closest('.file-field');
+            // Conditionally show/hide DBF functionality UI (placed after showToast is defined)
+            if (dbfFileFieldContainer) { 
                 if (!bufferPolyfillLoaded || !dbfLibraryLoaded) {
                     console.warn("DBF import UI elements will be hidden due to missing dependencies.");
-                    if (dbfFileField) {
-                        dbfFileField.style.display = 'none'; 
-                    }
-                    setTimeout(() => {
+                    dbfFileFieldContainer.style.display = 'none'; 
+                    setTimeout(() => { // Delay toast slightly to ensure Materialize is ready for it
                         showToast('DBF import disabled: required components failed to load. Check console (F12).', 'red darken-2', 10000);
                     }, 500);
                 } else {
-                    console.log("DBF import UI elements are available.");
-                    if (dbfFileField) dbfFileField.style.display = 'block'; 
+                    console.log("DBF import UI elements are available and will be shown.");
+                    dbfFileFieldContainer.style.display = 'block'; 
                 }
+            } else {
+                 console.error("Could not find the DBF file upload field container ('dbf-file-upload-field') to hide/show.");
             }
 
             function safeSetLocalStorage(key, value) {
@@ -1262,12 +1260,12 @@
 
                 if (typeof window.Buffer !== 'function') {
                     showToast('DBF Error: Buffer component not available. Cannot process file.', 'red', 6000);
-                    console.error("handleDbfFileSelect: window.Buffer is not a function. This should have been caught by initial checks.");
+                    console.error("handleDbfFileSelect: window.Buffer is not a function. This should have been caught by initial checks in DOMContentLoaded.");
                     return;
                 }
                 if (typeof Dbf !== 'object' || typeof Dbf.read !== 'function') {
                     showToast('DBF Error: DBF reader library not available. Cannot process file.', 'red', 6000);
-                    console.error("handleDbfFileSelect: Dbf object or Dbf.read is not available. This should have been caught by initial checks.");
+                    console.error("handleDbfFileSelect: Dbf object or Dbf.read is not available. This should have been caught by initial checks in DOMContentLoaded.");
                     return;
                 }
 
@@ -1349,8 +1347,8 @@
 
             M.Modal.init(document.querySelectorAll('.modal'), {
                 dismissible: false, 
-                onOpenEnd: (modalEl) => {
-                    if (modalEl.id === 'add-project-modal') {
+                onOpenEnd: (modalEl_instance) => { // modalEl is the DOM element, not instance here
+                    if (modalEl_instance.id === 'add-project-modal') {
                         M.textareaAutoResize(rawDataInput); 
                         if (dbfFileInput) { 
                             dbfFileInput.value = null;
