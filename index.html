@@ -1,7 +1,120 @@
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project Tracker - Firebase Integrated</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; background-color: #f4f7f6; color: #333; line-height: 1.4; }
+        .container { width: 98%; max-width: 1900px; margin: 10px auto; padding: 10px; background-color: #fff; box-shadow: 0 0 10px rgba(0,0,0,0.1); border-radius: 5px; }
+        h1, h2, h3 { color: #2c3e50; text-align: center; margin-bottom: 12px; font-size: 1.5em; }
+        h2 { font-size: 1.3em; }
+        h3 { font-size: 1.1em; text-align: left; margin-top: 15px; border-bottom: 1px solid #ccc; padding-bottom: 5px;}
+        .action-bar { margin-bottom: 15px; display: flex; gap: 10px; }
+        .btn { padding: 4px 8px; border: none; border-radius: 3px; cursor: pointer; font-size: 0.8em; transition: background-color 0.3s ease; margin: 2px; min-width: 60px; text-align: center; vertical-align: middle;}
+        .btn-lg { padding: 7px 12px; font-size: 0.9em; }
+        .btn-group-toggle { min-width: 25px; padding: 2px 6px; font-size: 0.9em; margin-left: 10px; background-color: #7f8c8d; color:white; }
+        .btn-group-toggle:hover { background-color: #95a5a6;}
+        .btn-danger { background-color: #e74c3c; color: white; } .btn-danger:hover { background-color: #c0392b; }
+        .btn-primary { background-color: #3498db; color: white; } .btn-primary:hover { background-color: #2980b9; }
+        .btn-success { background-color: #2ecc71; color: white; } .btn-success:hover { background-color: #27ae60; }
+        .btn-mark-done { background-color: #1abc9c; color: white; } .btn-mark-done:hover { background-color: #16a085; }
+        .btn-release { background-color: #9b59b6; color: white; font-size:0.85em; padding: 5px 10px; } .btn-release:hover { background-color: #8e44ad; }
+        .btn-day-start { background-color: #007bff; color: white; } 
+        .btn-day-start:hover { background-color: #0056b3; }
+        .btn-day-end { background-color: #fd7e14; color: white; } 
+        .btn-day-end:hover { background-color: #c85e08; }
+        .btn:disabled { background-color: #bdc3c7 !important; color: #7f8c8d !important; cursor: not-allowed; }
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.5); }
+        .modal-content { background-color: #fefefe; margin: 5% auto; padding: 15px; border: 1px solid #888; width: 90%; border-radius: 5px; position: relative; }
+        #projectFormModal .modal-content { max-width: 480px; } 
+        #tlDashboardModal .modal-content { max-width: 750px; max-height: 85vh; overflow-y: auto;} 
+        .close-button { color: #aaa; float: right; font-size: 24px; font-weight: bold; } .close-button:hover, .close-button:focus { color: black; text-decoration: none; cursor: pointer; }
+        #newProjectForm label { display: block; margin-top: 8px; font-weight: bold; font-size: 0.85em;}
+        #newProjectForm input[type="text"], #newProjectForm input[type="number"], #newProjectForm select { width: calc(100% - 18px); padding: 7px; margin-top: 3px; border: 1px solid #ddd; border-radius: 3px; box-sizing: border-box; font-size: 0.85em; }
+        #newProjectForm button[type="submit"] { margin-top: 12px; }
+        #projectTable { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 0.8em; } 
+        #projectTable th, #projectTable td { border: 1px solid #ddd; padding: 3px 5px; text-align: left; vertical-align: middle; white-space: nowrap; }
+        #projectTable thead th { background-color: #34495e; color: white; font-weight: bold; position: sticky; top: 0; z-index: 10;}
+        #projectTable td.wrap-text { white-space: normal; } 
+        #projectTable input[type="text"].assigned-to-input, #projectTable textarea.tech-notes-input { width: calc(100% - 6px); padding: 2px; border: 1px solid #ccc; border-radius: 2px; box-sizing: border-box; font-size: 1em; background-color: #fff; }
+        #projectTable textarea.tech-notes-input { resize: vertical; min-height: 18px; line-height: 1.3; }
+        .batch-header-row td { background-color: #6c757d !important; color: white; font-size: 1.1em; font-weight: bold; text-align: left; padding: 6px 8px; }
+        .fix-group-header td { background-color: #adb5bd !important; color: #212529; font-size: 1.0em; font-weight: bold; text-align: left; padding: 4px 8px; cursor:pointer; padding-left: 30px; }
+        .hidden-group-row { display: none; }
+        .overall-project-separator td { height: 10px !important; background-color: #e9ecef !important; border: none !important; padding: 0 !important; }
+        .fix1-row { background-color: #e6ffe6 !important; } 
+        .fix2-row { background-color: #ffe6f2 !important; } 
+        .fix3-row { background-color: #e6e6ff !important; } 
+        .fix4-row { background-color: #fff5e6 !important; } 
+        #projectTable tbody tr:not(.fix-group-header):not(.batch-header-row):not(.overall-project-separator):hover { background-color: #d0e0f0 !important; }
+        .status { padding: 2px 5px; border-radius: 3px; color: white; font-weight: bold; text-align: center; display: inline-block; font-size:0.95em; }
+        .status-available { background-color: #3498db; } .status-inprogressday1 { background-color: #f39c12; }
+        .status-day1ended_awaitingnext { background-color: #f39c12; } .status-inprogressday2 { background-color: #f39c12; }
+        .status-completed { background-color: #2ecc71; }
+        #tlDashboardContent { margin-top:15px; }
+        .dashboard-batch-item { border: 1px solid #bdc3c7; padding: 10px; margin-bottom: 10px; background-color: #fff; border-radius: 4px; }
+        .dashboard-batch-item h4 { margin-top: 0; margin-bottom: 8px; font-size: 1.05em; color: #34495e;}
+        .dashboard-batch-item p { margin: 3px 0; font-size: 0.9em;}
+        .dashboard-batch-actions-release { margin-top: 8px; margin-bottom: 8px; }
+        .dashboard-batch-actions-delete { margin-top: 8px; border-top: 1px dashed #ccc; padding-top: 8px; display: flex; flex-wrap: wrap; gap: 5px;}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Project Tracker (Live with Firebase)</h1>
+        <div class="action-bar">
+            <button id="openAddNewProjectBtn" class="btn btn-success btn-lg">➕ Add New Project(s)</button>
+            <button id="openTlDashboardBtn" class="btn btn-primary btn-lg">👑 TL Dashboard</button>
+        </div>
+
+        <div id="projectFormModal" class="modal">
+            <div class="modal-content">
+                <span class="close-button" id="closeProjectFormBtn">&times;</span>
+                <h2>Add New Project(s)</h2>
+                <form id="newProjectForm">
+                    <label for="fixCategorySelect">Fix Category:</label>
+                    <select id="fixCategorySelect" required><option value="Fix1">Fix1</option><option value="Fix2">Fix2</option><option value="Fix3">Fix3</option><option value="Fix4">Fix4</option></select>
+                    <label for="numRows">Number of Tasks/Rows:</label>
+                    <input type="number" id="numRows" value="1" min="1" required>
+                    <label for="baseProjectName">Base Project Name/ID:</label>
+                    <input type="text" id="baseProjectName" value="PROJ_ID_XYZ" required>
+                    <label for="areaTaskBase">Base Name for Area/Task (e.g., Section; blank for 'AreaXX'):</label>
+                    <input type="text" id="areaTaskBase" placeholder="Default: 'Area01', 'Area02'...">
+                    <label for="gsd">GSD:</label>
+                    <select id="gsd" required><option value="3in">3in</option><option value="9in">9in</option></select>
+                    <button type="submit" class="btn btn-success">Add Project(s)</button>
+                </form>
+            </div>
+        </div>
+
+        <div id="tlDashboardModal" class="modal">
+            <div class="modal-content">
+                <span class="close-button" id="closeTlDashboardBtn">&times;</span>
+                <h2>👑 Team Lead Dashboard</h2>
+                <div id="tlDashboardContent"></div>
+            </div>
+        </div>
+        
+        <h3>📌 Project Details</h3>
+        <table id="projectTable">
+            <thead>
+                <tr>
+                    <th>Fix</th><th style="min-width: 150px;">Base Name</th><th style="min-width: 80px;">Area/Task</th><th>GSD</th>
+                    <th style="min-width: 80px;">Assigned</th><th style="min-width: 120px;">Status</th>
+                    <th>D1 Start</th><th>D1 End</th><th>D1 Dur(m)</th>
+                    <th>D2 Start</th><th>D2 End</th><th>D2 Dur(m)</th>
+                    <th>Total(m)</th><th style="min-width: 120px;">Tech Notes</th><th style="min-width: 150px;">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="projectTableBody"></tbody>
+        </table>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
     <script>
-        // --- Firebase Configuration - ENSURE THIS IS YOUR CORRECT CONFIG ---
+        // --- Firebase Configuration - THIS IS YOUR ACTUAL CONFIG - VERIFY IT ---
         const firebaseConfig = {
           apiKey: "AIzaSyADB1W9YKaU6DFqGyjivsADJOhuIRY0eZ0",
           authDomain: "project-tracker-fddb1.firebaseapp.com",
@@ -14,12 +127,13 @@
 
         // Initialize Firebase
         let app;
-        let db; // Firestore database instance
+        let db; 
 
         try {
             app = firebase.initializeApp(firebaseConfig);
-            db = firebase.firestore(); // Using compat library for Firestore
+            db = firebase.firestore(); 
             console.log("Firebase initialized successfully!");
+            // const analytics = firebase.analytics(); // Uncomment if you added the analytics SDK and want to use it
         } catch (e) {
             console.error("CRITICAL: Error initializing Firebase: ", e);
             alert("CRITICAL ERROR: Could not connect to Firebase. App will not function correctly. Please check console and Firebase configuration.");
@@ -29,32 +143,49 @@
         const DEFAULT_PIN = "1234";
         const FIX_CATEGORIES_ORDER = ["Fix1", "Fix2", "Fix3", "Fix4"];
         const STATUS_ORDER = { 'Available': 1, 'InProgressDay1': 2, 'Day1Ended_AwaitingNext': 3, 'InProgressDay2': 4, 'Completed': 5 };
-        const NUM_TABLE_COLUMNS = 15;
+        const NUM_TABLE_COLUMNS = 15; 
 
-        let openAddNewProjectBtn, openTlDashboardBtn, projectFormModal, tlDashboardModal,
-            closeProjectFormBtn, closeTlDashboardBtn, newProjectForm, projectTableBody,
+        let openAddNewProjectBtn, openTlDashboardBtn, projectFormModal, tlDashboardModal, 
+            closeProjectFormBtn, closeTlDashboardBtn, newProjectForm, projectTableBody, 
             tlDashboardContentElement;
 
-        let projects = []; // This will be populated by Firebase in real-time
-        let groupVisibilityState = {}; // Key: batchId_fixCategory, Value: { isExpanded: true }
+        let projects = []; 
+        let groupVisibilityState = {}; 
 
-        // --- Utility Functions ---
-        function generateId() { return Date.now().toString(36) + Math.random().toString(36).substr(2, 5); } // Used for client-side batchId
+        function generateId() { return Date.now().toString(36) + Math.random().toString(36).substr(2, 5); }
         function formatMillisToMinutes(millis) { return (millis === null || typeof millis !== 'number' || millis < 0) ? 'N/A' : Math.floor(millis / 60000); }
+        
         function calculateDurationMs(startTime, endTime) {
             let startMillis = startTime;
             let endMillis = endTime;
-            if (startTime && typeof startTime.toMillis === 'function') startMillis = startTime.toMillis();
-            if (endTime && typeof endTime.toMillis === 'function') endMillis = endTime.toMillis();
+
+            // Handle Firebase Timestamps by converting to milliseconds
+            if (startTime && typeof startTime.toMillis === 'function') {
+                startMillis = startTime.toMillis();
+            }
+            if (endTime && typeof endTime.toMillis === 'function') {
+                endMillis = endTime.toMillis();
+            }
+            // Handle numbers (e.g., from Date.now() used as a temporary client-side value)
+            else if (typeof startTime === 'number' && typeof endTime === 'number') {
+                 // proceed
+            }
+            // If one is a timestamp and other is number (e.g. clientNowMillis with server timestamp)
+            else if (startTime && typeof startTime.toMillis === 'function' && typeof endTime === 'number') {
+                endMillis = endTime; // endTime is already millis
+            } else if (typeof startTime === 'number' && endTime && typeof endTime.toMillis === 'function') {
+                startMillis = startTime; // startTime is already millis
+            }
+
+
             return (!startMillis || !endMillis || endMillis < startMillis) ? null : endMillis - startMillis;
         }
 
-        // --- Firebase Data Operations ---
         function initializeFirebaseAndLoadData() {
             if (!db) {
                 console.error("Firestore not initialized. Cannot load data.");
-                alert("ERROR: Database connection failed. App cannot load data. Displaying empty table.");
-                projects = []; // Ensure projects is empty if Firebase fails
+                alert("ERROR: Database connection failed. App cannot load data.");
+                projects = []; 
                 refreshAllViews();
                 return;
             }
@@ -62,233 +193,32 @@
 
             db.collection("projects")
               .orderBy("batchId")
-              .orderBy("fixCategory") // Firestore might require composite indexes for this
+              .orderBy("fixCategory") 
               .orderBy("areaTask")
               .onSnapshot((querySnapshot) => {
                 const firebaseProjects = [];
                 querySnapshot.forEach((doc) => {
                     firebaseProjects.push({ id: doc.id, ...doc.data() });
                 });
-                projects = firebaseProjects;
+                projects = firebaseProjects; 
                 console.log("Projects data updated from Firebase:", projects.length, "items");
-                projects.forEach(p => { // Ensure group visibility state is initialized for all loaded projects
+                
+                projects.forEach(p => { 
                     const groupStateKey = `${p.batchId}_${p.fixCategory}`;
                     if (groupVisibilityState[groupStateKey] === undefined) {
                         groupVisibilityState[groupStateKey] = { isExpanded: true };
                     }
                 });
-                refreshAllViews();
+                refreshAllViews(); 
             }, (error) => {
                 console.error("Error fetching projects from Firebase: ", error);
-                alert("Error fetching projects. Please check console for details.");
-                projects = []; // Clear projects on error to avoid stale data
+                alert("Error fetching projects. Check console (e.g., missing Firestore indexes or permission issues).");
+                projects = []; 
                 refreshAllViews();
             });
         }
-
-        async function handleAddProjectSubmit(e) {
-            e.preventDefault();
-            if (!db) { alert("Database not initialized! Cannot add projects."); return; }
-
-            const fixCategory = document.getElementById('fixCategorySelect').value;
-            const numRows = parseInt(document.getElementById('numRows').value, 10) || 1;
-            const baseProjectNameVal = document.getElementById('baseProjectName').value;
-            const areaTaskBaseInput = document.getElementById('areaTaskBase').value.trim();
-            const gsd = document.getElementById('gsd').value;
-            const currentBatchId = "batch_" + generateId();
-            const batchCreationTimestamp = firebase.firestore.FieldValue.serverTimestamp();
-
-            try {
-                const fbBatch = db.batch();
-                for (let i = 1; i <= numRows; i++) {
-                    const areaPrefix = areaTaskBaseInput || "Area";
-                    const formattedIndex = String(i).padStart(2, '0');
-                    const currentAreaTask = `${areaPrefix}${formattedIndex}`;
-                    const newProjectData = {
-                        batchId: currentBatchId, creationTimestamp: batchCreationTimestamp,
-                        fixCategory: fixCategory, baseProjectName: baseProjectNameVal,
-                        areaTask: currentAreaTask, gsd: gsd, assignedTo: "", techNotes: "", status: 'Available',
-                        startTimeDay1: null, finishTimeDay1: null, durationDay1Ms: null,
-                        startTimeDay2: null, finishTimeDay2: null, durationDay2Ms: null, releasedToNextStage: false
-                    };
-                    const docRef = db.collection("projects").doc(); // Firestore auto-generates ID
-                    fbBatch.set(docRef, newProjectData);
-                }
-                await fbBatch.commit();
-                console.log(`${numRows} new project(s) added to Firebase.`);
-            } catch (error) {
-                console.error("Error adding projects to Firebase: ", error);
-                alert("Error adding projects. Check console.");
-            }
-            projectFormModal.style.display = 'none';
-            // Real-time listener will call refreshAllViews()
-        }
-
-        async function updateProjectState(projectId, action) {
-            if (!db) { alert("Database not initialized! Cannot update state."); return; }
-            const projectRef = db.collection("projects").doc(projectId);
-            
-            // Fetch current project data to make decisions if needed, especially for durations
-            let currentProjectData;
-            try {
-                const doc = await projectRef.get();
-                if (!doc.exists) {
-                    console.error("Project not found in Firebase for update:", projectId);
-                    alert(`Error: Project with ID ${projectId} not found for update.`);
-                    return;
-                }
-                currentProjectData = doc.data(); // Get current data directly from Firestore
-            } catch(error) {
-                console.error("Error fetching project before update:", error);
-                alert("Error fetching project details for update. Check console.");
-                return;
-            }
-
-            const nowTimestamp = firebase.firestore.FieldValue.serverTimestamp();
-            const nowMillisForClientCalc = Date.now(); // For client-side duration estimates with server timestamps
-            let updatedFields = {};
-
-            switch (action) {
-                case 'startDay1':
-                    if (currentProjectData.status === 'Available') {
-                        updatedFields = { status: 'InProgressDay1', startTimeDay1: nowTimestamp, finishTimeDay1: null, durationDay1Ms: null, startTimeDay2: null, finishTimeDay2: null, durationDay2Ms: null };
-                    } break;
-                case 'endDay1':
-                    if (currentProjectData.status === 'InProgressDay1' && currentProjectData.startTimeDay1) {
-                        updatedFields = { status: 'Day1Ended_AwaitingNext', finishTimeDay1: nowTimestamp, durationDay1Ms: calculateDurationMs(currentProjectData.startTimeDay1, nowMillisForClientCalc) };
-                    } break;
-                case 'startDay2':
-                    if (currentProjectData.status === 'Day1Ended_AwaitingNext') {
-                        updatedFields = { status: 'InProgressDay2', startTimeDay2: nowTimestamp, finishTimeDay2: null, durationDay2Ms: null };
-                    } break;
-                case 'endDay2':
-                    if (currentProjectData.status === 'InProgressDay2' && currentProjectData.startTimeDay2) {
-                        updatedFields = { status: 'Completed', finishTimeDay2: nowTimestamp, durationDay2Ms: calculateDurationMs(currentProjectData.startTimeDay2, nowMillisForClientCalc) };
-                    } break;
-                case 'markDone':
-                    if (currentProjectData.status !== 'Completed') {
-                        updatedFields.status = 'Completed';
-                        if (currentProjectData.startTimeDay1 && !currentProjectData.finishTimeDay1) {
-                            updatedFields.finishTimeDay1 = nowTimestamp;
-                            updatedFields.durationDay1Ms = calculateDurationMs(currentProjectData.startTimeDay1, nowMillisForClientCalc);
-                        }
-                        if (currentProjectData.startTimeDay2 && !currentProjectData.finishTimeDay2) {
-                            updatedFields.finishTimeDay2 = nowTimestamp;
-                            updatedFields.durationDay2Ms = calculateDurationMs(currentProjectData.startTimeDay2, nowMillisForClientCalc);
-                        }
-                    } break;
-                default:
-                    console.log("Unknown action in updateProjectState:", action); return;
-            }
-
-            if (Object.keys(updatedFields).length > 0) {
-                try {
-                    await projectRef.update(updatedFields);
-                    console.log(`Project ${projectId} action ${action} updated in Firebase.`);
-                } catch (error) {
-                    console.error(`Error updating project ${projectId} for action ${action}:`, error);
-                    alert(`Error updating project. Action: ${action}. See console.`);
-                }
-            }
-            // Real-time listener will call refreshAllViews()
-        }
-
-        async function releaseBatchToNextFix(batchId, currentFixCategory, nextFixCategory) {
-            if (!db) { alert("Database not initialized!"); return; }
-            // Fetch current source tasks to ensure we have the latest data before releasing
-            const sourceTasksSnapshot = await db.collection("projects")
-                .where("batchId", "==", batchId)
-                .where("fixCategory", "==", currentFixCategory)
-                .where("releasedToNextStage", "==", false)
-                .get();
-
-            if (sourceTasksSnapshot.empty) {
-                alert("Error: No source tasks found for release, or they may have already been released.");
-                refreshAllViews(); // Refresh dashboard to reflect current state
-                return;
-            }
-            
-            const sourceBatchTasks = [];
-            sourceTasksSnapshot.forEach(doc => sourceBatchTasks.push({id: doc.id, ...doc.data()}));
-
-            const allReadyForRelease = sourceBatchTasks.every(p => p.status === 'Completed' || p.status === 'Day1Ended_AwaitingNext');
-            if (!allReadyForRelease) {
-                alert(`Not all tasks in batch ID ${batchId} for ${currentFixCategory} are 'Completed' or 'Day 1 Ended'. Cannot release.`);
-                return;
-            }
-
-            const releaseTimestamp = firebase.firestore.FieldValue.serverTimestamp();
-            const fbBatch = db.batch();
-
-            for (const sourceTask of sourceBatchTasks) {
-                // Check if the task for the next stage ALREADY exists (idempotency)
-                const q = db.collection("projects")
-                    .where("batchId", "==", sourceTask.batchId)
-                    .where("areaTask", "==", sourceTask.areaTask)
-                    .where("fixCategory", "==", nextFixCategory);
-                const existingNextStageTaskSnapshot = await q.get();
-
-                if (existingNextStageTaskSnapshot.empty) {
-                    const newTaskData = {
-                        batchId: sourceTask.batchId, creationTimestamp: releaseTimestamp,
-                        fixCategory: nextFixCategory, baseProjectName: sourceTask.baseProjectName,
-                        areaTask: sourceTask.areaTask, gsd: sourceTask.gsd, assignedTo: sourceTask.assignedTo,
-                        techNotes: "", status: 'Available',
-                        startTimeDay1: null, finishTimeDay1: null, durationDay1Ms: null,
-                        startTimeDay2: null, finishTimeDay2: null, durationDay2Ms: null, releasedToNextStage: false
-                    };
-                    const newDocRef = db.collection("projects").doc();
-                    fbBatch.set(newDocRef, newTaskData);
-                }
-                
-                const sourceDocRef = db.collection("projects").doc(sourceTask.id);
-                fbBatch.update(sourceDocRef, { releasedToNextStage: true });
-            }
-
-            try {
-                await fbBatch.commit();
-                console.log(`Batch ${batchId} (${currentFixCategory}) released to ${nextFixCategory} in Firebase.`);
-            } catch (error) {
-                console.error("Error releasing batch to Firebase:", error);
-                alert("Error releasing batch. Check console.");
-            }
-            // Listener will refresh views
-        }
-
-        async function deleteProjectBatch(batchIdToDelete) {
-            if (!db) { alert("Database not initialized!"); return; }
-            try {
-                const querySnapshot = await db.collection("projects").where("batchId", "==", batchIdToDelete).get();
-                const fbBatch = db.batch();
-                querySnapshot.forEach(doc => fbBatch.delete(doc.ref));
-                await fbBatch.commit();
-                console.log(`Batch ${batchIdToDelete} deleted from Firebase.`);
-            } catch (error) {
-                console.error(`Error deleting batch ${batchIdToDelete}:`, error);
-                alert("Error deleting batch. Check console.");
-            }
-            // Listener will refresh views
-        }
-
-        async function deleteSpecificFixTasksForBatch(batchIdToDelete, fixCategoryToDelete) {
-            if (!db) { alert("Database not initialized!"); return; }
-            try {
-                const querySnapshot = await db.collection("projects")
-                   .where("batchId", "==", batchIdToDelete)
-                   .where("fixCategory", "==", fixCategoryToDelete)
-                   .get();
-                const fbBatch = db.batch();
-                querySnapshot.forEach(doc => fbBatch.delete(doc.ref));
-                await fbBatch.commit();
-                console.log(`${fixCategoryToDelete} tasks for batch ${batchIdToDelete} deleted from Firebase.`);
-            } catch (error) {
-                console.error(`Error deleting ${fixCategoryToDelete} for batch ${batchIdToDelete}:`, error);
-                alert("Error deleting specific fix tasks. Check console.");
-            }
-            // Listener will refresh views
-        }
         
-        function setupDOMReferences() { /* ... same ... */ 
+        function setupDOMReferences() { 
             openAddNewProjectBtn = document.getElementById('openAddNewProjectBtn');
             openTlDashboardBtn = document.getElementById('openTlDashboardBtn');
             projectFormModal = document.getElementById('projectFormModal');
@@ -300,7 +230,7 @@
             tlDashboardContentElement = document.getElementById('tlDashboardContent');
         }
 
-        function attachEventListeners() { /* ... same ... */ 
+        function attachEventListeners() { 
             if (openAddNewProjectBtn) openAddNewProjectBtn.onclick = () => { projectFormModal.style.display = 'block'; };
             if (closeProjectFormBtn) closeProjectFormBtn.onclick = () => { projectFormModal.style.display = 'none'; };
             if (openTlDashboardBtn) {
@@ -319,7 +249,44 @@
             }
             if (newProjectForm) newProjectForm.addEventListener('submit', handleAddProjectSubmit);
         }
-        
+
+        async function handleAddProjectSubmit(e) { 
+            e.preventDefault();
+            if (!db) { alert("Database not initialized! Cannot add projects."); return; }
+
+            const fixCategory = document.getElementById('fixCategorySelect').value;
+            const numRows = parseInt(document.getElementById('numRows').value, 10) || 1;
+            const baseProjectNameVal = document.getElementById('baseProjectName').value;
+            const areaTaskBaseInput = document.getElementById('areaTaskBase').value.trim();
+            const gsd = document.getElementById('gsd').value;
+            const currentBatchId = "batch_" + generateId(); 
+            const batchCreationTimestamp = firebase.firestore.FieldValue.serverTimestamp(); 
+
+            try {
+                const fbBatch = db.batch(); 
+                for (let i = 1; i <= numRows; i++) {
+                    const areaPrefix = areaTaskBaseInput || "Area"; 
+                    const formattedIndex = String(i).padStart(2, '0'); 
+                    const currentAreaTask = `${areaPrefix}${formattedIndex}`;
+                    const newProjectData = {
+                        batchId: currentBatchId, creationTimestamp: batchCreationTimestamp, 
+                        fixCategory: fixCategory, baseProjectName: baseProjectNameVal,
+                        areaTask: currentAreaTask, gsd: gsd, assignedTo: "", techNotes: "", status: 'Available',
+                        startTimeDay1: null, finishTimeDay1: null, durationDay1Ms: null,
+                        startTimeDay2: null, finishTimeDay2: null, durationDay2Ms: null, releasedToNextStage: false
+                    };
+                    const docRef = db.collection("projects").doc(); 
+                    fbBatch.set(docRef, newProjectData);
+                }
+                await fbBatch.commit(); 
+                console.log(`${numRows} new project(s) added to Firebase.`);
+            } catch (error) {
+                console.error("Error adding projects to Firebase: ", error);
+                alert("Error adding projects. Check console.");
+            }
+            projectFormModal.style.display = 'none';
+        }
+
         function getManageableBatches() { /* ... same ... */ 
             const allBatchesInfo = {};
             projects.forEach(p => {
@@ -373,8 +340,87 @@
                 tlDashboardContentElement.appendChild(batchDiv);
             });
         }
+            
+        async function releaseBatchToNextFix(batchId, currentFixCategory, nextFixCategory) { 
+            if (!db) { alert("Database not initialized!"); return; }
+            try {
+                const sourceTasksSnapshot = await db.collection("projects")
+                    .where("batchId", "==", batchId)
+                    .where("fixCategory", "==", currentFixCategory)
+                    .where("releasedToNextStage", "==", false)
+                    .get();
 
-        function renderProjects() { /* ... same rendering logic as v10, including batch and FixN headers ... */ 
+                if (sourceTasksSnapshot.empty) {
+                    alert("No tasks found for this batch in the current stage to release, or they may have already been released.");
+                    refreshAllViews(); return;
+                }
+                
+                const sourceBatchTasks = [];
+                sourceTasksSnapshot.forEach(doc => sourceBatchTasks.push({id: doc.id, ...doc.data()}));
+
+                const allReadyForRelease = sourceBatchTasks.every(p => p.status === 'Completed' || p.status === 'Day1Ended_AwaitingNext');
+                if (!allReadyForRelease) {
+                    alert(`Not all tasks in batch ID ${batchId} for ${currentFixCategory} are 'Completed' or 'Day 1 Ended'. Cannot release.`);
+                    return;
+                }
+
+                const releaseTimestamp = firebase.firestore.FieldValue.serverTimestamp();
+                const fbBatch = db.batch();
+
+                for (const sourceTask of sourceBatchTasks) {
+                    const q = db.collection("projects")
+                        .where("batchId", "==", sourceTask.batchId)
+                        .where("areaTask", "==", sourceTask.areaTask)
+                        .where("fixCategory", "==", nextFixCategory);
+                    const existingNextStageTaskSnapshot = await q.get();
+
+                    if (existingNextStageTaskSnapshot.empty) {
+                        const newTaskData = {
+                            batchId: sourceTask.batchId, creationTimestamp: releaseTimestamp, 
+                            fixCategory: nextFixCategory, baseProjectName: sourceTask.baseProjectName,
+                            areaTask: sourceTask.areaTask, gsd: sourceTask.gsd, assignedTo: sourceTask.assignedTo,
+                            techNotes: "", status: 'Available',
+                            startTimeDay1: null, finishTimeDay1: null, durationDay1Ms: null,
+                            startTimeDay2: null, finishTimeDay2: null, durationDay2Ms: null, releasedToNextStage: false
+                        };
+                        const newDocRef = db.collection("projects").doc();
+                        fbBatch.set(newDocRef, newTaskData);
+                    }
+                    
+                    const sourceDocRef = db.collection("projects").doc(sourceTask.id);
+                    fbBatch.update(sourceDocRef, { releasedToNextStage: true });
+                }
+                await fbBatch.commit();
+                console.log(`Batch ${batchId} (${currentFixCategory}) released to ${nextFixCategory} in Firebase.`);
+            } catch (error) {
+                console.error("Error releasing batch to Firebase:", error);
+                alert("Error releasing batch. Check console for details.");
+            }
+        }
+
+        async function deleteProjectBatch(batchIdToDelete) { 
+            if (!db) { alert("Database not initialized!"); return; }
+            try {
+                const querySnapshot = await db.collection("projects").where("batchId", "==", batchIdToDelete).get();
+                const fbBatch = db.batch();
+                querySnapshot.forEach(doc => fbBatch.delete(doc.ref));
+                await fbBatch.commit();
+                console.log(`Batch ${batchIdToDelete} deleted from Firebase.`);
+            } catch (error) { console.error(`Error deleting batch ${batchIdToDelete}:`, error); alert("Error deleting batch. Check console.");}
+        }
+
+        async function deleteSpecificFixTasksForBatch(batchIdToDelete, fixCategoryToDelete) { 
+            if (!db) { alert("Database not initialized!"); return; }
+            try {
+                const querySnapshot = await db.collection("projects").where("batchId", "==", batchIdToDelete).where("fixCategory", "==", fixCategoryToDelete).get();
+                const fbBatch = db.batch();
+                querySnapshot.forEach(doc => fbBatch.delete(doc.ref));
+                await fbBatch.commit();
+                console.log(`${fixCategoryToDelete} tasks for batch ${batchIdToDelete} deleted from Firebase.`);
+            } catch (error) { console.error(`Error deleting ${fixCategoryToDelete} for batch ${batchIdToDelete}:`, error); alert("Error deleting specific fix tasks. Check console.");}
+        }
+
+        function renderProjects() { /* ... same rendering logic as v10 ... */ 
             projects.sort((a, b) => { 
                 if (a.batchId < b.batchId) return -1; if (a.batchId > b.batchId) return 1;
                 const fixOrderA = FIX_CATEGORIES_ORDER.indexOf(a.fixCategory); const fixOrderB = FIX_CATEGORIES_ORDER.indexOf(b.fixCategory);
