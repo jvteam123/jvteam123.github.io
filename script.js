@@ -779,7 +779,7 @@ async function releaseBatchToNextFix(batchId, currentFixCategory, nextFixCategor
                     baseProjectName: sourceTask.baseProjectName,
                     areaTask: sourceTask.areaTask,
                     gsd: sourceTask.gsd,
-                    assignedTo: "", // New task starts unassigned
+                    assignedTo: sourceTask.assignedTo, // New task starts unassigned
                     techNotes: "", // New task starts with empty notes
                     status: 'Available', // New task starts as available
                     startTimeDay1: null,
