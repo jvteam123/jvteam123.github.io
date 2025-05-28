@@ -1036,47 +1036,156 @@ function renderProjects() {
         const timeFormatOptions = {
             hour: 'numeric',
             minute: '2-digit',
-            hour12: true
+            hour12: false // Use 24-hour format for input type="time"
         };
-        // Convert Firestore Timestamps to Date objects for display
-        let d1s = project.startTimeDay1,
-            d1f = project.finishTimeDay1,
-            d2s = project.startTimeDay2,
-            d2f = project.finishTimeDay2,
-            d3s = project.startTimeDay3,
-            d3f = project.finishTimeDay3;
 
-        try {
-            if (d1s && typeof d1s.toDate === 'function') d1s = d1s.toDate();
-            else if (d1s) d1s = new Date(d1s);
-            else d1s = null;
-            if (d1f && typeof d1f.toDate === 'function') d1f = d1f.toDate();
-            else if (d1f) d1f = new Date(d1f);
-            else d1f = null;
-            if (d2s && typeof d2s.toDate === 'function') d2s = d2s.toDate();
-            else if (d2s) d2s = new Date(d2s);
-            else d2s = null;
-            if (d2f && typeof d2f.toDate === 'function') d2f = d2f.toDate();
-            else if (d2f) d2f = new Date(d2f);
-            else d2f = null;
-            if (d3s && typeof d3s.toDate === 'function') d3s = d3s.toDate();
-            else if (d3s) d3s = new Date(d3s);
-            else d3s = null;
-            if (d3f && typeof d3f.toDate === 'function') d3f = d3f.toDate();
-            else if (d3f) d3f = new Date(d3f);
-            else d3f = null;
-
-        } catch (dateError) {
-            console.warn("Error converting Firestore timestamp to Date:", dateError);
-            d1s = d1f = d2s = d2f = d3s = d3f = null;
+        // Helper to format timestamp to HH:mm string for input type="time"
+        function formatTimestampToTime(timestamp) {
+            if (!timestamp) return '';
+            let date;
+            try {
+                date = typeof timestamp.toDate === 'function' ? timestamp.toDate() : new Date(timestamp);
+                if (isNaN(date.getTime())) return '';
+            } catch (e) {
+                return '';
+            }
+            return date.toTimeString().slice(0, 5); // "HH:mm"
         }
 
-        row.insertCell().textContent = d1s && !isNaN(d1s) ? d1s.toLocaleTimeString('en-US', timeFormatOptions) : '-';
-        row.insertCell().textContent = d1f && !isNaN(d1f) ? d1f.toLocaleTimeString('en-US', timeFormatOptions) : '-';
-        row.insertCell().textContent = d2s && !isNaN(d2s) ? d2s.toLocaleTimeString('en-US', timeFormatOptions) : '-';
-        row.insertCell().textContent = d2f && !isNaN(d2f) ? d2f.toLocaleTimeString('en-US', timeFormatOptions) : '-';
-        row.insertCell().textContent = d3s && !isNaN(d3s) ? d3s.toLocaleTimeString('en-US', timeFormatOptions) : '-';
-        row.insertCell().textContent = d3f && !isNaN(d3f) ? d3f.toLocaleTimeString('en-US', timeFormatOptions) : '-';
+        // Helper to parse HH:mm string and update Firestore timestamp
+        async function updateTimeField(projectId, fieldName, timeString, currentProject) {
+            showLoading(`Updating ${fieldName}...`);
+            if (!db || !projectId) {
+                alert("Database or project ID missing. Cannot update time.");
+                hideLoading();
+                return;
+            }
+
+            let newTimestamp = null;
+            if (timeString) {
+                const now = new Date();
+                const [hours, minutes] = timeString.split(':').map(Number);
+                now.setHours(hours, minutes, 0, 0);
+                newTimestamp = firebase.firestore.Timestamp.fromDate(now);
+            }
+
+            try {
+                const updateData = {
+                    [fieldName]: newTimestamp,
+                    lastModifiedTimestamp: firebase.firestore.FieldValue.serverTimestamp()
+                };
+                await db.collection("projects").doc(projectId).update(updateData);
+
+                // Recalculate duration for the affected day
+                let updatedProject = { ...currentProject,
+                    [fieldName]: newTimestamp
+                };
+
+                let durationFieldName = '';
+                let startTimeField = null;
+                let finishTimeField = null;
+
+                if (fieldName.includes('Day1')) {
+                    durationFieldName = 'durationDay1Ms';
+                    startTimeField = updatedProject.startTimeDay1;
+                    finishTimeField = updatedProject.finishTimeDay1;
+                } else if (fieldName.includes('Day2')) {
+                    durationFieldName = 'durationDay2Ms';
+                    startTimeField = updatedProject.startTimeDay2;
+                    finishTimeField = updatedProject.finishTimeDay2;
+                } else if (fieldName.includes('Day3')) {
+                    durationFieldName = 'durationDay3Ms';
+                    startTimeField = updatedProject.startTimeDay3;
+                    finishTimeField = updatedProject.finishTimeDay3;
+                }
+
+                if (startTimeField && finishTimeField && durationFieldName) {
+                    const newDuration = calculateDurationMs(startTimeField, finishTimeField);
+                    await db.collection("projects").doc(projectId).update({
+                        [durationFieldName]: newDuration,
+                        lastModifiedTimestamp: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                    logActivity(`Updated ${fieldName} and recalculated duration`, {
+                        projectId: projectId,
+                        projectName: currentProject.baseProjectName + ' ' + currentProject.areaTask,
+                        field: fieldName,
+                        newValue: timeString,
+                        newDuration: formatMillisToMinutes(newDuration)
+                    });
+                } else {
+                    logActivity(`Updated ${fieldName}`, {
+                        projectId: projectId,
+                        projectName: currentProject.baseProjectName + ' ' + currentProject.areaTask,
+                        field: fieldName,
+                        newValue: timeString
+                    });
+                }
+            } catch (error) {
+                console.error(`Error updating ${fieldName}:`, error);
+                alert(`Error updating ${fieldName}: ` + error.message);
+                // Revert UI to original state if update fails (this is handled by the Firestore listener re-rendering)
+            } finally {
+                hideLoading();
+            }
+        }
+
+
+        const isOriginalReassignedTask = project.status === 'Reassigned_TechAbsent';
+
+        // Day 1 Start Time Input
+        const d1sCell = row.insertCell();
+        const d1sInput = document.createElement('input');
+        d1sInput.type = 'time';
+        d1sInput.value = formatTimestampToTime(project.startTimeDay1);
+        d1sInput.disabled = isOriginalReassignedTask; // Disable if reassigned
+        d1sInput.onchange = (e) => updateTimeField(project.id, 'startTimeDay1', e.target.value, project);
+        d1sCell.appendChild(d1sInput);
+
+        // Day 1 End Time Input
+        const d1fCell = row.insertCell();
+        const d1fInput = document.createElement('input');
+        d1fInput.type = 'time';
+        d1fInput.value = formatTimestampToTime(project.finishTimeDay1);
+        d1fInput.disabled = isOriginalReassignedTask; // Disable if reassigned
+        d1fInput.onchange = (e) => updateTimeField(project.id, 'finishTimeDay1', e.target.value, project);
+        d1fCell.appendChild(d1fInput);
+
+        // Day 2 Start Time Input
+        const d2sCell = row.insertCell();
+        const d2sInput = document.createElement('input');
+        d2sInput.type = 'time';
+        d2sInput.value = formatTimestampToTime(project.startTimeDay2);
+        d2sInput.disabled = isOriginalReassignedTask; // Disable if reassigned
+        d2sInput.onchange = (e) => updateTimeField(project.id, 'startTimeDay2', e.target.value, project);
+        d2sCell.appendChild(d2sInput);
+
+        // Day 2 End Time Input
+        const d2fCell = row.insertCell();
+        const d2fInput = document.createElement('input');
+        d2fInput.type = 'time';
+        d2fInput.value = formatTimestampToTime(project.finishTimeDay2);
+        d2fInput.disabled = isOriginalReassignedTask; // Disable if reassigned
+        d2fInput.onchange = (e) => updateTimeField(project.id, 'finishTimeDay2', e.target.value, project);
+        d2fCell.appendChild(d2fInput);
+
+        // Day 3 Start Time Input
+        const d3sCell = row.insertCell();
+        const d3sInput = document.createElement('input');
+        d3sInput.type = 'time';
+        d3sInput.value = formatTimestampToTime(project.startTimeDay3);
+        d3sInput.disabled = isOriginalReassignedTask; // Disable if reassigned
+        d3sInput.onchange = (e) => updateTimeField(project.id, 'startTimeDay3', e.target.value, project);
+        d3sCell.appendChild(d3sInput);
+
+        // Day 3 End Time Input
+        const d3fCell = row.insertCell();
+        const d3fInput = document.createElement('input');
+        d3fInput.type = 'time';
+        d3fInput.value = formatTimestampToTime(project.finishTimeDay3);
+        d3fInput.disabled = isOriginalReassignedTask; // Disable if reassigned
+        d3fInput.onchange = (e) => updateTimeField(project.id, 'finishTimeDay3', e.target.value, project);
+        d3fCell.appendChild(d3fInput);
+
 
         let totalRawDurationMs = (project.durationDay1Ms || 0) + (project.durationDay2Ms || 0) + (project.durationDay3Ms || 0);
         let breakToSubtractMs = (project.breakDurationMinutes || 0) * 60000;
@@ -1140,7 +1249,7 @@ function renderProjects() {
         breakSelect.classList.add('break-select');
         breakSelect.id = `breakSelect_${project.id}`;
         breakSelect.title = "Select break time to deduct";
-        breakSelect.disabled = project.status === 'Reassigned_TechAbsent';
+        breakSelect.disabled = isOriginalReassignedTask;
         let defaultBreakOption = document.createElement('option');
         defaultBreakOption.value = '0';
         defaultBreakOption.textContent = 'No Break';
@@ -1206,13 +1315,77 @@ function renderProjects() {
         };
         btnContainer.appendChild(breakSelect);
 
-        const isOriginalReassignedTask = project.status === 'Reassigned_TechAbsent';
+        // Additional Minutes Manual Input
+        const additionalMinutesInput = document.createElement('input');
+        additionalMinutesInput.type = 'number';
+        additionalMinutesInput.classList.add('additional-minutes-input');
+        additionalMinutesInput.id = `additionalMinutes_${project.id}`;
+        additionalMinutesInput.placeholder = 'Add Mins';
+        additionalMinutesInput.min = '0';
+        additionalMinutesInput.value = (typeof project.additionalMinutesManual === 'number') ? project.additionalMinutesManual.toString() : '0';
+        additionalMinutesInput.title = "Manually add/subtract minutes";
+        additionalMinutesInput.disabled = isOriginalReassignedTask;
+        additionalMinutesInput.onchange = async (event) => {
+            showLoading("Updating additional minutes...");
+            const selectedAdditionalMinutes = parseInt(event.target.value, 10);
+            const oldAdditionalMinutes = project.additionalMinutesManual || 0;
+            if (isNaN(selectedAdditionalMinutes) || selectedAdditionalMinutes < 0) {
+                alert("Please enter a valid positive number for additional minutes.");
+                event.target.value = oldAdditionalMinutes.toString();
+                hideLoading();
+                return;
+            }
+            if (!db || !project.id) {
+                alert("Database or project ID missing. Cannot update additional minutes.");
+                event.target.value = oldAdditionalMinutes.toString(); // Revert on error
+                hideLoading();
+                return;
+            }
+            try {
+                await db.collection("projects").doc(project.id).update({
+                    additionalMinutesManual: selectedAdditionalMinutes,
+                    lastModifiedTimestamp: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                logActivity('Updated Additional Minutes', {
+                    projectId: project.id,
+                    projectName: project.baseProjectName + ' ' + project.areaTask,
+                    oldValue: oldAdditionalMinutes,
+                    newValue: selectedAdditionalMinutes
+                });
+                // Optimistically update the total duration cell
+                const currentRow = event.target.closest('tr');
+                if (currentRow) {
+                    const totalCellInRow = currentRow.querySelector('.total-duration-column');
+                    if (totalCellInRow) {
+                        let currentTotalRawMs = (project.durationDay1Ms || 0) + (project.durationDay2Ms || 0) + (project.durationDay3Ms || 0);
+                        let currentBreakMs = (project.breakDurationMinutes || 0) * 60000;
+                        let currentAdditionalMs = selectedAdditionalMinutes * 60000;
+                        let currentDurationAfterBreakMs = Math.max(0, currentTotalRawMs - currentBreakMs);
+                        let currentFinalTotalMs = currentDurationAfterBreakMs + currentAdditionalMs;
+                        if (currentTotalRawMs === 0 && (project.breakDurationMinutes || 0) === 0 && selectedAdditionalMinutes === 0) {
+                            currentFinalTotalMs = null;
+                        }
+                        totalCellInRow.textContent = formatMillisToMinutes(currentFinalTotalMs);
+                        project.additionalMinutesManual = selectedAdditionalMinutes; // Update local project object
+                    }
+                }
+            } catch (error) {
+                console.error("Error updating additional minutes:", error);
+                alert("Error updating additional minutes: " + error.message);
+                event.target.value = oldAdditionalMinutes.toString(); // Revert on error
+            } finally {
+                hideLoading();
+            }
+        };
+        btnContainer.appendChild(additionalMinutesInput);
+
 
         // Day 1 Start Button
         const sD1btn = document.createElement('button');
         sD1btn.textContent = 'Start D1';
         sD1btn.classList.add('btn', 'btn-day-start');
-        sD1btn.disabled = isOriginalReassignedTask || !(project.status === 'Available' || project.status === 'Day1Ended_AwaitingNext' || project.status === 'InProgressDay2' || project.status === 'Day2Ended_AwaitingNext' || project.status === 'InProgressDay3' || project.status === 'Completed');
+        sD1btn.disabled = isOriginalReassignedTask ||
+            !['Available'].includes(project.status); // Only available if status is 'Available'
         sD1btn.onclick = () => {
             if (project.id) updateProjectState(project.id, 'startDay1');
         };
@@ -1222,7 +1395,7 @@ function renderProjects() {
         const eD1btn = document.createElement('button');
         eD1btn.textContent = 'End D1';
         eD1btn.classList.add('btn', 'btn-day-end');
-        eD1btn.disabled = project.status !== 'InProgressDay1' || isOriginalReassignedTask;
+        eD1btn.disabled = isOriginalReassignedTask || project.status !== 'InProgressDay1';
         eD1btn.onclick = () => {
             if (project.id) updateProjectState(project.id, 'endDay1');
         };
@@ -1232,7 +1405,8 @@ function renderProjects() {
         const sD2btn = document.createElement('button');
         sD2btn.textContent = 'Start D2';
         sD2btn.classList.add('btn', 'btn-day-start');
-        sD2btn.disabled = isOriginalReassignedTask || !(project.status === 'Day1Ended_AwaitingNext' || project.status === 'Day2Ended_AwaitingNext' || project.status === 'InProgressDay3' || project.status === 'Completed');
+        sD2btn.disabled = isOriginalReassignedTask ||
+            !['Day1Ended_AwaitingNext'].includes(project.status); // Only available if status is 'Day1Ended_AwaitingNext'
         sD2btn.onclick = () => {
             if (project.id) updateProjectState(project.id, 'startDay2');
         };
@@ -1242,7 +1416,7 @@ function renderProjects() {
         const eD2btn = document.createElement('button');
         eD2btn.textContent = 'End D2';
         eD2btn.classList.add('btn', 'btn-day-end');
-        eD2btn.disabled = project.status !== 'InProgressDay2' || isOriginalReassignedTask;
+        eD2btn.disabled = isOriginalReassignedTask || project.status !== 'InProgressDay2';
         eD2btn.onclick = () => {
             if (project.id) updateProjectState(project.id, 'endDay2');
         };
@@ -1252,7 +1426,8 @@ function renderProjects() {
         const sD3btn = document.createElement('button');
         sD3btn.textContent = 'Start D3';
         sD3btn.classList.add('btn', 'btn-day-start');
-        sD3btn.disabled = isOriginalReassignedTask || !(project.status === 'Day2Ended_AwaitingNext' || project.status === 'InProgressDay3' || project.status === 'Completed');
+        sD3btn.disabled = isOriginalReassignedTask ||
+            !['Day2Ended_AwaitingNext'].includes(project.status); // Only available if status is 'Day2Ended_AwaitingNext'
         sD3btn.onclick = () => {
             if (project.id) updateProjectState(project.id, 'startDay3');
         };
@@ -1262,7 +1437,7 @@ function renderProjects() {
         const eD3btn = document.createElement('button');
         eD3btn.textContent = 'End D3';
         eD3btn.classList.add('btn', 'btn-day-end');
-        eD3btn.disabled = project.status !== 'InProgressDay3' || isOriginalReassignedTask;
+        eD3btn.disabled = isOriginalReassignedTask || project.status !== 'InProgressDay3';
         eD3btn.onclick = () => {
             if (project.id) updateProjectState(project.id, 'endDay3');
         };
@@ -1273,7 +1448,7 @@ function renderProjects() {
         const doneBtn = document.createElement('button');
         doneBtn.textContent = 'Done';
         doneBtn.classList.add('btn', 'btn-mark-done');
-        doneBtn.disabled = project.status === 'Completed' || isOriginalReassignedTask;
+        doneBtn.disabled = isOriginalReassignedTask || project.status === 'Completed';
         doneBtn.onclick = () => {
             if (project.id) updateProjectState(project.id, 'markDone');
         };
@@ -1335,7 +1510,7 @@ async function updateProjectState(projectId, action) {
     switch (action) {
         case 'startDay1':
             // Allow starting Day 1 if not already InProgressDay1 and not Reassigned
-            if (['Available', 'Day1Ended_AwaitingNext', 'InProgressDay2', 'Day2Ended_AwaitingNext', 'InProgressDay3', 'Completed'].includes(currentProjectData.status)) {
+            if (['Available'].includes(currentProjectData.status)) { // Only 'Available' can start Day1
                 updatedFields = {
                     ...updatedFields,
                     status: 'InProgressDay1',
@@ -1366,7 +1541,7 @@ async function updateProjectState(projectId, action) {
             }
             break;
         case 'startDay2':
-            if (['Day1Ended_AwaitingNext', 'Day2Ended_AwaitingNext', 'InProgressDay3', 'Completed'].includes(currentProjectData.status)) {
+            if (['Day1Ended_AwaitingNext'].includes(currentProjectData.status)) { // Only 'Day1Ended_AwaitingNext' can start Day2
                 updatedFields = {
                     ...updatedFields,
                     status: 'InProgressDay2',
@@ -1394,7 +1569,7 @@ async function updateProjectState(projectId, action) {
             }
             break;
         case 'startDay3':
-            if (['Day2Ended_AwaitingNext', 'InProgressDay3', 'Completed'].includes(currentProjectData.status)) {
+            if (['Day2Ended_AwaitingNext'].includes(currentProjectData.status)) { // Only 'Day2Ended_AwaitingNext' can start Day3
                 updatedFields = {
                     ...updatedFields,
                     status: 'InProgressDay3',
@@ -1955,5 +2130,4 @@ document.addEventListener('DOMContentLoaded', () => {
             loadingAuthMessageDiv.innerHTML = '<p style="color:red; font-weight:bold;">Authentication services could not be loaded. Please check the console and refresh.</p>';
             loadingAuthMessageDiv.style.display = 'block';
         }
-    }
 });
