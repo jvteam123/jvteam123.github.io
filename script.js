@@ -75,11 +75,10 @@ let groupVisibilityState = {};
 let isAppInitialized = false;
 let firestoreListenerUnsubscribe = null;
 
-// New variables for "per set" pagination
+// New variables for "per set" pagination, loaded from localStorage for persistence
 let batchIdSelect, fixCategoryFilter, monthFilter;
-// Load currentSelectedBatchId and currentSelectedMonth from localStorage
 let currentSelectedBatchId = localStorage.getItem('currentSelectedBatchId') || ""; //
-let currentSelectedFixCategory = "";
+let currentSelectedFixCategory = localStorage.getItem('currentSelectedFixCategory') || ""; //
 let currentSelectedMonth = localStorage.getItem('currentSelectedMonth') || ""; //
 
 // --- Loading Overlay Functions ---
@@ -235,22 +234,20 @@ async function initializeFirebaseAndLoadData() {
     });
 
     // Set the month filter value from localStorage
-    if (currentSelectedMonth && Array.from(uniqueMonths).includes(currentSelectedMonth)) { //
-        monthFilter.value = currentSelectedMonth; //
+    if (currentSelectedMonth && Array.from(uniqueMonths).includes(currentSelectedMonth)) {
+        monthFilter.value = currentSelectedMonth;
     } else {
-        // If stored value is invalid or no selection, reset
+        // If stored value is invalid or no selection, reset and clear localStorage
         currentSelectedMonth = "";
         monthFilter.value = "";
-        localStorage.setItem('currentSelectedMonth', ""); //
+        localStorage.setItem('currentSelectedMonth', "");
     }
     // --- End Fetch and Populate Month Filter ---
 
 
-    // Fetch all unique batch IDs first to populate the batchIdSelect dropdown
-    // This query *should* be based on the selected month to ensure the batch list is relevant
+    // --- Fetch and Populate Batch ID Filter (dependent on Month Filter) ---
     let allBatchesQuery = db.collection("projects").orderBy("creationTimestamp", "desc");
     if (currentSelectedMonth) {
-        // Filter projects to only those created within the selected month for batch dropdown
         const [year, monthNum] = currentSelectedMonth.split('-');
         const startDate = new Date(parseInt(year), parseInt(monthNum) - 1, 1);
         const endDate = new Date(parseInt(year), parseInt(monthNum), 0, 23, 59, 59, 999); // Last day of the month
@@ -262,11 +259,11 @@ async function initializeFirebaseAndLoadData() {
     const allBatchesSnapshot = await allBatchesQuery.get();
 
     const uniqueBatchIds = new Set();
-    const batchIdToName = {}; // To store base project name for display
+    const batchIdToName = {};
 
     allBatchesSnapshot.forEach(doc => {
         const data = doc.data();
-        if (data.batchId) { // No need to check creationTimestamp again here as query already filters by month
+        if (data.batchId) {
             uniqueBatchIds.add(data.batchId);
             batchIdToName[data.batchId] = data.baseProjectName;
         }
@@ -281,22 +278,27 @@ async function initializeFirebaseAndLoadData() {
         option.disabled = true;
         option.selected = true;
         batchIdSelect.appendChild(option);
-        currentSelectedBatchId = ""; // Reset current selected batch ID
-        localStorage.setItem('currentSelectedBatchId', ""); // Clear localStorage
+        currentSelectedBatchId = ""; // Reset selected batch ID
+        localStorage.setItem('currentSelectedBatchId', ""); // Clear localStorage for batch
         projects = [];
         refreshAllViews();
         hideLoading();
         return;
     } else {
         const sortedUniqueBatchIds = Array.from(uniqueBatchIds).sort((a, b) => {
-            // Find creation timestamps to sort by most recent batch first
             const projectA = allBatchesSnapshot.docs.find(doc => doc.data().batchId === a);
             const projectB = allBatchesSnapshot.docs.find(doc => doc.data().batchId === b);
             if (projectA && projectB && projectA.data().creationTimestamp && projectB.data().creationTimestamp) {
                 return projectB.data().creationTimestamp.toMillis() - projectA.data().creationTimestamp.toMillis();
             }
-            return a.localeCompare(b); // Fallback to alphabetical if no timestamp
+            return a.localeCompare(b);
         });
+
+        // Add 'All Batches' option
+        const allBatchesOption = document.createElement('option');
+        allBatchesOption.value = "";
+        allBatchesOption.textContent = "All Batches";
+        batchIdSelect.appendChild(allBatchesOption);
 
         sortedUniqueBatchIds.forEach(batchId => {
             const option = document.createElement('option');
@@ -306,27 +308,56 @@ async function initializeFirebaseAndLoadData() {
         });
 
         // If no batch is currently selected OR the previously selected batch is not in the filtered list,
-        // default to the latest one from the *filtered* list.
-        if (!currentSelectedBatchId || !uniqueBatchIds.has(currentSelectedBatchId)) { //
-            currentSelectedBatchId = sortedUniqueBatchIds[0]; //
-            localStorage.setItem('currentSelectedBatchId', currentSelectedBatchId); // Save the default if it changes
+        // default to "All Batches" or the first one if "All Batches" is not suitable.
+        if (!currentSelectedBatchId || !uniqueBatchIds.has(currentSelectedBatchId)) {
+            currentSelectedBatchId = ""; // Default to "All Batches"
+            localStorage.setItem('currentSelectedBatchId', "");
         }
 
-        // Set the dropdown value to the currentSelectedBatchId
-        if (batchIdSelect.value !== currentSelectedBatchId) { //
-            batchIdSelect.value = currentSelectedBatchId; //
+        if (batchIdSelect.value !== currentSelectedBatchId) {
+            batchIdSelect.value = currentSelectedBatchId;
         }
     }
+    // --- End Fetch and Populate Batch ID Filter ---
+
+    // --- Populate Fix Category Filter ---
+    // Populate the Fix Category filter dropdown from FIX_CATEGORIES_ORDER
+    fixCategoryFilter.innerHTML = '<option value="">All Categories</option>';
+    FIX_CATEGORIES_ORDER.forEach(category => {
+        const option = document.createElement('option');
+        option.value = category;
+        option.textContent = category;
+        fixCategoryFilter.appendChild(option);
+    });
+
+    // Set the Fix Category filter value from localStorage
+    if (currentSelectedFixCategory && FIX_CATEGORIES_ORDER.includes(currentSelectedFixCategory)) {
+        fixCategoryFilter.value = currentSelectedFixCategory;
+    } else {
+        currentSelectedFixCategory = "";
+        fixCategoryFilter.value = "";
+        localStorage.setItem('currentSelectedFixCategory', "");
+    }
+    // --- End Populate Fix Category Filter ---
+
 
     // Apply filters to the main project query
-    if (currentSelectedBatchId) { //
-        query = query.where("batchId", "==", currentSelectedBatchId); //
+    if (currentSelectedBatchId) {
+        query = query.where("batchId", "==", currentSelectedBatchId);
     }
-    if (currentSelectedFixCategory) { //
-        query = query.where("fixCategory", "==", currentSelectedFixCategory); //
+    if (currentSelectedFixCategory) {
+        query = query.where("fixCategory", "==", currentSelectedFixCategory);
+    }
+    if (currentSelectedMonth) {
+        const [year, monthNum] = currentSelectedMonth.split('-');
+        const startDate = new Date(parseInt(year), parseInt(monthNum) - 1, 1);
+        const endDate = new Date(parseInt(year), parseInt(monthNum), 0, 23, 59, 59, 999); // Last day of the month
+
+        query = query
+            .where("creationTimestamp", ">=", startDate)
+            .where("creationTimestamp", "<=", endDate);
     }
 
-    // Always order by fix category and area task for consistent display
     query = query.orderBy("fixCategory").orderBy("areaTask");
 
     try {
@@ -480,6 +511,7 @@ function attachEventListeners() {
     if (fixCategoryFilter) {
         fixCategoryFilter.onchange = (event) => {
             currentSelectedFixCategory = event.target.value;
+            localStorage.setItem('currentSelectedFixCategory', currentSelectedFixCategory); // Save to localStorage
             initializeFirebaseAndLoadData();
         };
     }
@@ -595,6 +627,8 @@ async function handleAddProjectSubmit(e) {
         localStorage.setItem('currentSelectedBatchId', currentSelectedBatchId); // Save newly created batch as selected
         currentSelectedMonth = ""; // Clear month filter so new batch is visible
         localStorage.setItem('currentSelectedMonth', ""); // Also update localStorage
+        currentSelectedFixCategory = ""; // Clear fix category filter
+        localStorage.setItem('currentSelectedFixCategory', ""); // Also update localStorage
         initializeFirebaseAndLoadData(); // Re-load data to show the new batch
     } catch (error) {
         console.error("Error adding projects: ", error);
@@ -1439,6 +1473,9 @@ async function updateProjectState(projectId, action) {
                 // Additional logic to clear future days if not started or ended
                 if (currentProjectData.status === 'Available') {
                     // No times recorded yet, simply mark completed
+                    updatedFields.startTimeDay1 = null; updatedFields.finishTimeDay1 = null; updatedFields.durationDay1Ms = null;
+                    updatedFields.startTimeDay2 = null; updatedFields.finishTimeDay2 = null; updatedFields.durationDay2Ms = null;
+                    updatedFields.startTimeDay3 = null; updatedFields.finishTimeDay3 = null; updatedFields.durationDay3Ms = null;
                 } else if (!currentProjectData.startTimeDay2 && currentProjectData.startTimeDay1 && !currentProjectData.finishTimeDay1) {
                     // Day 1 started, but not finished, and Day 2 not started. Finish Day 1.
                     updatedFields.finishTimeDay1 = serverTimestamp;
@@ -1685,11 +1722,10 @@ async function generateTlSummaryData() {
             const breakToSubtractMs = p.breakDurationMinutes * 60000;
             const additionalManualMs = p.additionalMinutesManual * 60000;
 
-            let durationAfterBreakMs = Math.max(0, totalRawDurationMs - breakToSubtractMs);
-            let finalTotalDurationMs = durationAfterBreakMs + additionalManualMs;
+            let finalTotalDurationMs = Math.max(0, totalRawDurationMs - breakToSubtractMs) + additionalManualMs;
 
-            // Only include projects with actual work recorded
-            if (finalTotalDurationMs === 0 && p.breakDurationMinutes === 0 && p.additionalMinutesManual === 0) {
+            // Only include projects with actual work recorded or specific non-zero adjustments
+            if (finalTotalDurationMs === 0 && p.breakDurationMinutes === 0 && p.additionalMinutesManual === 0 && totalRawDurationMs === 0) {
                 return;
             }
 
