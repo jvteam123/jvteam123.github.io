@@ -62,7 +62,7 @@ const STATUS_ORDER = {
     'InProgressDay2': 4, 'Day2Ended_AwaitingNext': 5, 'InProgressDay3': 6,
     'Completed': 7, 'Reassigned_TechAbsent': 8
 };
-const NUM_TABLE_COLUMNS = 14; // Decremented by 1 to hide 'Additional Minutes'
+const NUM_TABLE_COLUMNS = 15; // Decremented by 1 to hide 'Additional Minutes'
 
 let openAddNewProjectBtn, openTlDashboardBtn, openSettingsBtn, projectFormModal, tlDashboardModal, settingsModal,
     closeProjectFormBtn, closeTlDashboardBtn, closeSettingsBtn, newProjectForm, projectTableBody,
