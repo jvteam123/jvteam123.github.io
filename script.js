@@ -62,7 +62,7 @@ const STATUS_ORDER = {
     'InProgressDay2': 4, 'Day2Ended_AwaitingNext': 5, 'InProgressDay3': 6,
     'Completed': 7, 'Reassigned_TechAbsent': 8
 };
-const NUM_TABLE_COLUMNS = 15;
+const NUM_TABLE_COLUMNS = 14; // Changed from 15 to 14
 
 let openAddNewProjectBtn, openTlDashboardBtn, openSettingsBtn, projectFormModal, tlDashboardModal, settingsModal,
     closeProjectFormBtn, closeTlDashboardBtn, closeSettingsBtn, newProjectForm, projectTableBody,
@@ -350,7 +350,7 @@ async function initializeFirebaseAndLoadData() {
                     isExpanded: true
                 };
                 if (p.breakDurationMinutes === undefined) p.breakDurationMinutes = 0;
-                if (p.additionalMinutesManual === undefined) p.additionalMinutesManual = 0;
+                // Removed: if (p.additionalMinutesManual === undefined) p.additionalMinutesManual = 0;
                 if (p.startTimeDay3 === undefined) p.startTimeDay3 = null;
                 if (p.finishTimeDay3 === undefined) p.finishTimeDay3 = null;
                 if (p.durationDay3Ms === undefined) p.durationDay3Ms = null;
@@ -569,7 +569,7 @@ async function handleAddProjectSubmit(e) {
                 durationDay1Ms: null,
                 startTimeDay2: null,
                 finishTimeDay2: null,
-                durationDay2Ms: null,
+                    durationDay2Ms: null,
                 startTimeDay3: null,
                 finishTimeDay3: null,
                 durationDay3Ms: null,
@@ -577,8 +577,8 @@ async function handleAddProjectSubmit(e) {
                 lastModifiedTimestamp: batchCreationTimestamp,
                 isReassigned: false,
                 originalProjectId: null,
-                breakDurationMinutes: 0,
-                additionalMinutesManual: 0
+                breakDurationMinutes: 0
+                // Removed: additionalMinutesManual: 0
             };
             fbBatch.set(db.collection("projects").doc(), newProjectData);
         }
@@ -779,7 +779,7 @@ async function releaseBatchToNextFix(batchId, currentFixCategory, nextFixCategor
                     baseProjectName: sourceTask.baseProjectName,
                     areaTask: sourceTask.areaTask,
                     gsd: sourceTask.gsd,
-                    assignedTo: sourceTask.assignedTo, // New task starts unassigned
+                    assignedTo: sourceTask.assignedTo, // NEW: Copied from sourceTask
                     techNotes: "", // New task starts with empty notes
                     status: 'Available', // New task starts as available
                     startTimeDay1: null,
@@ -795,8 +795,8 @@ async function releaseBatchToNextFix(batchId, currentFixCategory, nextFixCategor
                     lastModifiedTimestamp: releaseTimestamp,
                     isReassigned: false,
                     originalProjectId: sourceTask.id, // Link to the task it was released from
-                    breakDurationMinutes: 0,
-                    additionalMinutesManual: 0
+                    breakDurationMinutes: 0
+                    // Removed: additionalMinutesManual: 0
                 };
                 fbBatch.set(db.collection("projects").doc(), newReleasedTaskData);
             }
@@ -1189,11 +1189,11 @@ function renderProjects() {
 
         let totalRawDurationMs = (project.durationDay1Ms || 0) + (project.durationDay2Ms || 0) + (project.durationDay3Ms || 0);
         let breakToSubtractMs = (project.breakDurationMinutes || 0) * 60000;
-        let additionalManualMs = (project.additionalMinutesManual || 0) * 60000;
+        // Removed: let additionalManualMs = (project.additionalMinutesManual || 0) * 60000;
         let durationAfterBreakMs = Math.max(0, totalRawDurationMs - breakToSubtractMs);
-        let finalTotalDurationMs = durationAfterBreakMs + additionalManualMs;
+        let finalTotalDurationMs = durationAfterBreakMs; // Removed: + additionalManualMs
         // If all duration components are zero, display 'N/A'
-        if (totalRawDurationMs === 0 && (project.breakDurationMinutes || 0) === 0 && (project.additionalMinutesManual || 0) === 0) {
+        if (totalRawDurationMs === 0 && (project.breakDurationMinutes || 0) === 0) { // Removed: && (project.additionalMinutesManual || 0) === 0
             finalTotalDurationMs = null;
         }
         const totalDurationCell = row.insertCell();
@@ -1295,10 +1295,10 @@ function renderProjects() {
                     if (totalCellInRow) {
                         let currentTotalRawMs = (project.durationDay1Ms || 0) + (project.durationDay2Ms || 0) + (project.durationDay3Ms || 0);
                         let currentBreakMs = selectedBreakMinutes * 60000;
-                        let currentAdditionalMs = (project.additionalMinutesManual || 0) * 60000;
+                        // Removed: let currentAdditionalMs = (project.additionalMinutesManual || 0) * 60000;
                         let currentDurationAfterBreakMs = Math.max(0, currentTotalRawMs - currentBreakMs);
-                        let currentFinalTotalMs = currentDurationAfterBreakMs + currentAdditionalMs;
-                        if (currentTotalRawMs === 0 && selectedBreakMinutes === 0 && (project.additionalMinutesManual || 0) === 0) {
+                        let currentFinalTotalMs = currentDurationAfterBreakMs; // Removed: + currentAdditionalMs
+                        if (currentTotalRawMs === 0 && selectedBreakMinutes === 0) { // Removed: && (project.additionalMinutesManual || 0) === 0
                             currentFinalTotalMs = null;
                         }
                         totalCellInRow.textContent = formatMillisToMinutes(currentFinalTotalMs);
@@ -1315,69 +1315,7 @@ function renderProjects() {
         };
         btnContainer.appendChild(breakSelect);
 
-        // Additional Minutes Manual Input
-        const additionalMinutesInput = document.createElement('input');
-        additionalMinutesInput.type = 'number';
-        additionalMinutesInput.classList.add('additional-minutes-input');
-        additionalMinutesInput.id = `additionalMinutes_${project.id}`;
-        additionalMinutesInput.placeholder = 'Add Mins';
-        additionalMinutesInput.min = '0';
-        additionalMinutesInput.value = (typeof project.additionalMinutesManual === 'number') ? project.additionalMinutesManual.toString() : '0';
-        additionalMinutesInput.title = "Manually add/subtract minutes";
-        additionalMinutesInput.disabled = isOriginalReassignedTask;
-        additionalMinutesInput.onchange = async (event) => {
-            showLoading("Updating additional minutes...");
-            const selectedAdditionalMinutes = parseInt(event.target.value, 10);
-            const oldAdditionalMinutes = project.additionalMinutesManual || 0;
-            if (isNaN(selectedAdditionalMinutes) || selectedAdditionalMinutes < 0) {
-                alert("Please enter a valid positive number for additional minutes.");
-                event.target.value = oldAdditionalMinutes.toString();
-                hideLoading();
-                return;
-            }
-            if (!db || !project.id) {
-                alert("Database or project ID missing. Cannot update additional minutes.");
-                event.target.value = oldAdditionalMinutes.toString(); // Revert on error
-                hideLoading();
-                return;
-            }
-            try {
-                await db.collection("projects").doc(project.id).update({
-                    additionalMinutesManual: selectedAdditionalMinutes,
-                    lastModifiedTimestamp: firebase.firestore.FieldValue.serverTimestamp()
-                });
-                logActivity('Updated Additional Minutes', {
-                    projectId: project.id,
-                    projectName: project.baseProjectName + ' ' + project.areaTask,
-                    oldValue: oldAdditionalMinutes,
-                    newValue: selectedAdditionalMinutes
-                });
-                // Optimistically update the total duration cell
-                const currentRow = event.target.closest('tr');
-                if (currentRow) {
-                    const totalCellInRow = currentRow.querySelector('.total-duration-column');
-                    if (totalCellInRow) {
-                        let currentTotalRawMs = (project.durationDay1Ms || 0) + (project.durationDay2Ms || 0) + (project.durationDay3Ms || 0);
-                        let currentBreakMs = (project.breakDurationMinutes || 0) * 60000;
-                        let currentAdditionalMs = selectedAdditionalMinutes * 60000;
-                        let currentDurationAfterBreakMs = Math.max(0, currentTotalRawMs - currentBreakMs);
-                        let currentFinalTotalMs = currentDurationAfterBreakMs + currentAdditionalMs;
-                        if (currentTotalRawMs === 0 && (project.breakDurationMinutes || 0) === 0 && selectedAdditionalMinutes === 0) {
-                            currentFinalTotalMs = null;
-                        }
-                        totalCellInRow.textContent = formatMillisToMinutes(currentFinalTotalMs);
-                        project.additionalMinutesManual = selectedAdditionalMinutes; // Update local project object
-                    }
-                }
-            } catch (error) {
-                console.error("Error updating additional minutes:", error);
-                alert("Error updating additional minutes: " + error.message);
-                event.target.value = oldAdditionalMinutes.toString(); // Revert on error
-            } finally {
-                hideLoading();
-            }
-        };
-        btnContainer.appendChild(additionalMinutesInput);
+        // Removed: Additional Minutes Manual Input (and associated logic)
 
 
         // Day 1 Start Button
@@ -1714,8 +1652,8 @@ async function handleReassignment(originalProjectData) {
             isReassigned: true, // Mark the new task as reassigned
             originalProjectId: originalProjectData.id, // Link to the original task
             releasedToNextStage: false,
-            breakDurationMinutes: 0,
-            additionalMinutesManual: 0
+            breakDurationMinutes: 0
+            // Removed: additionalMinutesManual: 0
         };
         const newDocRef = db.collection("projects").doc();
         batch.set(newDocRef, newReassignedData);
@@ -1854,17 +1792,17 @@ async function generateTlSummaryData() {
             p.durationDay2Ms = typeof p.durationDay2Ms === 'number' ? p.durationDay2Ms : 0;
             p.durationDay3Ms = typeof p.durationDay3Ms === 'number' ? p.durationDay3Ms : 0;
             p.breakDurationMinutes = typeof p.breakDurationMinutes === 'number' ? p.breakDurationMinutes : 0;
-            p.additionalMinutesManual = typeof p.additionalMinutesManual === 'number' ? p.additionalMinutesManual : 0;
+            // Removed: p.additionalMinutesManual = typeof p.additionalMinutesManual === 'number' ? p.additionalMinutesManual : 0;
 
             const totalRawDurationMs = p.durationDay1Ms + p.durationDay2Ms + p.durationDay3Ms;
             const breakToSubtractMs = p.breakDurationMinutes * 60000;
-            const additionalManualMs = p.additionalMinutesManual * 60000;
+            // Removed: const additionalManualMs = p.additionalMinutesManual * 60000;
 
             let durationAfterBreakMs = Math.max(0, totalRawDurationMs - breakToSubtractMs);
-            let finalTotalDurationMs = durationAfterBreakMs + additionalManualMs;
+            let finalTotalDurationMs = durationAfterBreakMs; // Removed: + additionalManualMs
 
             // Only include projects with actual work recorded
-            if (finalTotalDurationMs === 0 && p.breakDurationMinutes === 0 && p.additionalMinutesManual === 0) {
+            if (finalTotalDurationMs === 0 && p.breakDurationMinutes === 0) { // Removed: && p.additionalMinutesManual === 0
                 return;
             }
 
