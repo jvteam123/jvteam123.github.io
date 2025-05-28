@@ -26,7 +26,7 @@ let allowedEmailsFromFirestore = [];
 const TECH_IDS = [
     "4232JD", "7248AA", "4426KV", "4472JS", "7236LE",
     "4475JT", "7039NO", "7231NR", "7240HH", "7247JA",
-    "7249SS", "7244AA", "7312VP"
+    "7249SS", "7244AA", "7314VP"
 ];
 TECH_IDS.sort(); // Keep them sorted for the dropdown
 
