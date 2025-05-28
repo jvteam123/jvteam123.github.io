@@ -76,10 +76,10 @@
          let firestoreListenerUnsubscribe = null;
 
          // New variables for "per set" pagination
-         let batchIdSelect, fixCategoryFilter, monthFilter; // Added monthFilter
-         let currentSelectedBatchId = ""; // Default to show all latest batches (handled by query below)
-         let currentSelectedFixCategory = ""; // Default to show all fix categories
-         let currentSelectedMonth = ""; // Added to store the selected month (YYYY-MM)
+         let batchIdSelect, fixCategoryFilter, monthFilter;
+         let currentSelectedBatchId = "";
+         let currentSelectedFixCategory = "";
+         let currentSelectedMonth = localStorage.getItem('currentSelectedMonth') || ""; // Load from localStorage
 
          // --- Loading Overlay Functions ---
          function showLoading(message = "Loading...") {
@@ -158,7 +158,6 @@
          }
          }
 
-         // MODIFIED: initializeFirebaseAndLoadData to filter by selected batch and fix category
          async function initializeFirebaseAndLoadData() {
             showLoading("Loading projects...");
             if (!db) { projects = []; refreshAllViews(); hideLoading(); return; }
@@ -168,7 +167,7 @@
 
             let query = db.collection("projects");
 
-            // --- Fetch and Populate Month Filter (MODIFIED) ---
+            // --- Fetch and Populate Month Filter ---
             const allCreationTimestampsSnapshot = await db.collection("projects")
                 .orderBy("creationTimestamp", "desc")
                 .get();
@@ -178,17 +177,14 @@
                 const data = doc.data();
                 if (data.creationTimestamp) {
                     const date = data.creationTimestamp.toDate();
-                    // Format as YYYY-MM for option value
                     const yearMonth = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
                     uniqueMonths.add(yearMonth);
                 }
             });
 
             monthFilter.innerHTML = '<option value="">All Months</option>';
-            // Sort months in descending order (latest month first)
             Array.from(uniqueMonths).sort((a, b) => b.localeCompare(a)).forEach(yearMonth => {
                 const [year, monthNum] = yearMonth.split('-');
-                // Create a Date object for correct month name display
                 const date = new Date(year, parseInt(monthNum) - 1, 1);
                 const option = document.createElement('option');
                 option.value = yearMonth;
@@ -196,17 +192,20 @@
                 monthFilter.appendChild(option);
             });
 
-            // Ensure the dropdown visually reflects the current selection
-            if (monthFilter.value !== currentSelectedMonth) {
+            // Set the month filter value from localStorage
+            if (currentSelectedMonth && Array.from(uniqueMonths).includes(currentSelectedMonth)) {
                 monthFilter.value = currentSelectedMonth;
+            } else {
+                currentSelectedMonth = ""; // Reset if stored value is invalid
+                monthFilter.value = "";
+                localStorage.setItem('currentSelectedMonth', "");
             }
             // --- End Fetch and Populate Month Filter ---
 
 
             // Fetch all unique batch IDs first to populate the batchIdSelect dropdown
-            // This is a separate, non-listening query to avoid re-rendering the dropdown constantly
             const allBatchesSnapshot = await db.collection("projects")
-                .orderBy("creationTimestamp", "desc") // Order to get latest batches first
+                .orderBy("creationTimestamp", "desc")
                 .get();
             const uniqueBatchIds = new Set();
             const batchIdToName = {}; // To store base project name for display
@@ -225,10 +224,8 @@
                 }
             });
 
-            // Clear existing options
-            batchIdSelect.innerHTML = '';
+            batchIdSelect.innerHTML = ''; // Clear existing options
 
-            // If there are no projects, add a default disabled option
             if (uniqueBatchIds.size === 0) {
                 const option = document.createElement('option');
                 option.value = "";
@@ -236,21 +233,19 @@
                 option.disabled = true;
                 option.selected = true;
                 batchIdSelect.appendChild(option);
-                // If no batches, ensure currentSelectedBatchId is cleared to avoid filtering by a non-existent batch
                 currentSelectedBatchId = "";
-                projects = []; // Clear current projects display
-                refreshAllViews(); // Refresh the table
+                projects = [];
+                refreshAllViews();
                 hideLoading();
-                return; // Exit as there's nothing to display
+                return;
             } else {
-                // Sort unique batch IDs by creation timestamp (if available, otherwise alphabetically)
                 const sortedUniqueBatchIds = Array.from(uniqueBatchIds).sort((a, b) => {
                     const projectA = allBatchesSnapshot.docs.find(doc => doc.data().batchId === a);
                     const projectB = allBatchesSnapshot.docs.find(doc => doc.data().batchId === b);
                     if (projectA && projectB && projectA.data().creationTimestamp && projectB.data().creationTimestamp) {
                         return projectB.data().creationTimestamp.toMillis() - projectA.data().creationTimestamp.toMillis();
                     }
-                    return a.localeCompare(b); // Fallback to alphabetical
+                    return a.localeCompare(b);
                 });
 
                 sortedUniqueBatchIds.forEach(batchId => {
@@ -260,20 +255,17 @@
                     batchIdSelect.appendChild(option);
                 });
 
-                // If no batch is currently selected or the previously selected batch no longer exists,
-                // default to the latest one.
+                // If no batch is currently selected OR the previously selected batch is not in the filtered list,
+                // default to the latest one from the *filtered* list.
                 if (!currentSelectedBatchId || !uniqueBatchIds.has(currentSelectedBatchId)) {
                     currentSelectedBatchId = sortedUniqueBatchIds[0];
                 }
 
-                // Ensure the dropdown visually reflects the current selection
                 if (batchIdSelect.value !== currentSelectedBatchId) {
                     batchIdSelect.value = currentSelectedBatchId;
-                    // No need to dispatch 'change' here, as the onSnapshot will handle the re-render based on new currentSelectedBatchId
                 }
             }
 
-            // Apply filters based on selected values
             if (currentSelectedBatchId) {
                 query = query.where("batchId", "==", currentSelectedBatchId);
             }
@@ -281,7 +273,6 @@
                 query = query.where("fixCategory", "==", currentSelectedFixCategory);
             }
 
-            // Always order by fixCategory and areaTask for consistent display within the selected set
             query = query.orderBy("fixCategory").orderBy("areaTask");
 
             try {
@@ -295,7 +286,6 @@
 
                     projects = firebaseProjects;
 
-                    // Pre-process projects for new Day3 fields if not present
                     projects.forEach(p => {
                         const groupStateKey = `${p.batchId}_${p.fixCategory}`;
                         if (groupVisibilityState[groupStateKey] === undefined) groupVisibilityState[groupStateKey] = { isExpanded: true };
@@ -337,17 +327,16 @@
          addEmailInput = document.getElementById('addEmailInput');
          addEmailBtn = document.getElementById('addEmailBtn');
 
-         tlSummaryModal = document.getElementById('tlSummaryModal'); // NEW
-         closeTlSummaryBtn = document.getElementById('closeTlSummaryBtn'); // NEW
-         tlSummaryContent = document.getElementById('tlSummaryContent'); // NEW
-         openTlSummaryBtn = document.getElementById('openTlSummaryBtn'); // NEW
+         tlSummaryModal = document.getElementById('tlSummaryModal');
+         closeTlSummaryBtn = document.getElementById('closeTlSummaryBtn');
+         tlSummaryContent = document.getElementById('tlSummaryContent');
+         openTlSummaryBtn = document.getElementById('openTlSummaryBtn');
 
          loadingOverlay = document.getElementById('loadingOverlay');
 
-         // NEW: Group selection references
          batchIdSelect = document.getElementById('batchIdSelect');
          fixCategoryFilter = document.getElementById('fixCategoryFilter');
-         monthFilter = document.getElementById('monthFilter'); // Added monthFilter
+         monthFilter = document.getElementById('monthFilter');
          }
 
          function setupAuthRelatedDOMReferences() {
@@ -383,34 +372,31 @@
          if (closeSettingsBtn) closeSettingsBtn.onclick = () => { settingsModal.style.display = 'none'; };
          if (addEmailBtn) addEmailBtn.onclick = handleAddEmail;
 
-         if (openTlSummaryBtn) openTlSummaryBtn.onclick = () => { // NEW
+         if (openTlSummaryBtn) openTlSummaryBtn.onclick = () => {
          tlSummaryModal.style.display = 'block'; generateTlSummaryData();
          };
-         if (closeTlSummaryBtn) closeTlSummaryBtn.onclick = () => { // NEW
+         if (closeTlSummaryBtn) closeTlSummaryBtn.onclick = () => {
          tlSummaryModal.style.display = 'none';
          };
 
-
-         // NEW: Group selection event listeners
          if (batchIdSelect) {
          batchIdSelect.onchange = (event) => {
          currentSelectedBatchId = event.target.value;
-         initializeFirebaseAndLoadData(); // Reload data based on new selection
+         initializeFirebaseAndLoadData();
          };
          }
          if (fixCategoryFilter) {
          fixCategoryFilter.onchange = (event) => {
          currentSelectedFixCategory = event.target.value;
-         initializeFirebaseAndLoadData(); // Reload data based on new selection
+         initializeFirebaseAndLoadData();
          };
          }
-         // Added monthFilter event listener
          if (monthFilter) {
              monthFilter.onchange = (event) => {
                  currentSelectedMonth = event.target.value;
-                 // When the month changes, reset the selected batch so it can be re-populated
-                 currentSelectedBatchId = "";
-                 initializeFirebaseAndLoadData(); // Reload data based on new selection
+                 localStorage.setItem('currentSelectedMonth', currentSelectedMonth); // Save to localStorage
+                 currentSelectedBatchId = ""; // Reset selected batch when month changes
+                 initializeFirebaseAndLoadData();
              };
          }
 
@@ -419,7 +405,7 @@
          if (event.target == projectFormModal) projectFormModal.style.display = 'none';
          if (event.target == tlDashboardModal) tlDashboardModal.style.display = 'none';
          if (event.target == settingsModal) settingsModal.style.display = 'none';
-         if (event.target == tlSummaryModal) tlSummaryModal.style.display = 'none'; // NEW
+         if (event.target == tlSummaryModal) tlSummaryModal.style.display = 'none';
          };
          }
          if (newProjectForm) newProjectForm.addEventListener('submit', handleAddProjectSubmit);
@@ -486,23 +472,19 @@
          batchId: currentBatchId.split('_')[1]
          });
          newProjectForm.reset();
-         // After adding a new project, refresh the view to potentially show the new batch/fix category
-         // Ensure the newly added batch is selected in the dropdown
-         currentSelectedBatchId = currentBatchId; // Set this so initializeFirebaseAndLoadData will select it
-         // Clear month filter as well to ensure the new batch is visible
-         currentSelectedMonth = "";
+         currentSelectedBatchId = currentBatchId;
+         currentSelectedMonth = ""; // Clear month filter so new batch is visible
+         localStorage.setItem('currentSelectedMonth', ""); // Also update localStorage
          initializeFirebaseAndLoadData();
          } catch (error) { console.error("Error adding projects: ", error); alert("Error: " + error.message); }
          finally { projectFormModal.style.display = 'none'; hideLoading(); }
          }
 
-         // MODIFIED: getManageableBatches will now fetch ALL batches to ensure comprehensive dashboard view.
-         // This is important because the main table might only show a subset.
          async function getManageableBatches() {
          if (!db) { console.error("DB not initialized for getManageableBatches."); return []; }
          showLoading("Loading batches for dashboard...");
          try {
-         const querySnapshot = await db.collection("projects").get(); // Fetch all projects for dashboard
+         const querySnapshot = await db.collection("projects").get();
          const allBatchesInfo = {};
          querySnapshot.forEach(doc => {
          const p = doc.data();
@@ -511,7 +493,6 @@
          allBatchesInfo[p.batchId] = { batchId: p.batchId, baseProjectName: p.baseProjectName || "N/A", tasksByFix: {} };
          }
          if (p.fixCategory) {
-         // Initialize the array if it doesn't exist
          if (!allBatchesInfo[p.batchId].tasksByFix[p.fixCategory]) {
          allBatchesInfo[p.batchId].tasksByFix[p.fixCategory] = [];
          }
@@ -532,7 +513,7 @@
          async function renderTLDashboard() {
          if (!tlDashboardContentElement) { console.error("tlDashboardContentElement not found."); return; }
          tlDashboardContentElement.innerHTML = '';
-         const manageableBatches = await getManageableBatches(); // Fetch all batches for dashboard
+         const manageableBatches = await getManageableBatches();
          if (manageableBatches.length === 0) { tlDashboardContentElement.innerHTML = '<p>No project batches found.</p>'; return; }
 
          manageableBatches.forEach(batch => {
@@ -600,7 +581,7 @@
          const deleteAllBtn = document.createElement('button');
          deleteAllBtn.textContent = 'Delete ALL Tasks for this Batch';
          deleteAllBtn.classList.add('btn', 'btn-danger');
-         deleteAllBtn.onclick = () => { if (confirm(`Are you sure you want to delete ALL tasks for batch '${batch.baseProjectName || 'Unknown'}'? IRREVERSIBLE.`)) deleteProjectBatch(batch.batchId); };
+         deleteAllBtn.onclick = () => { if (confirm(`Are-you sure you want to delete ALL tasks for batch '${batch.baseProjectName || 'Unknown'}'? IRREVERSIBLE.`)) deleteProjectBatch(batch.batchId); };
          deleteActionsDiv.appendChild(deleteAllBtn);
          batchDiv.appendChild(deleteActionsDiv);
          tlDashboardContentElement.appendChild(batchDiv);
@@ -646,7 +627,7 @@
          currentFixCategory: currentFixCategory,
          nextFixCategory: nextFixCategory
          });
-         initializeFirebaseAndLoadData(); // Re-load data after release
+         initializeFirebaseAndLoadData();
          } catch (error) { console.error("Error releasing batch:", error); alert("Error: " + error.message); }
          finally { hideLoading(); }
          }
@@ -661,7 +642,7 @@
          querySnapshot.forEach(doc => fbBatch.delete(doc.ref));
          await fbBatch.commit();
          logActivity('Deleted Entire Project Batch', { batchId: batchIdToDelete.split('_')[1] });
-         initializeFirebaseAndLoadData(); // Re-load data after deletion
+         initializeFirebaseAndLoadData();
                          renderTLDashboard();
          } catch (error) { console.error(`Error deleting batch ${batchIdToDelete}:`, error); alert("Error: " + error.message); }
          finally { hideLoading(); }
@@ -676,7 +657,7 @@
          querySnapshot.forEach(doc => fbBatch.delete(doc.ref));
          await fbBatch.commit();
          logActivity(`Deleted Specific Fix Tasks for Batch: ${fixCategoryToDelete}`, { batchId: batchIdToDelete.split('_')[1], fixCategory: fixCategoryToDelete });
-         initializeFirebaseAndLoadData(); // Re-load data after deletion
+         initializeFirebaseAndLoadData();
                          renderTLDashboard();
          } catch (error) { console.error(`Error deleting ${fixCategoryToDelete} for batch ${batchIdToDelete}:`, error); alert("Error: " + error.message); }
          finally { hideLoading(); }
@@ -685,11 +666,10 @@
          function renderProjects() {
          if (!projectTableBody) { console.error("CRITICAL: projectTableBody not found."); return; }
          projectTableBody.innerHTML = '';
-         const projectsToRender = [...projects]; // projects array is already filtered by the query
+         const projectsToRender = [...projects];
 
          projectsToRender.sort((a, b) => {
          if (!a || !b) return 0;
-         // Sort within the current set by Fix Category, then Area Task
          const fixOrderA = FIX_CATEGORIES_ORDER.indexOf(a.fixCategory || ""); const fixOrderB = FIX_CATEGORIES_ORDER.indexOf(b.fixCategory || "");
          if (fixOrderA < fixOrderB) return -1; if (fixOrderA > fixOrderB) return 1;
          if ((a.areaTask || "") < (b.areaTask || "")) return -1; if ((a.areaTask || "") > (b.areaTask || "")) return 1;
@@ -1084,7 +1064,7 @@
          newAssignedTo: newTechId.trim(),
          newProjectId: newDocRef.id
          });
-         initializeFirebaseAndLoadData(); // Re-load data after reassignment
+         initializeFirebaseAndLoadData();
          } catch (error) { console.error("Error in re-assignment:", error); }
          finally { hideLoading(); }
          }
@@ -1093,8 +1073,6 @@
          function refreshAllViews() {
          try {
          renderProjects();
-         // TL Dashboard and Activity Log are only rendered when their modals are opened
-         // So no need to check modal display here as they are invoked by button click event listeners
          } catch (e) { console.error("Error during refreshAllViews:", e); }
          }
 
@@ -1131,7 +1109,6 @@
          }
          }
 
-         // NEW: Function to generate TL Summary data
          async function generateTlSummaryData() {
          if (!tlSummaryContent) {
          console.error("tlSummaryContent element not found.");
@@ -1147,7 +1124,6 @@
          }
 
          try {
-         // Fetch all projects regardless of current filters
          const allProjectsSnapshot = await db.collection("projects").get();
          const allProjects = [];
          allProjectsSnapshot.forEach(doc => {
@@ -1156,10 +1132,9 @@
          }
          });
 
-         const projectFixTotals = {}; // Key: "PROJECT_NAME_FixX", Value: total_minutes
+         const projectFixTotals = {};
 
          allProjects.forEach(p => {
-         // Ensure necessary fields exist before using them
          p.durationDay1Ms = p.durationDay1Ms || 0;
          p.durationDay2Ms = p.durationDay2Ms || 0;
          p.durationDay3Ms = p.durationDay3Ms || 0;
@@ -1173,9 +1148,8 @@
          let durationAfterBreakMs = Math.max(0, totalRawDurationMs - breakToSubtractMs);
          let finalTotalDurationMs = durationAfterBreakMs + additionalManualMs;
 
-         // Only count if there's actual duration or manual adjustments
          if (finalTotalDurationMs === 0 && p.breakDurationMinutes === 0 && p.additionalMinutesManual === 0) {
-         return; // Skip projects with no recorded time
+         return;
          }
 
          const key = `${p.baseProjectName || 'Unknown Project'}_${p.fixCategory || 'Unknown Fix'}`;
@@ -1186,11 +1160,11 @@
          totalMinutes: 0
          };
          }
-         projectFixTotals[key].totalMinutes += Math.floor(finalTotalDurationMs / 60000); // Add total minutes
+         projectFixTotals[key].totalMinutes += Math.floor(finalTotalDurationMs / 60000);
          });
 
          let summaryHtml = '<ul style="list-style: none; padding: 0;">';
-         const sortedKeys = Object.keys(projectFixTotals).sort(); // Sort alphabetically for consistent display
+         const sortedKeys = Object.keys(projectFixTotals).sort();
 
          sortedKeys.forEach(key => {
          const data = projectFixTotals[key];
@@ -1282,7 +1256,7 @@
          console.log("Initializing app components (DOM refs, event listeners, Firestore data)...");
          setupDOMReferences();
          attachEventListeners();
-         initializeFirebaseAndLoadData(); // Initial load of data
+         initializeFirebaseAndLoadData();
          isAppInitialized = true;
          } else {
          console.log("App components already initialized or re-initializing data load.");
