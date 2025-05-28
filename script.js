@@ -1,5 +1,4 @@
-
-         // CRITICAL SECURITY WARNING: Your Firebase API keys are exposed here.
+// CRITICAL SECURITY WARNING: Your Firebase API keys are exposed here.
          // For production, secure your data with Firebase Security Rules and restrict API key usage in Google Cloud Console.
          const firebaseConfig = {
          apiKey: "AIzaSyADB1W9YKaU6DFqGyjivsADJOhuIRY0eZ0", // Replace with your actual key if different
@@ -10,19 +9,19 @@
          appId: "1:698282455986:web:f31fa7830148dc47076aab",
          measurementId: "G-6D2Z9ZWEN1"
          };
-         
+
          let app;
          let db;
          let auth;
-         
+
          let signInBtn, signOutBtn, userInfoDisplayDiv, userNameP, userEmailP, userPhotoImg;
          let appContentDiv, loadingAuthMessageDiv;
          let loadingOverlay; // Reference to the loading overlay
-         
+
          const TL_DASHBOARD_PIN = "1234";
          const ALLOWED_EMAILS_DOC_REF_PATH = "settings/allowedEmails";
          let allowedEmailsFromFirestore = [];
-         
+
          // NEW: List of Tech IDs
          const TECH_IDS = [
          "4232JD", "7248AA", "4426KV", "4472JS", "7236LE",
@@ -30,33 +29,33 @@
          "7249SS", "7244AA", "7312VP"
          ];
          TECH_IDS.sort(); // Keep them sorted for the dropdown
-         
+
          try {
          if (typeof firebase === 'undefined' || typeof firebase.initializeApp === 'undefined') {
          throw new Error("Firebase SDK not loaded. Ensure Firebase scripts are correctly included.");
          }
          app = firebase.initializeApp(firebaseConfig);
-         
+
          if (typeof app.firestore === 'undefined') {
          throw new Error("Firestore SDK not loaded or initialized correctly with the app.");
          }
          db = firebase.firestore();
-         
+
          if (typeof app.auth === 'undefined') {
          throw new Error("Firebase Auth SDK not loaded or initialized correctly with the app.");
          }
          auth = firebase.auth();
-         
+
          console.log("Firebase initialized successfully (App, Firestore, Auth)!");
          fetchAllowedEmails();
-         
+
          } catch (e) {
          console.error("CRITICAL: Error initializing Firebase: ", e.message);
          const loadingMsgDiv = document.getElementById('loading-auth-message');
          if (loadingMsgDiv) loadingMsgDiv.innerHTML = `<p style="color:red;">CRITICAL ERROR: Could not connect to Firebase. App will not function correctly. Error: ${e.message}</p>`;
          else alert("CRITICAL ERROR: Could not connect to Firebase. App will not function correctly. Error: " + e.message);
          }
-         
+
          const FIX_CATEGORIES_ORDER = ["Fix1", "Fix2", "Fix3", "Fix4", "Fix5", "Fix6"];
          const STATUS_ORDER = {
          'Available': 1, 'InProgressDay1': 2, 'Day1Ended_AwaitingNext': 3,
@@ -64,23 +63,24 @@
          'Completed': 7, 'Reassigned_TechAbsent': 8
          };
          const NUM_TABLE_COLUMNS = 15;
-         
+
          let openAddNewProjectBtn, openTlDashboardBtn, openSettingsBtn, projectFormModal, tlDashboardModal, settingsModal,
          closeProjectFormBtn, closeTlDashboardBtn, closeSettingsBtn, newProjectForm, projectTableBody,
          tlDashboardContentElement, allowedEmailsList, addEmailInput, addEmailBtn;
-         
+
          let tlSummaryModal, closeTlSummaryBtn, tlSummaryContent, openTlSummaryBtn; // NEW: TL Summary modal elements
-         
+
          let projects = [];
          let groupVisibilityState = {};
          let isAppInitialized = false;
          let firestoreListenerUnsubscribe = null;
-         
+
          // New variables for "per set" pagination
-         let batchIdSelect, fixCategoryFilter;
+         let batchIdSelect, fixCategoryFilter, monthFilter; // Added monthFilter
          let currentSelectedBatchId = ""; // Default to show all latest batches (handled by query below)
          let currentSelectedFixCategory = ""; // Default to show all fix categories
-         
+         let currentSelectedMonth = ""; // Added to store the selected month (YYYY-MM)
+
          // --- Loading Overlay Functions ---
          function showLoading(message = "Loading...") {
          if (loadingOverlay) {
@@ -88,18 +88,18 @@
          loadingOverlay.style.display = 'flex';
          }
          }
-         
+
          function hideLoading() {
          if (loadingOverlay) {
          loadingOverlay.style.display = 'none';
          }
          }
          // --- End Loading Overlay Functions ---
-         
-         
+
+
          function generateId() { return Date.now().toString(36) + Math.random().toString(36).substr(2, 5); }
          function formatMillisToMinutes(millis) { return (millis === null || typeof millis !== 'number' || millis < 0) ? 'N/A' : Math.floor(millis / 60000); }
-         
+
          function calculateDurationMs(startTime, endTime) {
          let startMillis = startTime; let endMillis = endTime;
          if (startTime && typeof startTime.toMillis === 'function') startMillis = startTime.toMillis();
@@ -114,14 +114,14 @@
          }
          return (!startMillis || !endMillis || endMillis < startMillis || isNaN(startMillis) || isNaN(endMillis)) ? null : endMillis - startMillis;
          }
-         
+
          function loadGroupVisibilityState() {
          try { const savedState = localStorage.getItem('projectTrackerGroupVisibility'); if (savedState) groupVisibilityState = JSON.parse(savedState); else groupVisibilityState = {}; } catch (e) { console.error("Error parsing group visibility state from localStorage:", e); groupVisibilityState = {}; }
          }
          function saveGroupVisibilityState() {
          try { localStorage.setItem('projectTrackerGroupVisibility', JSON.stringify(groupVisibilityState)); } catch (lsError) { console.error("Error saving group visibility state to localStorage:", lsError); alert("Warning: Could not save your group visibility preferences.");}
          }
-         
+
          async function fetchAllowedEmails() {
          showLoading("Fetching allowed emails...");
          if (!db) { console.error("Firestore (db) not initialized. Cannot fetch allowed emails."); hideLoading(); return; }
@@ -140,7 +140,7 @@
          hideLoading();
          }
          }
-         
+
          async function updateAllowedEmailsInFirestore(newEmailsArray) {
          showLoading("Updating allowed emails...");
          if (!db) { alert("Database not initialized! Cannot update allowed emails."); hideLoading(); return false; }
@@ -157,17 +157,52 @@
          hideLoading();
          }
          }
-         
+
          // MODIFIED: initializeFirebaseAndLoadData to filter by selected batch and fix category
          async function initializeFirebaseAndLoadData() {
             showLoading("Loading projects...");
             if (!db) { projects = []; refreshAllViews(); hideLoading(); return; }
             if (firestoreListenerUnsubscribe) firestoreListenerUnsubscribe(); // Unsubscribe from previous listener
-         
+
             loadGroupVisibilityState();
-         
+
             let query = db.collection("projects");
-         
+
+            // --- Fetch and Populate Month Filter (MODIFIED) ---
+            const allCreationTimestampsSnapshot = await db.collection("projects")
+                .orderBy("creationTimestamp", "desc")
+                .get();
+
+            const uniqueMonths = new Set();
+            allCreationTimestampsSnapshot.forEach(doc => {
+                const data = doc.data();
+                if (data.creationTimestamp) {
+                    const date = data.creationTimestamp.toDate();
+                    // Format as YYYY-MM for option value
+                    const yearMonth = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+                    uniqueMonths.add(yearMonth);
+                }
+            });
+
+            monthFilter.innerHTML = '<option value="">All Months</option>';
+            // Sort months in descending order (latest month first)
+            Array.from(uniqueMonths).sort((a, b) => b.localeCompare(a)).forEach(yearMonth => {
+                const [year, monthNum] = yearMonth.split('-');
+                // Create a Date object for correct month name display
+                const date = new Date(year, parseInt(monthNum) - 1, 1);
+                const option = document.createElement('option');
+                option.value = yearMonth;
+                option.textContent = date.toLocaleString('en-US', { year: 'numeric', month: 'long' });
+                monthFilter.appendChild(option);
+            });
+
+            // Ensure the dropdown visually reflects the current selection
+            if (monthFilter.value !== currentSelectedMonth) {
+                monthFilter.value = currentSelectedMonth;
+            }
+            // --- End Fetch and Populate Month Filter ---
+
+
             // Fetch all unique batch IDs first to populate the batchIdSelect dropdown
             // This is a separate, non-listening query to avoid re-rendering the dropdown constantly
             const allBatchesSnapshot = await db.collection("projects")
@@ -175,17 +210,24 @@
                 .get();
             const uniqueBatchIds = new Set();
             const batchIdToName = {}; // To store base project name for display
+
             allBatchesSnapshot.forEach(doc => {
                 const data = doc.data();
-                if (data.batchId) {
-                    uniqueBatchIds.add(data.batchId);
-                    batchIdToName[data.batchId] = data.baseProjectName;
+                if (data.batchId && data.creationTimestamp) {
+                    const creationDate = data.creationTimestamp.toDate();
+                    const yearMonthOfBatch = `${creationDate.getFullYear()}-${String(creationDate.getMonth() + 1).padStart(2, '0')}`;
+
+                    // Filter batches by the selected month
+                    if (!currentSelectedMonth || yearMonthOfBatch === currentSelectedMonth) {
+                        uniqueBatchIds.add(data.batchId);
+                        batchIdToName[data.batchId] = data.baseProjectName;
+                    }
                 }
             });
-         
+
             // Clear existing options
             batchIdSelect.innerHTML = '';
-         
+
             // If there are no projects, add a default disabled option
             if (uniqueBatchIds.size === 0) {
                 const option = document.createElement('option');
@@ -210,27 +252,27 @@
                     }
                     return a.localeCompare(b); // Fallback to alphabetical
                 });
-         
+
                 sortedUniqueBatchIds.forEach(batchId => {
                     const option = document.createElement('option');
                     option.value = batchId;
                     option.textContent = `${batchIdToName[batchId] || 'Unknown Project'}`;
                     batchIdSelect.appendChild(option);
                 });
-         
+
                 // If no batch is currently selected or the previously selected batch no longer exists,
                 // default to the latest one.
                 if (!currentSelectedBatchId || !uniqueBatchIds.has(currentSelectedBatchId)) {
                     currentSelectedBatchId = sortedUniqueBatchIds[0];
                 }
-         
+
                 // Ensure the dropdown visually reflects the current selection
                 if (batchIdSelect.value !== currentSelectedBatchId) {
                     batchIdSelect.value = currentSelectedBatchId;
                     // No need to dispatch 'change' here, as the onSnapshot will handle the re-render based on new currentSelectedBatchId
                 }
             }
-         
+
             // Apply filters based on selected values
             if (currentSelectedBatchId) {
                 query = query.where("batchId", "==", currentSelectedBatchId);
@@ -238,10 +280,10 @@
             if (currentSelectedFixCategory) {
                 query = query.where("fixCategory", "==", currentSelectedFixCategory);
             }
-         
+
             // Always order by fixCategory and areaTask for consistent display within the selected set
             query = query.orderBy("fixCategory").orderBy("areaTask");
-         
+
             try {
                 firestoreListenerUnsubscribe = query.onSnapshot((querySnapshot) => {
                     const firebaseProjects = [];
@@ -250,9 +292,9 @@
                             firebaseProjects.push({ id: doc.id, ...doc.data() });
                         }
                     });
-         
+
                     projects = firebaseProjects;
-         
+
                     // Pre-process projects for new Day3 fields if not present
                     projects.forEach(p => {
                         const groupStateKey = `${p.batchId}_${p.fixCategory}`;
@@ -263,7 +305,7 @@
                         if (p.finishTimeDay3 === undefined) p.finishTimeDay3 = null;
                         if (p.durationDay3Ms === undefined) p.durationDay3Ms = null;
                     });
-         
+
                     refreshAllViews();
                 }, (error) => {
                     console.error("Error fetching projects: ", error);
@@ -276,8 +318,8 @@
                 hideLoading();
             }
          }
-         
-         
+
+
          function setupDOMReferences() {
          openAddNewProjectBtn = document.getElementById('openAddNewProjectBtn');
          openTlDashboardBtn = document.getElementById('openTlDashboardBtn');
@@ -294,19 +336,20 @@
          allowedEmailsList = document.getElementById('allowedEmailsList');
          addEmailInput = document.getElementById('addEmailInput');
          addEmailBtn = document.getElementById('addEmailBtn');
-         
+
          tlSummaryModal = document.getElementById('tlSummaryModal'); // NEW
          closeTlSummaryBtn = document.getElementById('closeTlSummaryBtn'); // NEW
          tlSummaryContent = document.getElementById('tlSummaryContent'); // NEW
          openTlSummaryBtn = document.getElementById('openTlSummaryBtn'); // NEW
-         
+
          loadingOverlay = document.getElementById('loadingOverlay');
-         
+
          // NEW: Group selection references
          batchIdSelect = document.getElementById('batchIdSelect');
          fixCategoryFilter = document.getElementById('fixCategoryFilter');
+         monthFilter = document.getElementById('monthFilter'); // Added monthFilter
          }
-         
+
          function setupAuthRelatedDOMReferences() {
          signInBtn = document.getElementById('signInBtn');
          signOutBtn = document.getElementById('signOutBtn');
@@ -317,7 +360,7 @@
          appContentDiv = document.getElementById('app-content');
          loadingAuthMessageDiv = document.getElementById('loading-auth-message');
          }
-         
+
          function attachEventListeners() {
          if (openAddNewProjectBtn) openAddNewProjectBtn.onclick = () => {
     const pin = prompt("Enter PIN to add new tracker:");
@@ -339,15 +382,15 @@
      settingsModal.style.display = 'block'; renderAllowedEmailsList(); };
          if (closeSettingsBtn) closeSettingsBtn.onclick = () => { settingsModal.style.display = 'none'; };
          if (addEmailBtn) addEmailBtn.onclick = handleAddEmail;
-         
+
          if (openTlSummaryBtn) openTlSummaryBtn.onclick = () => { // NEW
          tlSummaryModal.style.display = 'block'; generateTlSummaryData();
          };
          if (closeTlSummaryBtn) closeTlSummaryBtn.onclick = () => { // NEW
          tlSummaryModal.style.display = 'none';
          };
-         
-         
+
+
          // NEW: Group selection event listeners
          if (batchIdSelect) {
          batchIdSelect.onchange = (event) => {
@@ -361,7 +404,16 @@
          initializeFirebaseAndLoadData(); // Reload data based on new selection
          };
          }
-         
+         // Added monthFilter event listener
+         if (monthFilter) {
+             monthFilter.onchange = (event) => {
+                 currentSelectedMonth = event.target.value;
+                 // When the month changes, reset the selected batch so it can be re-populated
+                 currentSelectedBatchId = "";
+                 initializeFirebaseAndLoadData(); // Reload data based on new selection
+             };
+         }
+
          if (typeof window !== 'undefined') {
          window.onclick = (event) => {
          if (event.target == projectFormModal) projectFormModal.style.display = 'none';
@@ -373,7 +425,7 @@
          if (newProjectForm) newProjectForm.addEventListener('submit', handleAddProjectSubmit);
          setupAuthEventListeners();
          }
-         
+
          async function logActivity(action, details = {}) {
          if (!db || !auth.currentUser) {
          console.warn("Firestore or authenticated user not available for logging activity.");
@@ -392,8 +444,8 @@
          console.error("Error logging activity:", error);
          }
          }
-         
-         
+
+
          async function handleAddProjectSubmit(e) {
          e.preventDefault();
          showLoading("Adding project(s)...");
@@ -402,13 +454,13 @@
          const numRows = parseInt(document.getElementById('numRows').value, 10);
          const baseProjectNameVal = document.getElementById('baseProjectName').value.trim();
          const gsd = document.getElementById('gsd').value;
-         
+
          if (!baseProjectNameVal || isNaN(numRows) || numRows < 1) { alert("Invalid input."); hideLoading(); return; }
-         
+
          const currentBatchId = "batch_" + generateId();
          const batchCreationTimestamp = firebase.firestore.FieldValue.serverTimestamp();
          const fbBatch = db.batch();
-         
+
          try {
          for (let i = 1; i <= numRows; i++) {
          const newProjectData = {
@@ -437,11 +489,13 @@
          // After adding a new project, refresh the view to potentially show the new batch/fix category
          // Ensure the newly added batch is selected in the dropdown
          currentSelectedBatchId = currentBatchId; // Set this so initializeFirebaseAndLoadData will select it
+         // Clear month filter as well to ensure the new batch is visible
+         currentSelectedMonth = "";
          initializeFirebaseAndLoadData();
          } catch (error) { console.error("Error adding projects: ", error); alert("Error: " + error.message); }
          finally { projectFormModal.style.display = 'none'; hideLoading(); }
          }
-         
+
          // MODIFIED: getManageableBatches will now fetch ALL batches to ensure comprehensive dashboard view.
          // This is important because the main table might only show a subset.
          async function getManageableBatches() {
@@ -473,14 +527,14 @@
          hideLoading();
          }
          }
-         
-         
+
+
          async function renderTLDashboard() {
          if (!tlDashboardContentElement) { console.error("tlDashboardContentElement not found."); return; }
          tlDashboardContentElement.innerHTML = '';
          const manageableBatches = await getManageableBatches(); // Fetch all batches for dashboard
          if (manageableBatches.length === 0) { tlDashboardContentElement.innerHTML = '<p>No project batches found.</p>'; return; }
-         
+
          manageableBatches.forEach(batch => {
          if (!batch || !batch.batchId) return;
          const batchDiv = document.createElement('div');
@@ -552,7 +606,7 @@
          tlDashboardContentElement.appendChild(batchDiv);
          });
          }
-         
+
          async function releaseBatchToNextFix(batchId, currentFixCategory, nextFixCategory) {
          showLoading(`Releasing ${currentFixCategory} tasks...`);
          if (!db) { alert("Database not initialized!"); hideLoading(); return; }
@@ -596,7 +650,7 @@
          } catch (error) { console.error("Error releasing batch:", error); alert("Error: " + error.message); }
          finally { hideLoading(); }
          }
-         
+
          async function deleteProjectBatch(batchIdToDelete) {
          showLoading("Deleting batch...");
          if (!db || !batchIdToDelete) { hideLoading(); return; }
@@ -627,12 +681,12 @@
          } catch (error) { console.error(`Error deleting ${fixCategoryToDelete} for batch ${batchIdToDelete}:`, error); alert("Error: " + error.message); }
          finally { hideLoading(); }
          }
-         
+
          function renderProjects() {
          if (!projectTableBody) { console.error("CRITICAL: projectTableBody not found."); return; }
          projectTableBody.innerHTML = '';
          const projectsToRender = [...projects]; // projects array is already filtered by the query
-         
+
          projectsToRender.sort((a, b) => {
          if (!a || !b) return 0;
          // Sort within the current set by Fix Category, then Area Task
@@ -643,13 +697,13 @@
          if (statusAVal < statusBVal) return -1; if (statusAVal > statusBVal) return 1;
          return 0;
          });
-         
+
          let currentBatchIdForDisplay = null;
          let currentFixCategoryForHeader = null;
-         
+
          projectsToRender.forEach(project => {
          if (!project || !project.id || !project.batchId || !project.fixCategory) { return; }
-         
+
          if (project.batchId !== currentBatchIdForDisplay) {
          currentBatchIdForDisplay = project.batchId; currentFixCategoryForHeader = null;
          const batchHeaderRow = projectTableBody.insertRow(); batchHeaderRow.classList.add('batch-header-row');
@@ -675,37 +729,37 @@
          }
          };
          }
-         
+
          const row = projectTableBody.insertRow();
          const currentGroupStateKeyForRow = `${project.batchId}_${project.fixCategory}`;
          if (!(groupVisibilityState[currentGroupStateKeyForRow]?.isExpanded !== false)) row.classList.add('hidden-group-row');
          if (project.fixCategory) row.classList.add(`${project.fixCategory.toLowerCase()}-row`);
          if (project.isReassigned) row.classList.add('reassigned-task-highlight');
-         
+
          row.insertCell().textContent = project.fixCategory || 'N/A';
          const baseNameCell = row.insertCell(); baseNameCell.textContent = project.baseProjectName || 'N/A'; baseNameCell.classList.add('wrap-text');
          row.insertCell().textContent = project.areaTask || 'N/A';
          row.insertCell().textContent = project.gsd || 'N/A';
-         
+
          const assignedToCell = row.insertCell();
          const assignedToSelect = document.createElement('select');
          assignedToSelect.classList.add('assigned-to-select');
          assignedToSelect.disabled = project.status === 'Reassigned_TechAbsent';
-         
+
          const unassignedOption = document.createElement('option');
          unassignedOption.value = "";
          unassignedOption.textContent = "Select Tech ID";
          assignedToSelect.appendChild(unassignedOption);
-         
+
          TECH_IDS.forEach(techId => {
          const option = document.createElement('option');
          option.value = techId;
          option.textContent = techId;
          assignedToSelect.appendChild(option);
          });
-         
+
          assignedToSelect.value = project.assignedTo || "";
-         
+
          assignedToSelect.onchange = async (event) => {
          showLoading("Updating assignment...");
          const newTechId = event.target.value;
@@ -737,7 +791,7 @@
          }
          };
          assignedToCell.appendChild(assignedToSelect);
-         
+
          const statusCell = row.insertCell();
          const statusSpan = document.createElement('span'); statusSpan.classList.add('status');
          let statusText = (project.status || "Unknown").replace(/([A-Z])(?=[a-z0-9_])/g, ' $1').trim();
@@ -746,12 +800,12 @@
          if (project.status === "Reassigned_TechAbsent") statusText = "Re-Assigned";
          statusSpan.textContent = statusText; statusSpan.classList.add(`status-${(project.status || "unknown").toLowerCase()}`);
          statusCell.appendChild(statusSpan);
-         
+
          const timeFormatOptions = { hour: 'numeric', minute: '2-digit', hour12: true };
          let d1s = project.startTimeDay1, d1f = project.finishTimeDay1,
          d2s = project.startTimeDay2, d2f = project.finishTimeDay2,
          d3s = project.startTimeDay3, d3f = project.finishTimeDay3;
-         
+
          try {
          if (d1s && typeof d1s.toDate === 'function') d1s = d1s.toDate(); else if (d1s) d1s = new Date(d1s); else d1s = null;
          if (d1f && typeof d1f.toDate === 'function') d1f = d1f.toDate(); else if (d1f) d1f = new Date(d1f); else d1f = null;
@@ -759,16 +813,16 @@
          if (d2f && typeof d2f.toDate === 'function') d2f = d2f.toDate(); else if (d2f) d2f = new Date(d2f); else d2f = null;
          if (d3s && typeof d3s.toDate === 'function') d3s = d3s.toDate(); else if (d3s) d3s = new Date(d3s); else d3s = null;
          if (d3f && typeof d3f.toDate === 'function') d3f = d3f.toDate(); else if (d3f) d3f = new Date(d3f); else d3f = null;
-         
+
          } catch (dateError) { d1s = d1f = d2s = d2f = d3s = d3f = null; }
-         
+
          row.insertCell().textContent = d1s && !isNaN(d1s) ? d1s.toLocaleTimeString('en-US', timeFormatOptions) : '-';
          row.insertCell().textContent = d1f && !isNaN(d1f) ? d1f.toLocaleTimeString('en-US', timeFormatOptions) : '-';
          row.insertCell().textContent = d2s && !isNaN(d2s) ? d2s.toLocaleTimeString('en-US', timeFormatOptions) : '-';
          row.insertCell().textContent = d2f && !isNaN(d2f) ? d2f.toLocaleTimeString('en-US', timeFormatOptions) : '-';
          row.insertCell().textContent = d3s && !isNaN(d3s) ? d3s.toLocaleTimeString('en-US', timeFormatOptions) : '-';
          row.insertCell().textContent = d3f && !isNaN(d3f) ? d3f.toLocaleTimeString('en-US', timeFormatOptions) : '-';
-         
+
          let totalRawDurationMs = (project.durationDay1Ms || 0) + (project.durationDay2Ms || 0) + (project.durationDay3Ms || 0);
          let breakToSubtractMs = (project.breakDurationMinutes || 0) * 60000;
          let additionalManualMs = (project.additionalMinutesManual || 0) * 60000;
@@ -780,7 +834,7 @@
          const totalDurationCell = row.insertCell();
          totalDurationCell.textContent = formatMillisToMinutes(finalTotalDurationMs);
          totalDurationCell.classList.add('total-duration-column');
-         
+
          const techNotesCell = row.insertCell();
          const techNotesInput = document.createElement('textarea'); techNotesInput.value = project.techNotes || '';
          techNotesInput.placeholder = 'Notes'; techNotesInput.classList.add('tech-notes-input'); techNotesInput.rows = 1;
@@ -806,10 +860,10 @@
          }
          };
          techNotesCell.appendChild(techNotesInput);
-         
+
          const actionsCell = row.insertCell();
          const btnContainer = document.createElement('div');
-         
+
          const breakSelect = document.createElement('select');
          breakSelect.classList.add('break-select'); breakSelect.id = `breakSelect_${project.id}`;
          breakSelect.title = "Select break time to deduct"; breakSelect.disabled = project.status === 'Reassigned_TechAbsent';
@@ -856,36 +910,36 @@
          }
          };
          btnContainer.appendChild(breakSelect);
-         
+
          const isOriginalReassignedTask = project.status === 'Reassigned_TechAbsent';
          const sD1btn = document.createElement('button'); sD1btn.textContent = 'Start D1'; sD1btn.classList.add('btn','btn-day-start');
          sD1btn.disabled = isOriginalReassignedTask || !(project.status === 'Available' || project.status === 'Day1Ended_AwaitingNext' || project.status === 'InProgressDay2' || project.status === 'Day2Ended_AwaitingNext' || project.status === 'InProgressDay3' || project.status === 'Completed');
          sD1btn.onclick = () => { if (project.id) updateProjectState(project.id, 'startDay1'); }; btnContainer.appendChild(sD1btn);
-         
+
          const eD1btn = document.createElement('button'); eD1btn.textContent = 'End D1'; eD1btn.classList.add('btn','btn-day-end'); eD1btn.disabled = project.status !== 'InProgressDay1' || isOriginalReassignedTask; eD1btn.onclick = () => { if (project.id) updateProjectState(project.id, 'endDay1'); }; btnContainer.appendChild(eD1btn);
-         
+
          const sD2btn = document.createElement('button'); sD2btn.textContent = 'Start D2'; sD2btn.classList.add('btn','btn-day-start');
          sD2btn.disabled = isOriginalReassignedTask || !(project.status === 'Day1Ended_AwaitingNext' || project.status === 'Day2Ended_AwaitingNext' || project.status === 'InProgressDay3' || project.status === 'Completed');
          sD2btn.onclick = () => { if (project.id) updateProjectState(project.id, 'startDay2'); }; btnContainer.appendChild(sD2btn);
-         
+
          const eD2btn = document.createElement('button'); eD2btn.textContent = 'End D2'; eD2btn.classList.add('btn','btn-day-end');
          eD2btn.disabled = project.status !== 'InProgressDay2' || isOriginalReassignedTask; eD2btn.onclick = () => { if (project.id) updateProjectState(project.id, 'endDay2'); }; btnContainer.appendChild(eD2btn);
-         
+
          const sD3btn = document.createElement('button'); sD3btn.textContent = 'Start D3'; sD3btn.classList.add('btn','btn-day-start');
          sD3btn.disabled = isOriginalReassignedTask || !(project.status === 'Day2Ended_AwaitingNext' || project.status === 'InProgressDay3' || project.status === 'Completed');
          sD3btn.onclick = () => { if (project.id) updateProjectState(project.id, 'startDay3'); }; btnContainer.appendChild(sD3btn);
-         
+
          const eD3btn = document.createElement('button'); eD3btn.textContent = 'End D3'; eD3btn.classList.add('btn','btn-day-end');
          eD3btn.disabled = project.status !== 'InProgressDay3' || isOriginalReassignedTask; eD3btn.onclick = () => { if (project.id) updateProjectState(project.id, 'endDay3'); }; btnContainer.appendChild(eD3btn);
-         
-         
+
+
          const doneBtn = document.createElement('button'); doneBtn.textContent = 'Done'; doneBtn.classList.add('btn','btn-mark-done'); doneBtn.disabled = project.status === 'Completed' || isOriginalReassignedTask; doneBtn.onclick = () => { if (project.id) updateProjectState(project.id, 'markDone'); }; btnContainer.appendChild(doneBtn);
          const reassignBtn = document.createElement('button'); reassignBtn.textContent = 'Re-Assign'; reassignBtn.classList.add('btn', 'btn-warning'); reassignBtn.title = 'Re-assign task by creating a new entry.'; reassignBtn.disabled = project.status === 'Completed' || isOriginalReassignedTask; reassignBtn.onclick = () => { const currentProjectData = projects.find(p => p.id === project.id); if (currentProjectData) handleReassignment(currentProjectData); }; btnContainer.appendChild(reassignBtn);
-         
+
          actionsCell.appendChild(btnContainer);
          });
          }
-         
+
          async function updateProjectState(projectId, action) {
          showLoading("Updating project state...");
          if (!db || !projectId ) { hideLoading(); return; }
@@ -901,13 +955,13 @@
          return;
          }
          if (!currentProjectData || currentProjectData.status === 'Reassigned_TechAbsent') { hideLoading(); return; }
-         
+
          const serverTimestamp = firebase.firestore.FieldValue.serverTimestamp();
          const clientNowMillis = Date.now();
          let updatedFields = { lastModifiedTimestamp: serverTimestamp };
          let oldStatus = currentProjectData.status;
          let newStatus = oldStatus;
-         
+
          switch (action) {
          case 'startDay1':
          if (['Available', 'Day1Ended_AwaitingNext', 'InProgressDay2', 'Day2Ended_AwaitingNext', 'InProgressDay3', 'Completed'].includes(currentProjectData.status)) {
@@ -970,7 +1024,7 @@
          updatedFields.durationDay1Ms = calculateDurationMs(currentProjectData.startTimeDay1, clientNowMillis);
          } else if (currentProjectData.startTime1 && currentProjectData.finishTime1 && !currentProjectData.startTime2) {
          updatedFields.startTimeDay2 = null; updatedFields.finishTimeDay2 = null; updatedFields.durationDay2Ms = null;
-         updatedFields.startTimeDay3 = null; updatedFields.finishTimeDay3 = null; updatedFields.durationDay3Ms = null;
+         updatedFields.startTimeDay3 = null; updatedFields.finishTimeDay3 = null; updatedDays3Ms = null;
          } else if (currentProjectData.startTime2 && !currentProjectData.finishTime2) {
          updatedFields.finishTimeDay2 = serverTimestamp;
          updatedFields.durationDay2Ms = calculateDurationMs(currentProjectData.startTimeDay2, clientNowMillis);
@@ -997,12 +1051,12 @@
          hideLoading();
          }
          }
-         
+
          async function handleReassignment(originalProjectData) {
          if (!originalProjectData || !originalProjectData.id || originalProjectData.status === 'Reassigned_TechAbsent' || originalProjectData.status === 'Completed') return;
          const newTechId = prompt(`Task for '${originalProjectData.areaTask}'. Enter New Tech ID:`);
          if (newTechId === null || newTechId.trim() === "") return;
-         
+
          if (confirm(`Create NEW task for '${newTechId.trim()}'? Current task will be closed.`)) {
          showLoading("Reassigning task...");
          if (!db) { hideLoading(); return; }
@@ -1035,7 +1089,7 @@
          finally { hideLoading(); }
          }
          }
-         
+
          function refreshAllViews() {
          try {
          renderProjects();
@@ -1043,7 +1097,7 @@
          // So no need to check modal display here as they are invoked by button click event listeners
          } catch (e) { console.error("Error during refreshAllViews:", e); }
          }
-         
+
          async function renderAllowedEmailsList() {
          if (!allowedEmailsList) return; await fetchAllowedEmails(); allowedEmailsList.innerHTML = '';
          if (allowedEmailsFromFirestore.length === 0) { allowedEmailsList.innerHTML = '<li>No allowed emails configured.</li>'; return; }
@@ -1076,7 +1130,7 @@
          }
          }
          }
-         
+
          // NEW: Function to generate TL Summary data
          async function generateTlSummaryData() {
          if (!tlSummaryContent) {
@@ -1085,13 +1139,13 @@
          }
          showLoading("Generating TL Summary...");
          tlSummaryContent.innerHTML = '<p>Loading summary...</p>';
-         
+
          if (!db) {
          tlSummaryContent.innerHTML = '<p style="color:red;">Database not initialized. Cannot generate summary.</p>';
          hideLoading();
          return;
          }
-         
+
          try {
          // Fetch all projects regardless of current filters
          const allProjectsSnapshot = await db.collection("projects").get();
@@ -1101,9 +1155,9 @@
          allProjects.push({ id: doc.id, ...doc.data() });
          }
          });
-         
+
          const projectFixTotals = {}; // Key: "PROJECT_NAME_FixX", Value: total_minutes
-         
+
          allProjects.forEach(p => {
          // Ensure necessary fields exist before using them
          p.durationDay1Ms = p.durationDay1Ms || 0;
@@ -1111,19 +1165,19 @@
          p.durationDay3Ms = p.durationDay3Ms || 0;
          p.breakDurationMinutes = p.breakDurationMinutes || 0;
          p.additionalMinutesManual = p.additionalMinutesManual || 0;
-         
+
          const totalRawDurationMs = p.durationDay1Ms + p.durationDay2Ms + p.durationDay3Ms;
          const breakToSubtractMs = p.breakDurationMinutes * 60000;
          const additionalManualMs = p.additionalMinutesManual * 60000;
-         
+
          let durationAfterBreakMs = Math.max(0, totalRawDurationMs - breakToSubtractMs);
          let finalTotalDurationMs = durationAfterBreakMs + additionalManualMs;
-         
+
          // Only count if there's actual duration or manual adjustments
          if (finalTotalDurationMs === 0 && p.breakDurationMinutes === 0 && p.additionalMinutesManual === 0) {
          return; // Skip projects with no recorded time
          }
-         
+
          const key = `${p.baseProjectName || 'Unknown Project'}_${p.fixCategory || 'Unknown Fix'}`;
          if (!projectFixTotals[key]) {
          projectFixTotals[key] = {
@@ -1134,10 +1188,10 @@
          }
          projectFixTotals[key].totalMinutes += Math.floor(finalTotalDurationMs / 60000); // Add total minutes
          });
-         
+
          let summaryHtml = '<ul style="list-style: none; padding: 0;">';
          const sortedKeys = Object.keys(projectFixTotals).sort(); // Sort alphabetically for consistent display
-         
+
          sortedKeys.forEach(key => {
          const data = projectFixTotals[key];
          const decimalHours = (data.totalMinutes / 60).toFixed(2);
@@ -1149,16 +1203,16 @@
                                 </li>
                             `;
          });
-         
+
          if (sortedKeys.length === 0) {
          summaryHtml = '<p>No project time data found to generate a summary.</p>';
          } else {
          summaryHtml += '</ul>';
          }
-         
+
          tlSummaryContent.innerHTML = summaryHtml;
          logActivity('Generated TL Summary', { numEntries: sortedKeys.length });
-         
+
          } catch (error) {
          console.error("Error generating TL Summary:", error);
          tlSummaryContent.innerHTML = '<p style="color:red;">Error generating summary: ' + error.message + '</p>';
@@ -1166,11 +1220,11 @@
          hideLoading();
          }
          }
-         
-         
+
+
          function setupAuthEventListeners() {
          const provider = new firebase.auth.GoogleAuthProvider();
-         
+
          if (signInBtn) {
          signInBtn.addEventListener('click', () => {
          showLoading("Signing in...");
@@ -1203,7 +1257,7 @@
          } else {
          console.error("Sign-in button not found during event listener setup.");
          }
-         
+
          if (signOutBtn) {
          signOutBtn.addEventListener('click', () => {
          showLoading("Signing out...");
@@ -1222,7 +1276,7 @@
          console.error("Sign-out button not found during event listener setup.");
          }
          }
-         
+
          function initializeAppComponents() {
          if (!isAppInitialized) {
          console.log("Initializing app components (DOM refs, event listeners, Firestore data)...");
@@ -1235,41 +1289,41 @@
          initializeFirebaseAndLoadData();
          }
          }
-         
+
          if (auth) {
          auth.onAuthStateChanged(async (user) => {
          setupDOMReferences();
          setupAuthRelatedDOMReferences();
-         
+
          if (!userNameP || !userEmailP || !userPhotoImg || !userInfoDisplayDiv || !signInBtn || !appContentDiv || !loadingAuthMessageDiv || !openSettingsBtn) {
          console.error("One or more critical UI elements for auth state change not found. Aborting UI update.");
          hideLoading();
          return;
          }
-         
+
          if (user) {
          showLoading("Checking authorization...");
          await fetchAllowedEmails();
          const userEmailLower = user.email ? user.email.toLowerCase() : "";
-         
+
          if (user.email && allowedEmailsFromFirestore.map(email => email.toLowerCase()).includes(userEmailLower)) {
          console.log("Auth state changed: User is SIGNED IN and ALLOWED - ", user.displayName, user.email);
-         
+
          userNameP.textContent = user.displayName || "Name not available";
          userEmailP.textContent = user.email || "Email not available";
          userPhotoImg.src = user.photoURL || "default-user.png";
-         
+
          userInfoDisplayDiv.style.display = 'flex';
          signInBtn.style.display = 'none';
          loadingAuthMessageDiv.style.display = 'none';
          appContentDiv.style.display = 'block';
          openSettingsBtn.style.display = 'block';
-         
+
          initializeAppComponents();
          } else {
          console.warn("Auth state changed: User SIGNED IN but NOT ALLOWED - ", user.email);
          alert("Access Denied: Your email address (" + (user.email || "N/A") + ") is not authorized to use this application.");
-         
+
          auth.signOut().then(() => {
          console.log("Unauthorized user automatically signed out.");
          loadingAuthMessageDiv.innerHTML = '<p>Access Denied. Please sign in with an authorized account.</p>';
@@ -1278,7 +1332,7 @@
          appContentDiv.style.display = 'none';
          loadingAuthMessageDiv.style.display = 'block';
          openSettingsBtn.style.display = 'none';
-         
+
          projects = [];
          if (projectTableBody) projectTableBody.innerHTML = '';
          if (tlDashboardContentElement) tlDashboardContentElement.innerHTML = '';
@@ -1301,24 +1355,24 @@
          hideLoading();
          });
          }
-         
+
          } else {
          console.log("Auth state changed: User is SIGNED OUT");
-         
+
          userNameP.textContent = '';
          userEmailP.textContent = '';
          userPhotoImg.src = '';
-         
+
          userInfoDisplayDiv.style.display = 'none';
          signInBtn.style.display = 'block';
          appContentDiv.style.display = 'none';
          openSettingsBtn.style.display = 'none';
-         
+
          if (loadingAuthMessageDiv.innerHTML.indexOf("Access Denied") === -1) {
          loadingAuthMessageDiv.innerHTML = '<p>Please sign in to access the Project Tracker.</p>';
          }
          loadingAuthMessageDiv.style.display = 'block';
-         
+
          projects = [];
          if (projectTableBody) projectTableBody.innerHTML = '';
          if (tlDashboardContentElement) tlDashboardContentElement.innerHTML = '';
@@ -1340,13 +1394,13 @@
          loadingAuthMessageDiv.style.display = 'block';
          }
          }
-         
-         
+
+
          document.addEventListener('DOMContentLoaded', () => {
          console.log("DOM fully loaded.");
          setupDOMReferences();
          setupAuthRelatedDOMReferences();
-         
+
          if (auth) {
          setupAuthEventListeners();
          console.log("Auth UI and event listeners set up.");
@@ -1359,4 +1413,3 @@
          }
          }
          });
-      
