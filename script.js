@@ -1848,6 +1848,8 @@ async function generateTlSummaryData() {
         });
 
         const projectFixTotals = {};
+        // NEW: Object to store overall totals per project name
+        const overallProjectTotals = {};
 
         allProjects.forEach(p => {
             // Ensure fields exist and are numbers, default to 0 if not
@@ -1861,11 +1863,10 @@ async function generateTlSummaryData() {
             const breakToSubtractMs = p.breakDurationMinutes * 60000;
             const additionalManualMs = p.additionalMinutesManual * 60000;
 
-            let durationAfterBreakMs = Math.max(0, totalRawDurationMs - breakToSubtractMs);
-            let finalTotalDurationMs = durationAfterBreakMs + additionalManualMs;
+            let finalTotalDurationMs = Math.max(0, totalRawDurationMs - breakToSubtractMs) + additionalManualMs;
 
-            // Only include projects with actual work recorded
-            if (finalTotalDurationMs === 0 && p.breakDurationMinutes === 0 && p.additionalMinutesManual === 0) {
+            // Only include projects with actual work recorded that have a positive final duration
+            if (finalTotalDurationMs <= 0 && p.breakDurationMinutes === 0 && p.additionalMinutesManual === 0) {
                 return;
             }
 
@@ -1878,9 +1879,40 @@ async function generateTlSummaryData() {
                 };
             }
             projectFixTotals[key].totalMinutes += Math.floor(finalTotalDurationMs / 60000);
+
+            // Accumulate for overall project total
+            const overallProjectKey = p.baseProjectName || 'Unknown Project';
+            if (!overallProjectTotals[overallProjectKey]) {
+                overallProjectTotals[overallProjectKey] = {
+                    projectName: overallProjectKey,
+                    totalMinutes: 0
+                };
+            }
+            overallProjectTotals[overallProjectKey].totalMinutes += Math.floor(finalTotalDurationMs / 60000);
         });
 
         let summaryHtml = '<ul style="list-style: none; padding: 0;">';
+
+        // NEW: Display Overall Project Totals first
+        const sortedOverallProjectKeys = Object.keys(overallProjectTotals).sort();
+        if (sortedOverallProjectKeys.length > 0) {
+            summaryHtml += '<h3>Overall Project Totals (All Fix Categories)</h3>';
+            sortedOverallProjectKeys.forEach(projectName => {
+                const data = overallProjectTotals[projectName];
+                const decimalHours = (data.totalMinutes / 60).toFixed(2);
+                summaryHtml += `
+                    <li class="tl-summary-overall-total">
+                        <strong>Project:</strong> ${data.projectName}<br>
+                        <strong>Total Across All Fixes:</strong> ${data.totalMinutes} minutes<br>
+                        <strong>Decimal:</strong> ${decimalHours} hours
+                    </li>
+                `;
+            });
+            summaryHtml += '<hr style="margin: 20px 0;">'; // Separator
+        }
+
+
+        summaryHtml += '<h3>Totals by Project and Fix Category</h3>';
         // Sort keys for consistent display
         const sortedKeys = Object.keys(projectFixTotals).sort();
 
@@ -1896,7 +1928,7 @@ async function generateTlSummaryData() {
             `;
         });
 
-        if (sortedKeys.length === 0) {
+        if (sortedKeys.length === 0 && sortedOverallProjectKeys.length === 0) {
             summaryHtml = '<p>No project time data found to generate a summary.</p>';
         } else {
             summaryHtml += '</ul>';
