@@ -2125,9 +2125,10 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log("Auth UI and event listeners set up.");
     } else {
         console.error("Firebase Auth not available on DOMContentLoaded. Auth UI setup skipped.");
-        const authContainer = document.getElementById('auth-container'); // Assuming you have an auth-container
+        const authContainer = document.getElementById('auth-container');
         if (authContainer && loadingAuthMessageDiv) {
             loadingAuthMessageDiv.innerHTML = '<p style="color:red; font-weight:bold;">Authentication services could not be loaded. Please check the console and refresh.</p>';
             loadingAuthMessageDiv.style.display = 'block';
         }
-});
+    } // Add this closing curly brace for the else block
+}); // This now correctly closes the DOMContentLoaded function block and the addEventListener call
