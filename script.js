@@ -319,7 +319,10 @@
          }
          
          function attachEventListeners() {
-         if (openAddNewProjectBtn) openAddNewProjectBtn.onclick = () => { projectFormModal.style.display = 'block'; };
+         if (openAddNewProjectBtn) openAddNewProjectBtn.onclick = () => {
+    const pin = prompt("Enter PIN to add new tracker:");
+    if (pin !== "1234") { alert("Incorrect PIN."); return; }
+     projectFormModal.style.display = 'block'; };
          if (closeProjectFormBtn) closeProjectFormBtn.onclick = () => { projectFormModal.style.display = 'none'; };
          if (openTlDashboardBtn) {
          openTlDashboardBtn.onclick = () => {
@@ -330,7 +333,10 @@
          };
          }
          if (closeTlDashboardBtn) closeTlDashboardBtn.onclick = () => { tlDashboardModal.style.display = 'none'; };
-         if (openSettingsBtn) openSettingsBtn.onclick = () => { settingsModal.style.display = 'block'; renderAllowedEmailsList(); };
+         if (openSettingsBtn) openSettingsBtn.onclick = () => {
+    const pin = prompt("Enter PIN to access User Settings:");
+    if (pin !== "1234") { alert("Incorrect PIN."); return; }
+     settingsModal.style.display = 'block'; renderAllowedEmailsList(); };
          if (closeSettingsBtn) closeSettingsBtn.onclick = () => { settingsModal.style.display = 'none'; };
          if (addEmailBtn) addEmailBtn.onclick = handleAddEmail;
          
