@@ -106,13 +106,15 @@
          #newProjectForm input[type="text"], #newProjectForm input[type="number"], #newProjectForm select { width: calc(100% - 18px); padding: 7px; margin-top: 3px; border: 1px solid #ddd; border-radius: 3px; box-sizing: border-box; font-size: 0.85em; }
          #newProjectForm button[type="submit"] { margin-top: 12px; }
          #projectTable { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 0.8em; }
-         #projectTable th, #projectTable td { border: 1px solid #ddd; padding: 3px 5px; text-align: left; vertical-align: middle;}
+         #projectTable th, #projectTable td { border: 1px solid #ddd; padding: 3px 5px; text-align: left; vertical-align: middle; white-space: nowrap; }
          #projectTable thead th { background-color: #34495e; color: white; font-weight: bold; position: sticky; top: 0; z-index: 10;}
          #projectTable td.wrap-text { white-space: normal; }
          #projectTable select.assigned-to-select, /* Changed from input[type="text"].assigned-to-input */
-         #projectTable textarea.tech-notes-input {
+         #projectTable textarea.tech-notes-input,
+         #projectTable input[type="number"].additional-minutes-input {
          width: calc(100% - 6px); padding: 2px; border: 1px solid #ccc; border-radius: 2px; box-sizing: border-box; font-size: 1em; background-color: #fff;
          }
+         #projectTable input[type="number"].additional-minutes-input { width: 60px; text-align: right;}
          #projectTable textarea.tech-notes-input { resize: vertical; min-height: 18px; line-height: 1.3; }
          .batch-header-row td { background-color: #6c757d !important; color: white; font-size: 1.1em; font-weight: bold; text-align: left; padding: 6px 8px; }
          .fix-group-header td { background-color: #adb5bd !important; color: #212529; font-size: 1.0em; font-weight: bold; text-align: left; padding: 4px 8px; cursor:pointer; padding-left: 30px; }
@@ -213,8 +215,8 @@
          100% { transform: rotate(360deg); }
          }
       </style>
-      <link rel="icon" type="image/png" href="icon.png">
-   </head>
+   <link rel="icon" type="image/png" href="icon.png">
+</head>
    <body>
       <div class="container">
          <div id="auth-container">
@@ -317,6 +319,7 @@
                   <option value="11">November</option>
                   <option value="12">December</option>
                </select>
+               </select>
                <label for="fixCategoryFilter">Select Fix Category:</label>
                <select id="fixCategoryFilter">
                   <option value="">All Fix Categories</option>
@@ -359,6 +362,7 @@
       <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
       <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
       <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
-      <script src="script.js"></script>
-   </body>
+      
+     <script src="script.js"></script>
+</body>
 </html>
