@@ -1000,20 +1000,19 @@ async function deleteSpecificFixTasksForBatch(batchId, fixCategory) { // Still u
 
 // ====================================================================================
 // MODIFIED renderProjects FUNCTION STARTS HERE
+// REPLACE YOUR EXISTING FUNCTION WITH THIS ENTIRE BLOCK
 // ====================================================================================
 function renderProjects() {
     if (!projectTableBody) {
         console.error("CRITICAL: projectTableBody not found. Cannot render projects.");
         return;
     }
-    projectTableBody.innerHTML = ""; 
+    projectTableBody.innerHTML = "";
 
-    const sortedProjects = [...projects]; 
-    
-    // MODIFIED SORTING: Primary sort by baseProjectName, then by fixCategory, areaTask, status
+    const sortedProjects = [...projects];
+
     sortedProjects.sort((a, b) => {
-        if (!a || !b) return 0; 
-        
+        if (!a || !b) return 0;
         const baseNameA = a.baseProjectName || "";
         const baseNameB = b.baseProjectName || "";
         if (baseNameA < baseNameB) return -1;
@@ -1029,47 +1028,41 @@ function renderProjects() {
         if (areaTaskA < areaTaskB) return -1;
         if (areaTaskA > areaTaskB) return 1;
 
-        const statusOrderA = STATUS_ORDER[a.status || ""] || 99; 
+        const statusOrderA = STATUS_ORDER[a.status || ""] || 99;
         const statusOrderB = STATUS_ORDER[b.status || ""] || 99;
         if (statusOrderA < statusOrderB) return -1;
         if (statusOrderA > statusOrderB) return 1;
 
-        return 0; 
+        return 0;
     });
 
 
-    let currentBaseProjectNameHeader = null; // MODIFIED: Tracks current baseProjectName for grouping
+    let currentBaseProjectNameHeader = null;
     let currentFixCategoryHeader = null;
 
     sortedProjects.forEach(project => {
-        // project.batchId is still part of the data, but not the primary grouping key for headers
-        if (!project || !project.id || !project.baseProjectName || !project.fixCategory) { 
+        if (!project || !project.id || !project.baseProjectName || !project.fixCategory) {
              console.warn("Skipping rendering of invalid project object (missing essential fields):", project);
              return;
         }
 
-        // === Main Project Name Header Row ===
-        // MODIFIED: Group by baseProjectName
         if (project.baseProjectName !== currentBaseProjectNameHeader) {
             currentBaseProjectNameHeader = project.baseProjectName;
-            currentFixCategoryHeader = null; // IMPORTANT: Reset fix category when project name changes
+            currentFixCategoryHeader = null;
 
             const projectNameHeaderRow = projectTableBody.insertRow();
-            // Using 'batch-header-row' class for styling consistency, though it now represents a project name group
-            projectNameHeaderRow.classList.add("batch-header-row"); 
+            projectNameHeaderRow.classList.add("batch-header-row");
             const projectNameCell = projectNameHeaderRow.insertCell();
             projectNameCell.setAttribute("colspan", NUM_TABLE_COLUMNS.toString());
             projectNameCell.textContent = `Project: ${project.baseProjectName || "Unknown"}`;
         }
 
-        // === Fix Category Sub-Header Row (within the current baseProjectName group) ===
         if (project.fixCategory !== currentFixCategoryHeader) {
             currentFixCategoryHeader = project.fixCategory;
-            // MODIFIED: groupKey for visibility now uses baseProjectName and fixCategory
-            const groupKey = `${currentBaseProjectNameHeader}_${currentFixCategoryHeader}`; 
+            const groupKey = `${currentBaseProjectNameHeader}_${currentFixCategoryHeader}`;
 
             if (typeof groupVisibilityState[groupKey] === 'undefined') {
-                groupVisibilityState[groupKey] = { isExpanded: true }; 
+                groupVisibilityState[groupKey] = { isExpanded: true };
             }
 
             const groupHeaderRow = projectTableBody.insertRow();
@@ -1079,8 +1072,8 @@ function renderProjects() {
 
             const toggleBtn = document.createElement('button');
             toggleBtn.classList.add('btn', 'btn-group-toggle');
-            const isExpanded = groupVisibilityState[groupKey]?.isExpanded !== false; 
-            toggleBtn.textContent = isExpanded ? "−" : "+"; 
+            const isExpanded = groupVisibilityState[groupKey]?.isExpanded !== false;
+            toggleBtn.textContent = isExpanded ? "−" : "+";
             toggleBtn.title = isExpanded ? `Collapse ${currentFixCategoryHeader}` : `Expand ${currentFixCategoryHeader}`;
 
             groupHeaderCell.appendChild(document.createTextNode(`${currentFixCategoryHeader} `));
@@ -1091,14 +1084,13 @@ function renderProjects() {
                     if (groupVisibilityState[groupKey]) {
                         groupVisibilityState[groupKey].isExpanded = !groupVisibilityState[groupKey].isExpanded;
                         saveGroupVisibilityState();
-                        renderProjects(); 
+                        renderProjects();
                     }
                 }
             };
         }
 
         const row = projectTableBody.insertRow();
-        // MODIFIED: Check visibility based on the new groupKey structure
         if (groupVisibilityState[`${currentBaseProjectNameHeader}_${project.fixCategory}`]?.isExpanded === false) {
             row.classList.add("hidden-group-row");
         }
@@ -1112,8 +1104,8 @@ function renderProjects() {
 
         row.insertCell().textContent = project.fixCategory || "N/A";
         const projectNameCell = row.insertCell();
-        projectNameCell.textContent = project.baseProjectName || "N/A"; // Still display baseProjectName per task if needed
-        projectNameCell.classList.add("wrap-text"); 
+        projectNameCell.textContent = project.baseProjectName || "N/A";
+        projectNameCell.classList.add("wrap-text");
         row.insertCell().textContent = project.areaTask || "N/A";
         row.insertCell().textContent = project.gsd || "N/A";
 
@@ -1135,10 +1127,10 @@ function renderProjects() {
         assignedToSelect.onchange = async (event) => {
             showLoading("Updating assignment...");
             const newTechId = event.target.value;
-            const oldTechId = project.assignedTo || ""; 
+            const oldTechId = project.assignedTo || "";
             if (!db || !project.id) {
                 alert("Database or project ID missing. Cannot update assignment.");
-                event.target.value = oldTechId; 
+                event.target.value = oldTechId;
                 hideLoading();
                 return;
             }
@@ -1147,45 +1139,45 @@ function renderProjects() {
                     assignedTo: newTechId,
                     lastModifiedTimestamp: firebase.firestore.FieldValue.serverTimestamp()
                 });
-                project.assignedTo = newTechId; 
+                project.assignedTo = newTechId;
             } catch (error) {
                 console.error("Error updating assignedTo:", error);
                 alert("Error updating assignment: " + error.message);
-                event.target.value = oldTechId; 
+                event.target.value = oldTechId;
             } finally {
                 hideLoading();
             }
         };
         assignedToCell.appendChild(assignedToSelect);
 
-        const statusCell = row.insertCell(); 
+        const statusCell = row.insertCell();
         const statusSpan = document.createElement('span');
         statusSpan.classList.add('status');
-        let statusText = (project.status || "Unknown").replace(/([A-Z])(?=[a-z0-9_])/g, ' $1').trim(); 
+        let statusText = (project.status || "Unknown").replace(/([A-Z])(?=[a-z0-9_])/g, ' $1').trim();
         if (project.status === "Day1Ended_AwaitingNext") statusText = "Started Day 1 Ended";
         else if (project.status === "Day2Ended_AwaitingNext") statusText = "Started Day 2 Ended";
         else if (project.status === "Day3Ended_AwaitingNext") statusText = "Started Day 3 Ended";
         else if (project.status === "Reassigned_TechAbsent") statusText = "Re-Assigned";
         statusSpan.textContent = statusText;
         statusSpan.classList.add(`status-${(project.status || "unknown").toLowerCase()}`);
-        statusCell.appendChild(statusSpan); 
+        statusCell.appendChild(statusSpan);
 
         function formatTime(timestampOrDate) {
             if (!timestampOrDate) return "";
             let date;
             try {
                 if (timestampOrDate.toDate && typeof timestampOrDate.toDate === 'function') {
-                    date = timestampOrDate.toDate(); 
+                    date = timestampOrDate.toDate();
                 } else if (timestampOrDate instanceof Date) {
-                    date = timestampOrDate; 
+                    date = timestampOrDate;
                 } else {
-                     date = new Date(timestampOrDate); 
+                     date = new Date(timestampOrDate);
                 }
-                if (isNaN(date.getTime())) return ""; 
+                if (isNaN(date.getTime())) return "";
             } catch (e) {
-                return ""; 
+                return "";
             }
-            return date.toTimeString().slice(0, 5); 
+            return date.toTimeString().slice(0, 5);
         }
 
         async function updateTimeField(projectId, fieldName, newValue, projectData) {
@@ -1196,10 +1188,10 @@ function renderProjects() {
                 return;
             }
             let firestoreTimestamp = null;
-            if (newValue) { 
+            if (newValue) {
                 const today = new Date();
                 const [hours, minutes] = newValue.split(':').map(Number);
-                today.setHours(hours, minutes, 0, 0); 
+                today.setHours(hours, minutes, 0, 0);
                 firestoreTimestamp = firebase.firestore.Timestamp.fromDate(today);
             }
             try {
@@ -1207,7 +1199,11 @@ function renderProjects() {
                     [fieldName]: firestoreTimestamp,
                     lastModifiedTimestamp: firebase.firestore.FieldValue.serverTimestamp()
                 });
-                let updatedProjectData = { ...projectData, [fieldName]: firestoreTimestamp }; 
+                // After updating one field, fetch the whole document to ensure we have both start and finish times
+                const updatedDoc = await db.collection("projects").doc(projectId).get();
+                if (!updatedDoc.exists) return;
+                const updatedProjectData = updatedDoc.data();
+
                 let durationFieldToUpdate = "";
                 let startTimeForCalc = null;
                 let finishTimeForCalc = null;
@@ -1224,6 +1220,7 @@ function renderProjects() {
                      startTimeForCalc = updatedProjectData.startTimeDay3;
                      finishTimeForCalc = updatedProjectData.finishTimeDay3;
                 }
+                // Now, reliably check if both times exist and update the duration
                 if (durationFieldToUpdate && startTimeForCalc && finishTimeForCalc) {
                     const newDuration = calculateDurationMs(startTimeForCalc, finishTimeForCalc);
                     await db.collection("projects").doc(projectId).update({
@@ -1245,7 +1242,12 @@ function renderProjects() {
         startTime1Input.type = 'time';
         startTime1Input.value = formatTime(project.startTimeDay1);
         startTime1Input.disabled = isTaskDisabled;
-        startTime1Input.onchange = (event) => updateTimeField(project.id, 'startTimeDay1', event.target.value, project);
+        // MODIFIED onchange handler for immediate UI update
+        startTime1Input.onchange = (event) => {
+            const currentRow = event.target.closest('tr');
+            updateTimeField(project.id, 'startTimeDay1', event.target.value, project); // Persist data
+            updateDisplayTotalForRow(currentRow); // Update UI instantly
+        };
         startTime1Cell.appendChild(startTime1Input);
 
         const finishTime1Cell = row.insertCell();
@@ -1253,7 +1255,12 @@ function renderProjects() {
         finishTime1Input.type = 'time';
         finishTime1Input.value = formatTime(project.finishTimeDay1);
         finishTime1Input.disabled = isTaskDisabled;
-        finishTime1Input.onchange = (event) => updateTimeField(project.id, 'finishTimeDay1', event.target.value, project);
+        // MODIFIED onchange handler for immediate UI update
+        finishTime1Input.onchange = (event) => {
+            const currentRow = event.target.closest('tr');
+            updateTimeField(project.id, 'finishTimeDay1', event.target.value, project); // Persist data
+            updateDisplayTotalForRow(currentRow); // Update UI instantly
+        };
         finishTime1Cell.appendChild(finishTime1Input);
 
         const startTime2Cell = row.insertCell();
@@ -1261,7 +1268,12 @@ function renderProjects() {
         startTime2Input.type = 'time';
         startTime2Input.value = formatTime(project.startTimeDay2);
         startTime2Input.disabled = isTaskDisabled;
-        startTime2Input.onchange = (event) => updateTimeField(project.id, 'startTimeDay2', event.target.value, project);
+        // MODIFIED onchange handler for immediate UI update
+        startTime2Input.onchange = (event) => {
+            const currentRow = event.target.closest('tr');
+            updateTimeField(project.id, 'startTimeDay2', event.target.value, project); // Persist data
+            updateDisplayTotalForRow(currentRow); // Update UI instantly
+        };
         startTime2Cell.appendChild(startTime2Input);
 
         const finishTime2Cell = row.insertCell();
@@ -1269,7 +1281,12 @@ function renderProjects() {
         finishTime2Input.type = 'time';
         finishTime2Input.value = formatTime(project.finishTimeDay2);
         finishTime2Input.disabled = isTaskDisabled;
-        finishTime2Input.onchange = (event) => updateTimeField(project.id, 'finishTimeDay2', event.target.value, project);
+        // MODIFIED onchange handler for immediate UI update
+        finishTime2Input.onchange = (event) => {
+            const currentRow = event.target.closest('tr');
+            updateTimeField(project.id, 'finishTimeDay2', event.target.value, project); // Persist data
+            updateDisplayTotalForRow(currentRow); // Update UI instantly
+        };
         finishTime2Cell.appendChild(finishTime2Input);
 
         const startTime3Cell = row.insertCell();
@@ -1277,7 +1294,12 @@ function renderProjects() {
         startTime3Input.type = 'time';
         startTime3Input.value = formatTime(project.startTimeDay3);
         startTime3Input.disabled = isTaskDisabled;
-        startTime3Input.onchange = (event) => updateTimeField(project.id, 'startTimeDay3', event.target.value, project);
+        // MODIFIED onchange handler for immediate UI update
+        startTime3Input.onchange = (event) => {
+            const currentRow = event.target.closest('tr');
+            updateTimeField(project.id, 'startTimeDay3', event.target.value, project); // Persist data
+            updateDisplayTotalForRow(currentRow); // Update UI instantly
+        };
         startTime3Cell.appendChild(startTime3Input);
 
         const finishTime3Cell = row.insertCell();
@@ -1285,7 +1307,12 @@ function renderProjects() {
         finishTime3Input.type = 'time';
         finishTime3Input.value = formatTime(project.finishTimeDay3);
         finishTime3Input.disabled = isTaskDisabled;
-        finishTime3Input.onchange = (event) => updateTimeField(project.id, 'finishTimeDay3', event.target.value, project);
+        // MODIFIED onchange handler for immediate UI update
+        finishTime3Input.onchange = (event) => {
+            const currentRow = event.target.closest('tr');
+            updateTimeField(project.id, 'finishTimeDay3', event.target.value, project); // Persist data
+            updateDisplayTotalForRow(currentRow); // Update UI instantly
+        };
         finishTime3Cell.appendChild(finishTime3Input);
 
         const totalDurationMsDay1 = project.durationDay1Ms || 0;
@@ -1296,7 +1323,7 @@ function renderProjects() {
         const additionalMs = (project.additionalMinutesManual || 0) * 60000;
         let finalAdjustedDurationMs = Math.max(0, totalWorkDurationMs - breakMs) + additionalMs;
         if (totalWorkDurationMs === 0 && (project.breakDurationMinutes || 0) === 0 && (project.additionalMinutesManual || 0) === 0) {
-            finalAdjustedDurationMs = null; 
+            finalAdjustedDurationMs = null;
         }
         const totalDurationCell = row.insertCell();
         totalDurationCell.textContent = formatMillisToMinutes(finalAdjustedDurationMs);
@@ -1307,7 +1334,7 @@ function renderProjects() {
         techNotesInput.value = project.techNotes || "";
         techNotesInput.placeholder = "Notes";
         techNotesInput.classList.add('tech-notes-input');
-        techNotesInput.rows = 1; 
+        techNotesInput.rows = 1;
         techNotesInput.id = `techNotes_${project.id}`;
         techNotesInput.disabled = project.status === "Reassigned_TechAbsent";
         techNotesInput.onchange = async (event) => {
@@ -1316,7 +1343,7 @@ function renderProjects() {
             const oldNotes = project.techNotes || "";
              if (!db || !project.id) {
                 alert("Database or project ID missing. Cannot update notes.");
-                event.target.value = oldNotes; 
+                event.target.value = oldNotes;
                 hideLoading();
                 return;
             }
@@ -1325,11 +1352,11 @@ function renderProjects() {
                     techNotes: newNotes,
                     lastModifiedTimestamp: firebase.firestore.FieldValue.serverTimestamp()
                 });
-                project.techNotes = newNotes; 
+                project.techNotes = newNotes;
             } catch (error) {
                 console.error("Error updating techNotes:", error);
                 alert("Error updating tech notes: " + error.message);
-                event.target.value = oldNotes; 
+                event.target.value = oldNotes;
             } finally {
                 hideLoading();
             }
@@ -1338,13 +1365,13 @@ function renderProjects() {
 
         const actionsCell = row.insertCell();
         const actionButtonsDiv = document.createElement('div');
-        actionButtonsDiv.classList.add('action-buttons-container'); 
+        actionButtonsDiv.classList.add('action-buttons-container');
 
         const breakSelect = document.createElement('select');
         breakSelect.classList.add('break-select');
         breakSelect.id = `breakSelect_${project.id}`;
         breakSelect.title = "Select break time to deduct";
-        breakSelect.disabled = isTaskDisabled;
+        breakSelect.disabled = isTaskDisabled; // Kept original logic, but can be set to false if needed
         [
             { value: "0", text: "No Break" }, { value: "15", text: "15m Break" },
             { value: "60", text: "1h Break" }, { value: "90", text: "1h30m Break" }
@@ -1355,10 +1382,13 @@ function renderProjects() {
             breakSelect.appendChild(option);
         });
         breakSelect.value = typeof project.breakDurationMinutes === 'number' ? project.breakDurationMinutes.toString() : "0";
+        // MODIFIED onchange handler for immediate UI update
         breakSelect.onchange = async (event) => {
-            showLoading("Updating break duration...");
             const newBreakMinutes = parseInt(event.target.value, 10);
+            const currentRow = event.target.closest('tr');
             const oldBreakMinutes = project.breakDurationMinutes || 0;
+
+            showLoading("Updating break duration...");
             if (!db || !project.id) {
                 alert("Database or project ID missing. Cannot update break duration.");
                 event.target.value = oldBreakMinutes.toString();
@@ -1370,20 +1400,9 @@ function renderProjects() {
                     breakDurationMinutes: newBreakMinutes,
                     lastModifiedTimestamp: firebase.firestore.FieldValue.serverTimestamp()
                 });
-                project.breakDurationMinutes = newBreakMinutes; 
-                const currentRow = event.target.closest('tr');
-                if (currentRow) {
-                    const durationDisplayCell = currentRow.querySelector('.total-duration-column');
-                    if (durationDisplayCell) {
-                        const currentTotalWorkMs = (project.durationDay1Ms || 0) + (project.durationDay2Ms || 0) + (project.durationDay3Ms || 0);
-                        const currentAdditionalMs = (project.additionalMinutesManual || 0) * 60000;
-                        let newAdjustedDuration = Math.max(0, currentTotalWorkMs - (newBreakMinutes * 60000)) + currentAdditionalMs;
-                         if (currentTotalWorkMs === 0 && newBreakMinutes === 0 && (project.additionalMinutesManual || 0) === 0) {
-                            newAdjustedDuration = null;
-                        }
-                        durationDisplayCell.textContent = formatMillisToMinutes(newAdjustedDuration);
-                    }
-                }
+                project.breakDurationMinutes = newBreakMinutes;
+                // Update the UI immediately using the helper function
+                updateDisplayTotalForRow(currentRow);
             } catch (error) {
                 console.error("Error updating break duration:", error);
                 alert("Error updating break duration: " + error.message);
@@ -1398,7 +1417,7 @@ function renderProjects() {
             const button = document.createElement('button');
             button.textContent = text;
             button.classList.add('btn', className);
-            button.disabled = isTaskDisabled || disabledCondition; 
+            button.disabled = isTaskDisabled || disabledCondition;
             button.onclick = () => { if (project.id) updateProjectState(project.id, action, project); };
             return button;
         };
@@ -1416,7 +1435,7 @@ function renderProjects() {
         reassignBtn.title = "Re-assign task by creating a new entry. Current task will be closed.";
         reassignBtn.disabled = project.status === "Completed" || isTaskDisabled;
         reassignBtn.onclick = () => {
-            const currentProjectData = projects.find(p => p.id === project.id); 
+            const currentProjectData = projects.find(p => p.id === project.id);
             if (currentProjectData) handleReassignment(currentProjectData);
         };
         actionButtonsDiv.appendChild(reassignBtn);
