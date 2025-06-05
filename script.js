@@ -1181,73 +1181,72 @@ function renderProjects() {
             return date.toTimeString().slice(0, 5);
         }
 
-        // This function is now defined inside renderProjects to have access to project context if needed
-        // but its primary role is to save data and ensure backend consistency.
-        // This is the NEW, corrected function
-async function updateTimeField(projectId, fieldName, newValue) {
-    showLoading(`Updating ${fieldName}...`);
-    if (!db || !projectId) {
-        alert("Database or project ID missing. Cannot update time.");
-        hideLoading();
-        return;
-    }
+        // This is the FIXED function that correctly updates the database
+        async function updateTimeField(projectId, fieldName, newValue) {
+            showLoading(`Updating ${fieldName}...`);
+            if (!db || !projectId) {
+                alert("Database or project ID missing. Cannot update time.");
+                hideLoading();
+                return;
+            }
 
-    let firestoreTimestamp = null;
-    if (newValue) {
-        const today = new Date();
-        const [hours, minutes] = newValue.split(':').map(Number);
-        if (!isNaN(hours) && !isNaN(minutes)) {
-            today.setHours(hours, minutes, 0, 0);
-            firestoreTimestamp = firebase.firestore.Timestamp.fromDate(today);
+            let firestoreTimestamp = null;
+            if (newValue) {
+                const today = new Date();
+                const [hours, minutes] = newValue.split(':').map(Number);
+                if (!isNaN(hours) && !isNaN(minutes)) {
+                    today.setHours(hours, minutes, 0, 0);
+                    firestoreTimestamp = firebase.firestore.Timestamp.fromDate(today);
+                }
+            }
+
+            try {
+                // Step 1: Update the single time field that was changed by the user.
+                await db.collection("projects").doc(projectId).update({
+                    [fieldName]: firestoreTimestamp,
+                    lastModifiedTimestamp: firebase.firestore.FieldValue.serverTimestamp()
+                });
+
+                // Step 2: Immediately re-fetch the document to get the most current state.
+                const updatedDoc = await db.collection("projects").doc(projectId).get();
+                if (!updatedDoc.exists) {
+                    console.error("Document not found after update:", projectId);
+                    return;
+                }
+                const updatedProjectData = updatedDoc.data();
+
+                // Step 3: Determine which day's duration to recalculate based on the field name.
+                let durationFieldToUpdate = "";
+                let newDuration = null;
+
+                if (fieldName.includes("Day1")) {
+                    durationFieldToUpdate = "durationDay1Ms";
+                    newDuration = calculateDurationMs(updatedProjectData.startTimeDay1, updatedProjectData.finishTimeDay1);
+                } else if (fieldName.includes("Day2")) {
+                    durationFieldToUpdate = "durationDay2Ms";
+                    newDuration = calculateDurationMs(updatedProjectData.startTimeDay2, updatedProjectData.finishTimeDay2);
+                } else if (fieldName.includes("Day3")) {
+                    durationFieldToUpdate = "durationDay3Ms";
+                    newDuration = calculateDurationMs(updatedProjectData.startTimeDay3, updatedProjectData.finishTimeDay3);
+                }
+
+                // Step 4: ALWAYS update the calculated duration field in the database.
+                // This ensures the database is always in sync. The `calculateDurationMs` function
+                // will return null if the calculation is invalid, which correctly updates the database.
+                if (durationFieldToUpdate) {
+                    await db.collection("projects").doc(projectId).update({
+                        [durationFieldToUpdate]: newDuration
+                        // No need to update the timestamp again, it was done on the first update.
+                    });
+                }
+            } catch (error) {
+                console.error(`Error updating ${fieldName}:`, error);
+                alert(`Error updating ${fieldName}: ` + error.message);
+            } finally {
+                hideLoading();
+            }
         }
-    }
-
-    try {
-        // Step 1: Update the single time field that was changed by the user.
-        await db.collection("projects").doc(projectId).update({
-            [fieldName]: firestoreTimestamp,
-            lastModifiedTimestamp: firebase.firestore.FieldValue.serverTimestamp()
-        });
-
-        // Step 2: Immediately re-fetch the document to get the most current state.
-        const updatedDoc = await db.collection("projects").doc(projectId).get();
-        if (!updatedDoc.exists) {
-            console.error("Document not found after update:", projectId);
-            return;
-        }
-        const updatedProjectData = updatedDoc.data();
-
-        // Step 3: Determine which day's duration to recalculate based on the field name.
-        let durationFieldToUpdate = "";
-        let newDuration = null;
-
-        if (fieldName.includes("Day1")) {
-            durationFieldToUpdate = "durationDay1Ms";
-            newDuration = calculateDurationMs(updatedProjectData.startTimeDay1, updatedProjectData.finishTimeDay1);
-        } else if (fieldName.includes("Day2")) {
-            durationFieldToUpdate = "durationDay2Ms";
-            newDuration = calculateDurationMs(updatedProjectData.startTimeDay2, updatedProjectData.finishTimeDay2);
-        } else if (fieldName.includes("Day3")) {
-            durationFieldToUpdate = "durationDay3Ms";
-            newDuration = calculateDurationMs(updatedProjectData.startTimeDay3, updatedProjectData.finishTimeDay3);
-        }
-
-        // Step 4: ALWAYS update the calculated duration field in the database.
-        // This ensures the database is always in sync. The `calculateDurationMs` function
-        // will return null if the calculation is invalid, which correctly updates the database.
-        if (durationFieldToUpdate) {
-            await db.collection("projects").doc(projectId).update({
-                [durationFieldToUpdate]: newDuration
-                // No need to update the timestamp again, it was done on the first update.
-            });
-        }
-    } catch (error) {
-        console.error(`Error updating ${fieldName}:`, error);
-        alert(`Error updating ${fieldName}: ` + error.message);
-    } finally {
-        hideLoading();
-    }
-}
+        
         const isTaskDisabled = project.status === "Reassigned_TechAbsent";
 
         const startTime1Cell = row.insertCell();
