@@ -998,11 +998,6 @@ async function deleteSpecificFixTasksForBatch(batchId, fixCategory) { // Still u
     }
 }
 
-
-// ====================================================================================
-// MODIFIED renderProjects FUNCTION STARTS HERE
-// THIS IS THE FULLY REPLACED FUNCTION WITH ALL CHANGES
-// ====================================================================================
 function renderProjects() {
     if (!projectTableBody) {
         console.error("CRITICAL: projectTableBody not found. Cannot render projects.");
@@ -1181,72 +1176,6 @@ function renderProjects() {
             return date.toTimeString().slice(0, 5);
         }
 
-        // This is the FIXED function that correctly updates the database
-        async function updateTimeField(projectId, fieldName, newValue) {
-            showLoading(`Updating ${fieldName}...`);
-            if (!db || !projectId) {
-                alert("Database or project ID missing. Cannot update time.");
-                hideLoading();
-                return;
-            }
-
-            let firestoreTimestamp = null;
-            if (newValue) {
-                const today = new Date();
-                const [hours, minutes] = newValue.split(':').map(Number);
-                if (!isNaN(hours) && !isNaN(minutes)) {
-                    today.setHours(hours, minutes, 0, 0);
-                    firestoreTimestamp = firebase.firestore.Timestamp.fromDate(today);
-                }
-            }
-
-            try {
-                // Step 1: Update the single time field that was changed by the user.
-                await db.collection("projects").doc(projectId).update({
-                    [fieldName]: firestoreTimestamp,
-                    lastModifiedTimestamp: firebase.firestore.FieldValue.serverTimestamp()
-                });
-
-                // Step 2: Immediately re-fetch the document to get the most current state.
-                const updatedDoc = await db.collection("projects").doc(projectId).get();
-                if (!updatedDoc.exists) {
-                    console.error("Document not found after update:", projectId);
-                    return;
-                }
-                const updatedProjectData = updatedDoc.data();
-
-                // Step 3: Determine which day's duration to recalculate based on the field name.
-                let durationFieldToUpdate = "";
-                let newDuration = null;
-
-                if (fieldName.includes("Day1")) {
-                    durationFieldToUpdate = "durationDay1Ms";
-                    newDuration = calculateDurationMs(updatedProjectData.startTimeDay1, updatedProjectData.finishTimeDay1);
-                } else if (fieldName.includes("Day2")) {
-                    durationFieldToUpdate = "durationDay2Ms";
-                    newDuration = calculateDurationMs(updatedProjectData.startTimeDay2, updatedProjectData.finishTimeDay2);
-                } else if (fieldName.includes("Day3")) {
-                    durationFieldToUpdate = "durationDay3Ms";
-                    newDuration = calculateDurationMs(updatedProjectData.startTimeDay3, updatedProjectData.finishTimeDay3);
-                }
-
-                // Step 4: ALWAYS update the calculated duration field in the database.
-                // This ensures the database is always in sync. The `calculateDurationMs` function
-                // will return null if the calculation is invalid, which correctly updates the database.
-                if (durationFieldToUpdate) {
-                    await db.collection("projects").doc(projectId).update({
-                        [durationFieldToUpdate]: newDuration
-                        // No need to update the timestamp again, it was done on the first update.
-                    });
-                }
-            } catch (error) {
-                console.error(`Error updating ${fieldName}:`, error);
-                alert(`Error updating ${fieldName}: ` + error.message);
-            } finally {
-                hideLoading();
-            }
-        }
-        
         const isTaskDisabled = project.status === "Reassigned_TechAbsent";
 
         const startTime1Cell = row.insertCell();
@@ -1254,11 +1183,10 @@ function renderProjects() {
         startTime1Input.type = 'time';
         startTime1Input.value = formatTime(project.startTimeDay1);
         startTime1Input.disabled = isTaskDisabled;
-        // MODIFIED onchange handler for immediate UI update
         startTime1Input.onchange = (event) => {
             const currentRow = event.target.closest('tr');
-            updateTimeField(project.id, 'startTimeDay1', event.target.value); // Persist data
-            updateDisplayTotalForRow(currentRow); // Update UI instantly
+            updateTimeField(project.id, 'startTimeDay1', event.target.value);
+            updateDisplayTotalForRow(currentRow);
         };
         startTime1Cell.appendChild(startTime1Input);
 
@@ -1267,11 +1195,10 @@ function renderProjects() {
         finishTime1Input.type = 'time';
         finishTime1Input.value = formatTime(project.finishTimeDay1);
         finishTime1Input.disabled = isTaskDisabled;
-        // MODIFIED onchange handler for immediate UI update
         finishTime1Input.onchange = (event) => {
             const currentRow = event.target.closest('tr');
-            updateTimeField(project.id, 'finishTimeDay1', event.target.value); // Persist data
-            updateDisplayTotalForRow(currentRow); // Update UI instantly
+            updateTimeField(project.id, 'finishTimeDay1', event.target.value);
+            updateDisplayTotalForRow(currentRow);
         };
         finishTime1Cell.appendChild(finishTime1Input);
 
@@ -1280,11 +1207,10 @@ function renderProjects() {
         startTime2Input.type = 'time';
         startTime2Input.value = formatTime(project.startTimeDay2);
         startTime2Input.disabled = isTaskDisabled;
-        // MODIFIED onchange handler for immediate UI update
         startTime2Input.onchange = (event) => {
             const currentRow = event.target.closest('tr');
-            updateTimeField(project.id, 'startTimeDay2', event.target.value); // Persist data
-            updateDisplayTotalForRow(currentRow); // Update UI instantly
+            updateTimeField(project.id, 'startTimeDay2', event.target.value);
+            updateDisplayTotalForRow(currentRow);
         };
         startTime2Cell.appendChild(startTime2Input);
 
@@ -1293,11 +1219,10 @@ function renderProjects() {
         finishTime2Input.type = 'time';
         finishTime2Input.value = formatTime(project.finishTimeDay2);
         finishTime2Input.disabled = isTaskDisabled;
-        // MODIFIED onchange handler for immediate UI update
         finishTime2Input.onchange = (event) => {
             const currentRow = event.target.closest('tr');
-            updateTimeField(project.id, 'finishTimeDay2', event.target.value); // Persist data
-            updateDisplayTotalForRow(currentRow); // Update UI instantly
+            updateTimeField(project.id, 'finishTimeDay2', event.target.value);
+            updateDisplayTotalForRow(currentRow);
         };
         finishTime2Cell.appendChild(finishTime2Input);
 
@@ -1306,11 +1231,10 @@ function renderProjects() {
         startTime3Input.type = 'time';
         startTime3Input.value = formatTime(project.startTimeDay3);
         startTime3Input.disabled = isTaskDisabled;
-        // MODIFIED onchange handler for immediate UI update
         startTime3Input.onchange = (event) => {
             const currentRow = event.target.closest('tr');
-            updateTimeField(project.id, 'startTimeDay3', event.target.value); // Persist data
-            updateDisplayTotalForRow(currentRow); // Update UI instantly
+            updateTimeField(project.id, 'startTimeDay3', event.target.value);
+            updateDisplayTotalForRow(currentRow);
         };
         startTime3Cell.appendChild(startTime3Input);
 
@@ -1319,11 +1243,10 @@ function renderProjects() {
         finishTime3Input.type = 'time';
         finishTime3Input.value = formatTime(project.finishTimeDay3);
         finishTime3Input.disabled = isTaskDisabled;
-        // MODIFIED onchange handler for immediate UI update
         finishTime3Input.onchange = (event) => {
             const currentRow = event.target.closest('tr');
-            updateTimeField(project.id, 'finishTimeDay3', event.target.value); // Persist data
-            updateDisplayTotalForRow(currentRow); // Update UI instantly
+            updateTimeField(project.id, 'finishTimeDay3', event.target.value);
+            updateDisplayTotalForRow(currentRow);
         };
         finishTime3Cell.appendChild(finishTime3Input);
 
@@ -1383,7 +1306,7 @@ function renderProjects() {
         breakSelect.classList.add('break-select');
         breakSelect.id = `breakSelect_${project.id}`;
         breakSelect.title = "Select break time to deduct";
-        breakSelect.disabled = isTaskDisabled; // Kept original logic, can be set to false if needed
+        breakSelect.disabled = isTaskDisabled;
         [
             { value: "0", text: "No Break" }, { value: "15", text: "15m Break" },
             { value: "60", text: "1h Break" }, { value: "90", text: "1h30m Break" }
@@ -1394,7 +1317,6 @@ function renderProjects() {
             breakSelect.appendChild(option);
         });
         breakSelect.value = typeof project.breakDurationMinutes === 'number' ? project.breakDurationMinutes.toString() : "0";
-        // MODIFIED onchange handler for immediate UI update
         breakSelect.onchange = async (event) => {
             const newBreakMinutes = parseInt(event.target.value, 10);
             const currentRow = event.target.closest('tr');
@@ -1408,13 +1330,11 @@ function renderProjects() {
                 return;
             }
             try {
-                // Update database in the background
                 await db.collection("projects").doc(project.id).update({
                     breakDurationMinutes: newBreakMinutes,
                     lastModifiedTimestamp: firebase.firestore.FieldValue.serverTimestamp()
                 });
                 project.breakDurationMinutes = newBreakMinutes;
-                // Update the UI immediately using the helper function
                 updateDisplayTotalForRow(currentRow);
             } catch (error) {
                 console.error("Error updating break duration:", error);
@@ -1455,21 +1375,12 @@ function renderProjects() {
         actionsCell.appendChild(actionButtonsDiv);
     });
 }
-// ====================================================================================
-// MODIFIED renderProjects FUNCTION ENDS HERE
-// ====================================================================================
 
-
-// ====================================================================================
-//  DEBUG VERSION of updateDisplayTotalForRow HELPER FUNCTION
-// ====================================================================================
 function updateDisplayTotalForRow(tableRow) {
-    console.log("--- DEBUG: updateDisplayTotalForRow called ---");
     if (!tableRow) {
-        console.error("DEBUG ERROR: updateDisplayTotalForRow received a null or undefined tableRow.");
+        console.error("updateDisplayTotalForRow received a null or undefined tableRow.");
         return;
     }
-    console.log("DEBUG: Received tableRow element:", tableRow);
 
     const startTime1Input = tableRow.querySelector('td:nth-child(7) input[type="time"]');
     const finishTime1Input = tableRow.querySelector('td:nth-child(8) input[type="time"]');
@@ -1481,7 +1392,7 @@ function updateDisplayTotalForRow(tableRow) {
     const totalDurationCell = tableRow.querySelector('.total-duration-column');
 
     if (!startTime1Input || !finishTime1Input || !breakSelect || !totalDurationCell) {
-        console.error("DEBUG ERROR: Could not find one or more required input/cell elements in the row.");
+        console.error("Could not find one or more required input/cell elements in the row.");
         return;
     }
 
@@ -1492,8 +1403,6 @@ function updateDisplayTotalForRow(tableRow) {
     const startTime3Value = startTime3Input.value;
     const finishTime3Value = finishTime3Input.value;
     const breakMinutes = parseInt(breakSelect.value, 10) || 0;
-
-    console.log(`DEBUG Values: S1=${startTime1Value}, F1=${finishTime1Value}, S2=${startTime2Value}, F2=${finishTime2Value}, S3=${startTime3Value}, F3=${finishTime3Value}, Break=${breakMinutes}`);
 
     const calculateDayMsFromInput = (startStr, finishStr) => {
         if (!startStr || !finishStr) return 0;
@@ -1509,7 +1418,6 @@ function updateDisplayTotalForRow(tableRow) {
     const durationMs1 = calculateDayMsFromInput(startTime1Value, finishTime1Value);
     const durationMs2 = calculateDayMsFromInput(startTime2Value, finishTime2Value);
     const durationMs3 = calculateDayMsFromInput(startTime3Value, finishTime3Value);
-    console.log(`DEBUG Durations (ms): Day1=${durationMs1}, Day2=${durationMs2}, Day3=${durationMs3}`);
 
     const totalWorkDurationMs = durationMs1 + durationMs2 + durationMs3;
     const breakMs = breakMinutes * 60000;
@@ -1520,15 +1428,73 @@ function updateDisplayTotalForRow(tableRow) {
     }
     
     const finalMinutes = formatMillisToMinutes(finalAdjustedDurationMs);
-    console.log(`DEBUG: Final calculated total minutes: ${finalMinutes}`);
-
     totalDurationCell.textContent = finalMinutes;
-    console.log("--- DEBUG: Successfully updated the total duration cell in the UI. ---");
 }
-// ====================================================================================
-// END OF NEW HELPER FUNCTION
-// ====================================================================================
 
+// This is the NEW, corrected function, moved to the correct global scope
+async function updateTimeField(projectId, fieldName, newValue) {
+    showLoading(`Updating ${fieldName}...`);
+    if (!db || !projectId) {
+        alert("Database or project ID missing. Cannot update time.");
+        hideLoading();
+        return;
+    }
+
+    let firestoreTimestamp = null;
+    if (newValue) {
+        const today = new Date();
+        const [hours, minutes] = newValue.split(':').map(Number);
+        if (!isNaN(hours) && !isNaN(minutes)) {
+            today.setHours(hours, minutes, 0, 0);
+            firestoreTimestamp = firebase.firestore.Timestamp.fromDate(today);
+        }
+    }
+
+    try {
+        // Step 1: Update the single time field that was changed by the user.
+        await db.collection("projects").doc(projectId).update({
+            [fieldName]: firestoreTimestamp,
+            lastModifiedTimestamp: firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+        // Step 2: Immediately re-fetch the document to get the most current state.
+        const updatedDoc = await db.collection("projects").doc(projectId).get();
+        if (!updatedDoc.exists) {
+            console.error("Document not found after update:", projectId);
+            return;
+        }
+        const updatedProjectData = updatedDoc.data();
+
+        // Step 3: Determine which day's duration to recalculate based on the field name.
+        let durationFieldToUpdate = "";
+        let newDuration = null;
+
+        if (fieldName.includes("Day1")) {
+            durationFieldToUpdate = "durationDay1Ms";
+            newDuration = calculateDurationMs(updatedProjectData.startTimeDay1, updatedProjectData.finishTimeDay1);
+        } else if (fieldName.includes("Day2")) {
+            durationFieldToUpdate = "durationDay2Ms";
+            newDuration = calculateDurationMs(updatedProjectData.startTimeDay2, updatedProjectData.finishTimeDay2);
+        } else if (fieldName.includes("Day3")) {
+            durationFieldToUpdate = "durationDay3Ms";
+            newDuration = calculateDurationMs(updatedProjectData.startTimeDay3, updatedProjectData.finishTimeDay3);
+        }
+
+        // Step 4: ALWAYS update the calculated duration field in the database.
+        // This ensures the database is always in sync. The `calculateDurationMs` function
+        // will return null if the calculation is invalid, which correctly updates the database.
+        if (durationFieldToUpdate) {
+            await db.collection("projects").doc(projectId).update({
+                [durationFieldToUpdate]: newDuration
+            });
+        }
+    } catch (error) {
+        console.error(`Error updating ${fieldName}:`, error);
+        alert(`Error updating ${fieldName}: ` + error.message);
+    } finally {
+        hideLoading();
+    }
+}
 
 async function updateProjectState(projectId, action, currentProjectData) {
     showLoading("Updating project state...");
