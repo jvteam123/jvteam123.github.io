@@ -209,6 +209,59 @@ async function updateAllowedEmailsInFirestore(emailsArray) {
 }
 
 
+/**
+ * Reads all time and break values from a given table row, calculates the
+ * total duration, and updates the 'Total Duration' cell's text content instantly.
+ * @param {HTMLTableRowElement} tableRow The <tr> element that contains the inputs.
+ */
+function updateDisplayTotalForRow(tableRow) {
+    if (!tableRow) return;
+
+    // Get all the time values from the inputs in the row
+    const startTime1 = tableRow.querySelector('td:nth-child(7) input[type="time"]').value;
+    const finishTime1 = tableRow.querySelector('td:nth-child(8) input[type="time"]').value;
+    const startTime2 = tableRow.querySelector('td:nth-child(9) input[type="time"]').value;
+    const finishTime2 = tableRow.querySelector('td:nth-child(10) input[type="time"]').value;
+    const startTime3 = tableRow.querySelector('td:nth-child(11) input[type="time"]').value;
+    const finishTime3 = tableRow.querySelector('td:nth-child(12) input[type="time"]').value;
+    const breakMinutes = parseInt(tableRow.querySelector('.break-select').value, 10) || 0;
+
+    // Note: This logic does not yet account for additionalMinutesManual.
+    // If you implement a UI for that, its value should be read and added here.
+
+    // Helper to calculate duration in milliseconds for a single day
+    const calculateDayMs = (start, finish) => {
+        if (!start || !finish) return 0;
+        const today = new Date().toISOString().slice(0, 10); // Get YYYY-MM-DD
+        const startDateTime = new Date(`${today}T${start}`).getTime();
+        const finishDateTime = new Date(`${today}T${finish}`).getTime();
+        if (isNaN(startDateTime) || isNaN(finishDateTime) || finishDateTime <= startDateTime) return 0;
+        return finishDateTime - startDateTime;
+    };
+
+    // Calculate duration for each day
+    const durationMs1 = calculateDayMs(startTime1, finishTime1);
+    const durationMs2 = calculateDayMs(startTime2, finishTime2);
+    const durationMs3 = calculateDayMs(startTime3, finishTime3);
+
+    const totalWorkDurationMs = durationMs1 + durationMs2 + durationMs3;
+    const breakMs = breakMinutes * 60000;
+
+    // Calculate the final adjusted total
+    let finalAdjustedDurationMs = Math.max(0, totalWorkDurationMs - breakMs);
+
+    // If all inputs are empty/zero, display N/A instead of 0
+    if (totalWorkDurationMs === 0 && breakMinutes === 0) {
+        finalAdjustedDurationMs = null;
+    }
+
+    // Find the total duration cell in the row and update its text
+    const totalDurationCell = tableRow.querySelector('.total-duration-column');
+    if (totalDurationCell) {
+        totalDurationCell.textContent = formatMillisToMinutes(finalAdjustedDurationMs);
+    }
+}
+
 async function initializeFirebaseAndLoadData() {
     showLoading("Loading projects...");
     if (!db) {
