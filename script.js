@@ -1462,56 +1462,69 @@ function renderProjects() {
 
 
 // ====================================================================================
-// NEW HELPER FUNCTION FOR INSTANT UI UPDATES
+//  DEBUG VERSION of updateDisplayTotalForRow HELPER FUNCTION
 // ====================================================================================
-/**
- * Reads all time and break values from a given table row, calculates the
- * total duration, and updates the 'Total Duration' cell's text content instantly.
- * @param {HTMLTableRowElement} tableRow The <tr> element that contains the inputs.
- */
 function updateDisplayTotalForRow(tableRow) {
-    if (!tableRow) return;
+    console.log("--- DEBUG: updateDisplayTotalForRow called ---");
+    if (!tableRow) {
+        console.error("DEBUG ERROR: updateDisplayTotalForRow received a null or undefined tableRow.");
+        return;
+    }
+    console.log("DEBUG: Received tableRow element:", tableRow);
 
-    // Get all the time values from the inputs in the row using more specific selectors
-    const startTime1 = tableRow.querySelector('td:nth-child(7) input[type="time"]').value;
-    const finishTime1 = tableRow.querySelector('td:nth-child(8) input[type="time"]').value;
-    const startTime2 = tableRow.querySelector('td:nth-child(9) input[type="time"]').value;
-    const finishTime2 = tableRow.querySelector('td:nth-child(10) input[type="time"]').value;
-    const startTime3 = tableRow.querySelector('td:nth-child(11) input[type="time"]').value;
-    const finishTime3 = tableRow.querySelector('td:nth-child(12) input[type="time"]').value;
-    const breakMinutes = parseInt(tableRow.querySelector('.break-select').value, 10) || 0;
+    const startTime1Input = tableRow.querySelector('td:nth-child(7) input[type="time"]');
+    const finishTime1Input = tableRow.querySelector('td:nth-child(8) input[type="time"]');
+    const startTime2Input = tableRow.querySelector('td:nth-child(9) input[type="time"]');
+    const finishTime2Input = tableRow.querySelector('td:nth-child(10) input[type="time"]');
+    const startTime3Input = tableRow.querySelector('td:nth-child(11) input[type="time"]');
+    const finishTime3Input = tableRow.querySelector('td:nth-child(12) input[type="time"]');
+    const breakSelect = tableRow.querySelector('.break-select');
+    const totalDurationCell = tableRow.querySelector('.total-duration-column');
 
-    // Helper to calculate duration in milliseconds for a single day
-    const calculateDayMs = (start, finish) => {
-        if (!start || !finish) return 0;
-        const today = new Date().toISOString().slice(0, 10); // Get YYYY-MM-DD
-        const startDateTime = new Date(`${today}T${start}`).getTime();
-        const finishDateTime = new Date(`${today}T${finish}`).getTime();
-        if (isNaN(startDateTime) || isNaN(finishDateTime) || finishDateTime <= startDateTime) return 0;
+    if (!startTime1Input || !finishTime1Input || !breakSelect || !totalDurationCell) {
+        console.error("DEBUG ERROR: Could not find one or more required input/cell elements in the row.");
+        return;
+    }
+
+    const startTime1Value = startTime1Input.value;
+    const finishTime1Value = finishTime1Input.value;
+    const startTime2Value = startTime2Input.value;
+    const finishTime2Value = finishTime2Input.value;
+    const startTime3Value = startTime3Input.value;
+    const finishTime3Value = finishTime3Input.value;
+    const breakMinutes = parseInt(breakSelect.value, 10) || 0;
+
+    console.log(`DEBUG Values: S1=${startTime1Value}, F1=${finishTime1Value}, S2=${startTime2Value}, F2=${finishTime2Value}, S3=${startTime3Value}, F3=${finishTime3Value}, Break=${breakMinutes}`);
+
+    const calculateDayMsFromInput = (startStr, finishStr) => {
+        if (!startStr || !finishStr) return 0;
+        const todayDateStr = new Date().toISOString().slice(0, 10);
+        const startDateTime = new Date(`${todayDateStr}T${startStr}`).getTime();
+        const finishDateTime = new Date(`${todayDateStr}T${finishStr}`).getTime();
+        if (isNaN(startDateTime) || isNaN(finishDateTime) || finishDateTime <= startDateTime) {
+            return 0;
+        }
         return finishDateTime - startDateTime;
     };
 
-    // Calculate duration for each day
-    const durationMs1 = calculateDayMs(startTime1, finishTime1);
-    const durationMs2 = calculateDayMs(startTime2, finishTime2);
-    const durationMs3 = calculateDayMs(startTime3, finishTime3);
+    const durationMs1 = calculateDayMsFromInput(startTime1Value, finishTime1Value);
+    const durationMs2 = calculateDayMsFromInput(startTime2Value, finishTime2Value);
+    const durationMs3 = calculateDayMsFromInput(startTime3Value, finishTime3Value);
+    console.log(`DEBUG Durations (ms): Day1=${durationMs1}, Day2=${durationMs2}, Day3=${durationMs3}`);
 
     const totalWorkDurationMs = durationMs1 + durationMs2 + durationMs3;
     const breakMs = breakMinutes * 60000;
-    // Note: This does not account for additionalMinutesManual. If a UI is added for it,
-    // its value should be read and included in the calculation here.
     let finalAdjustedDurationMs = Math.max(0, totalWorkDurationMs - breakMs);
 
-    // If all inputs are empty/zero, display N/A instead of 0
     if (totalWorkDurationMs === 0 && breakMinutes === 0) {
         finalAdjustedDurationMs = null;
     }
+    
+    const finalMinutes = formatMillisToMinutes(finalAdjustedDurationMs);
+    console.log(`DEBUG: Final calculated total minutes: ${finalMinutes}`);
 
-    // Find the total duration cell in the row and update its text
-    const totalDurationCell = tableRow.querySelector('.total-duration-column');
-    if (totalDurationCell) {
-        totalDurationCell.textContent = formatMillisToMinutes(finalAdjustedDurationMs);
-    }
+    totalDurationCell.textContent = finalMinutes;
+    console.log("--- DEBUG: Successfully updated the total duration cell in the UI. ---");
 }
 // ====================================================================================
 // END OF NEW HELPER FUNCTION
