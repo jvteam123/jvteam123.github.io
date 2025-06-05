@@ -351,14 +351,32 @@ async function initializeFirebaseAndLoadData() {
         projectsQuery = projectsQuery.where("fixCategory", "==", currentSelectedFixCategory);
     }
 
+    // Firestore OrderBy:
+    // If a specific baseProjectName IS selected, we can rely on that for the primary grouping
+    // and then order by fixCategory, areaTask within that project.
+    // If "All Projects" is selected, we need to order by baseProjectName first on the client-side
+    // after fetching, because Firestore won't allow orderBy('baseProjectName') then orderBy('creationTimestamp')
+    // if creationTimestamp has inequality filters.
+    // So, the Firestore query will fetch broadly and then client-side sort in renderProjects will handle the visual grouping.
     if (hasTimestampInequalityFilter) {
-        projectsQuery = projectsQuery.orderBy("creationTimestamp", "desc")
-                                 .orderBy("fixCategory")
-                                 .orderBy("areaTask");
+        projectsQuery = projectsQuery.orderBy("creationTimestamp", "desc");
+        // Additional orderBy for consistency, though client-side will primarily dictate visual order
+        if (!currentSelectedBatchId) { // If "All Projects", try to presort by baseProjectName if possible.
+                                       // This might not always be compatible with timestamp inequality.
+                                       // Client-side sort in renderProjects is the main driver for visual grouping.
+        }
+        projectsQuery = projectsQuery.orderBy("fixCategory").orderBy("areaTask");
+
     } else {
-        projectsQuery = projectsQuery.orderBy("fixCategory")
-                                 .orderBy("areaTask");
+        // If no timestamp inequality, we *could* add orderBy("baseProjectName") here IF it's not already filtered by baseProjectName.
+        // However, to keep it simple and rely on client-side for the specific grouping asked,
+        // we'll stick to fixCategory and areaTask for Firestore's part.
+        if (!currentSelectedBatchId) { // Only add if not already filtering by a specific baseProjectName
+             // projectsQuery = projectsQuery.orderBy("baseProjectName"); // This might be added if desired
+        }
+        projectsQuery = projectsQuery.orderBy("fixCategory").orderBy("areaTask");
     }
+
 
     try {
         firestoreListenerUnsubscribe = projectsQuery.onSnapshot(snapshot => {
@@ -370,11 +388,8 @@ async function initializeFirebaseAndLoadData() {
             });
             projects = newProjects;
             projects.forEach(project => {
-                const groupKey = `${project.batchId}_${project.fixCategory}`; // Group visibility might still use batchId if needed for sub-grouping under a project name, or this needs rethinking.
-                                                                          // For now, let's assume `renderProjects` will adapt or this grouping remains for tasks within a selected project.
-                if (typeof groupVisibilityState[groupKey] === 'undefined') {
-                    groupVisibilityState[groupKey] = { isExpanded: true };
-                }
+                // The groupKey for visibilityState will be determined in renderProjects based on baseProjectName and fixCategory.
+                // No need to initialize groupVisibilityState here anymore based on batchId.
                 if (typeof project.breakDurationMinutes === 'undefined') project.breakDurationMinutes = 0;
                 if (typeof project.additionalMinutesManual === 'undefined') project.additionalMinutesManual = 0;
                 if (typeof project.startTimeDay3 === 'undefined') project.startTimeDay3 = null;
@@ -937,9 +952,6 @@ async function deleteProjectBatch(batchId) { // This function still operates on 
         });
         await batch.commit();
 
-        // If the main view was filtered by a project name that might now be empty or affected
-        // it will refresh correctly via initializeFirebaseAndLoadData.
-        // currentSelectedBatchId (now projectName) doesn't need to be reset here unless the deleted batch was the ONLY one for that project name.
         initializeFirebaseAndLoadData(); 
         renderTLDashboard(); 
 
@@ -986,6 +998,9 @@ async function deleteSpecificFixTasksForBatch(batchId, fixCategory) { // Still u
     }
 }
 
+// ====================================================================================
+// MODIFIED renderProjects FUNCTION STARTS HERE
+// ====================================================================================
 function renderProjects() {
     if (!projectTableBody) {
         console.error("CRITICAL: projectTableBody not found. Cannot render projects.");
@@ -994,13 +1009,15 @@ function renderProjects() {
     projectTableBody.innerHTML = ""; 
 
     const sortedProjects = [...projects]; 
+    
+    // MODIFIED SORTING: Primary sort by baseProjectName, then by fixCategory, areaTask, status
     sortedProjects.sort((a, b) => {
         if (!a || !b) return 0; 
         
-        // Optional: If a baseProjectName is selected, you might want to sort by it first,
-        // or ensure projects are grouped by it if not handled by headers.
-        // For now, relying on Firestore query and then these sub-sorts.
-        // If currentSelectedBatchId (projectName) is set, all projects in sortedProjects will have that name.
+        const baseNameA = a.baseProjectName || "";
+        const baseNameB = b.baseProjectName || "";
+        if (baseNameA < baseNameB) return -1;
+        if (baseNameA > baseNameB) return 1;
 
         const fixCategoryIndexA = FIX_CATEGORIES_ORDER.indexOf(a.fixCategory || "");
         const fixCategoryIndexB = FIX_CATEGORIES_ORDER.indexOf(b.fixCategory || "");
@@ -1021,38 +1038,39 @@ function renderProjects() {
     });
 
 
-    let currentBatchIdHeader = null; // This might represent individual batchId if projects for a single baseProjectName come from multiple batches.
-                                    // Or, if baseProjectName is selected, this might not be needed or could be adapted.
-                                    // For now, the existing batch header logic will group by distinct batchIds within the filtered set.
+    let currentBaseProjectNameHeader = null; // MODIFIED: Tracks current baseProjectName for grouping
     let currentFixCategoryHeader = null;
 
     sortedProjects.forEach(project => {
-        if (!project || !project.id || !project.batchId || !project.fixCategory) { // batchId is still part of project data
-             console.warn("Skipping rendering of invalid project object:", project);
+        // project.batchId is still part of the data, but not the primary grouping key for headers
+        if (!project || !project.id || !project.baseProjectName || !project.fixCategory) { 
+             console.warn("Skipping rendering of invalid project object (missing essential fields):", project);
              return;
         }
 
-        // Batch Header Row - this will still show if tasks come from different batches, even under one selected baseProjectName
-        // If you want to *hide* batchId distinctions completely when a baseProjectName is selected, this needs more logic.
-        if (project.batchId !== currentBatchIdHeader) {
-            currentBatchIdHeader = project.batchId;
-            currentFixCategoryHeader = null; 
-            const batchRow = projectTableBody.insertRow();
-            batchRow.classList.add("batch-header-row");
-            const batchCell = batchRow.insertCell();
-            batchCell.setAttribute("colspan", NUM_TABLE_COLUMNS.toString());
-            // Display baseProjectName here, and batchId for detail if multiple batches make up the selected project name
-            batchCell.textContent = `Project: ${project.baseProjectName || "Unknown"} (Batch Ref: ${project.batchId.split('_')[1] || "N/A"})`;
+        // === Main Project Name Header Row ===
+        // MODIFIED: Group by baseProjectName
+        if (project.baseProjectName !== currentBaseProjectNameHeader) {
+            currentBaseProjectNameHeader = project.baseProjectName;
+            currentFixCategoryHeader = null; // IMPORTANT: Reset fix category when project name changes
+
+            const projectNameHeaderRow = projectTableBody.insertRow();
+            // Using 'batch-header-row' class for styling consistency, though it now represents a project name group
+            projectNameHeaderRow.classList.add("batch-header-row"); 
+            const projectNameCell = projectNameHeaderRow.insertCell();
+            projectNameCell.setAttribute("colspan", NUM_TABLE_COLUMNS.toString());
+            projectNameCell.textContent = `Project: ${project.baseProjectName || "Unknown"}`;
         }
 
+        // === Fix Category Sub-Header Row (within the current baseProjectName group) ===
         if (project.fixCategory !== currentFixCategoryHeader) {
             currentFixCategoryHeader = project.fixCategory;
-            const groupKey = `${project.batchId}_${currentFixCategoryHeader}`; 
+            // MODIFIED: groupKey for visibility now uses baseProjectName and fixCategory
+            const groupKey = `${currentBaseProjectNameHeader}_${currentFixCategoryHeader}`; 
 
             if (typeof groupVisibilityState[groupKey] === 'undefined') {
                 groupVisibilityState[groupKey] = { isExpanded: true }; 
             }
-
 
             const groupHeaderRow = projectTableBody.insertRow();
             groupHeaderRow.classList.add("fix-group-header");
@@ -1080,9 +1098,11 @@ function renderProjects() {
         }
 
         const row = projectTableBody.insertRow();
-        if (groupVisibilityState[`${project.batchId}_${project.fixCategory}`]?.isExpanded === false) {
+        // MODIFIED: Check visibility based on the new groupKey structure
+        if (groupVisibilityState[`${currentBaseProjectNameHeader}_${project.fixCategory}`]?.isExpanded === false) {
             row.classList.add("hidden-group-row");
         }
+
         if (project.fixCategory) {
             row.classList.add(`${project.fixCategory.toLowerCase()}-row`);
         }
@@ -1092,7 +1112,7 @@ function renderProjects() {
 
         row.insertCell().textContent = project.fixCategory || "N/A";
         const projectNameCell = row.insertCell();
-        projectNameCell.textContent = project.baseProjectName || "N/A";
+        projectNameCell.textContent = project.baseProjectName || "N/A"; // Still display baseProjectName per task if needed
         projectNameCell.classList.add("wrap-text"); 
         row.insertCell().textContent = project.areaTask || "N/A";
         row.insertCell().textContent = project.gsd || "N/A";
@@ -1403,6 +1423,9 @@ function renderProjects() {
         actionsCell.appendChild(actionButtonsDiv);
     });
 }
+// ====================================================================================
+// MODIFIED renderProjects FUNCTION ENDS HERE
+// ====================================================================================
 
 async function updateProjectState(projectId, action, currentProjectData) {
     showLoading("Updating project state...");
