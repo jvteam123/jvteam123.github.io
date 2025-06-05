@@ -350,6 +350,7 @@ async function initializeFirebaseAndLoadData() {
 
     // 3. Construct the main query for projects table based on all filters
     let projectsQuery = db.collection("projects");
+    let hasTimestampInequalityFilter = false; // Flag to track if the filter is applied
 
     if (currentSelectedMonth && monthFilter && monthFilter.value) {
         const [year, month] = currentSelectedMonth.split('-');
@@ -357,6 +358,7 @@ async function initializeFirebaseAndLoadData() {
         const endDate = new Date(parseInt(year), parseInt(month), 0, 23, 59, 59, 999);
         projectsQuery = projectsQuery.where("creationTimestamp", ">=", startDate)
                                      .where("creationTimestamp", "<=", endDate);
+        hasTimestampInequalityFilter = true;
     }
 
     if (currentSelectedBatchId && batchIdSelect && batchIdSelect.value) {
@@ -368,7 +370,19 @@ async function initializeFirebaseAndLoadData() {
     }
 
     // Add default sorting
-    projectsQuery = projectsQuery.orderBy("fixCategory").orderBy("areaTask"); // Firestore requires composite index for this
+    if (hasTimestampInequalityFilter) {
+        // If filtering by month (creationTimestamp inequality),
+        // creationTimestamp must be the first orderBy field.
+        // Using "desc" for consistency with batchQuery's timestamp ordering.
+        projectsQuery = projectsQuery.orderBy("creationTimestamp", "desc")
+                                 .orderBy("fixCategory")
+                                 .orderBy("areaTask");
+    } else {
+        // If no timestamp inequality, the original orderBy is fine.
+        projectsQuery = projectsQuery.orderBy("fixCategory")
+                                 .orderBy("areaTask");
+    }
+    // Firestore requires composite index for this - comment applies to both conditional branches
 
     try {
         firestoreListenerUnsubscribe = projectsQuery.onSnapshot(snapshot => {
