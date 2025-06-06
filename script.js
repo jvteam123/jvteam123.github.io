@@ -673,6 +673,41 @@ async function renderTLDashboard() {
         }
         batchItemDiv.appendChild(deleteActionsDiv);
 
+        const resetActionsDiv = document.createElement('div');
+        resetActionsDiv.classList.add('dashboard-batch-actions-reset');
+        resetActionsDiv.style.marginTop = '10px';
+        resetActionsDiv.innerHTML = '<strong>Reset Individual Tasks:</strong>';
+
+        const taskResetContainer = document.createElement('div');
+        taskResetContainer.className = 'task-reset-container';
+        taskResetContainer.style.display = 'none';
+        taskResetContainer.style.marginTop = '10px';
+        taskResetContainer.style.padding = '10px';
+        taskResetContainer.style.border = '1px solid #ccc';
+
+        if (batch.tasksByFix) {
+            stagesPresent.forEach(fixCat => {
+                const manageBtn = document.createElement('button');
+                manageBtn.textContent = `Manage ${fixCat}`;
+                manageBtn.className = 'btn btn-secondary btn-small';
+                manageBtn.style.marginLeft = '5px';
+                manageBtn.onclick = () => {
+                    if (taskResetContainer.style.display === 'block' && taskResetContainer.dataset.activeFix === fixCat) {
+                        taskResetContainer.style.display = 'none';
+                        taskResetContainer.dataset.activeFix = '';
+                    } else {
+                        taskResetContainer.dataset.activeFix = fixCat;
+                        taskResetContainer.style.display = 'block';
+                        renderResettableTasksForBatchFix(taskResetContainer, batch.batchId, fixCat);
+                    }
+                };
+                resetActionsDiv.appendChild(manageBtn);
+            });
+        }
+
+        batchItemDiv.appendChild(resetActionsDiv);
+        batchItemDiv.appendChild(taskResetContainer);
+
         tlDashboardContentElement.appendChild(batchItemDiv);
     });
 }
@@ -761,6 +796,112 @@ async function deleteSpecificFixTasksForBatch(batchId, fixCategory) {
         hideLoading();
     }
 }
+
+async function resetProjectTask(projectId) {
+    showLoading("Resetting task...");
+    if (!db || !projectId) {
+        alert("Database not initialized or project ID missing.");
+        hideLoading();
+        return;
+    }
+    const projectRef = db.collection("projects").doc(projectId);
+
+    try {
+        const doc = await projectRef.get();
+        if (!doc.exists) {
+            throw new Error("Project document not found.");
+        }
+        const projectData = doc.data();
+
+        const today = new Date().toLocaleDateString('en-US');
+        const originalNotes = projectData.techNotes || "";
+        const resetNotes = `Task Reset by TL on ${today}. Original Notes: "${originalNotes}"`;
+
+        const updateData = {
+            status: "Available",
+            assignedTo: "",
+            startTimeDay1: null,
+            finishTimeDay1: null,
+            durationDay1Ms: null,
+            startTimeDay2: null,
+            finishTimeDay2: null,
+            durationDay2Ms: null,
+            startTimeDay3: null,
+            finishTimeDay3: null,
+            durationDay3Ms: null,
+            techNotes: resetNotes,
+            breakDurationMinutes: 0,
+            lastModifiedTimestamp: firebase.firestore.FieldValue.serverTimestamp()
+        };
+
+        await projectRef.update(updateData);
+    } catch (error) {
+        console.error(`Error resetting project ${projectId}:`, error);
+        alert("Error resetting the task: " + error.message);
+    } finally {
+        hideLoading();
+    }
+}
+
+async function renderResettableTasksForBatchFix(containerElement, batchId, fixCategory) {
+    if (!db || !containerElement) return;
+    containerElement.innerHTML = `<p>Loading tasks for ${fixCategory}...</p>`;
+
+    try {
+        const querySnapshot = await db.collection("projects")
+            .where("batchId", "==", batchId)
+            .where("fixCategory", "==", fixCategory)
+            .orderBy("areaTask")
+            .get();
+
+        if (querySnapshot.empty) {
+            containerElement.innerHTML = `<p>No tasks found for ${fixCategory}.</p>`;
+            return;
+        }
+
+        containerElement.innerHTML = '';
+        const taskListUl = document.createElement('ul');
+        taskListUl.className = 'resettable-tasks-list';
+
+        querySnapshot.forEach(doc => {
+            const project = { id: doc.id, ...doc.data() };
+            const li = document.createElement('li');
+            li.innerHTML = `
+                <strong>${project.areaTask}</strong> - 
+                Status: ${project.status.replace(/([A-Z])/g, ' $1').trim()} - 
+                Assigned: ${project.assignedTo || 'N/A'}
+            `;
+            
+            const resetButton = document.createElement('button');
+            resetButton.textContent = "Reset Task";
+            resetButton.className = 'btn btn-danger btn-small';
+            
+            if (project.status === 'Available' || project.releasedToNextStage) {
+                resetButton.disabled = true;
+                resetButton.title = project.releasedToNextStage 
+                    ? "Cannot reset a task that has been released." 
+                    : "Task is already available.";
+            }
+            
+            resetButton.onclick = async () => {
+                if (confirm(`Are you sure you want to reset task '${project.areaTask}'? All progress will be lost.`)) {
+                    await resetProjectTask(project.id);
+                    renderResettableTasksForBatchFix(containerElement, batchId, fixCategory);
+                }
+            };
+
+            li.appendChild(resetButton);
+            taskListUl.appendChild(li);
+        });
+
+        containerElement.appendChild(taskListUl);
+
+    } catch (error) {
+        console.error("Error rendering resettable tasks:", error);
+        containerElement.innerHTML = `<p style="color:red;">Error loading tasks: ${error.message}</p>`;
+    }
+}
+
 
 function renderProjects() {
     if (!projectTableBody) {
