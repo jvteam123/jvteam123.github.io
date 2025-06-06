@@ -1098,48 +1098,70 @@ async function updateTimeField(projectId, fieldName, newValue) {
         return;
     }
 
-    let firestoreTimestamp = null;
-    if (newValue) {
-        const today = new Date();
-        const [hours, minutes] = newValue.split(':').map(Number);
-        if (!isNaN(hours) && !isNaN(minutes)) {
-            today.setHours(hours, minutes, 0, 0);
-            firestoreTimestamp = firebase.firestore.Timestamp.fromDate(today);
-        }
-    }
+    const projectRef = db.collection("projects").doc(projectId);
 
     try {
-        await db.collection("projects").doc(projectId).update({
-            [fieldName]: firestoreTimestamp,
-            lastModifiedTimestamp: firebase.firestore.FieldValue.serverTimestamp()
-        });
-
-        const updatedDoc = await db.collection("projects").doc(projectId).get();
-        if (!updatedDoc.exists) {
-            console.error("Document not found after update:", projectId);
+        const doc = await projectRef.get();
+        if (!doc.exists) {
+            console.error("Document not found for update:", projectId);
+            hideLoading();
             return;
         }
-        const updatedProjectData = updatedDoc.data();
+        const projectData = doc.data();
 
-        let durationFieldToUpdate = "";
-        let newDuration = null;
+        let firestoreTimestamp = null;
+        if (newValue) {
+            const [hours, minutes] = newValue.split(':').map(Number);
+            if (!isNaN(hours) && !isNaN(minutes)) {
+                
+                // Determine the base date to use
+                let baseDate;
+                const isStartField = fieldName.includes('startTime');
+                const day = fieldName.match(/Day(\d)/)[1];
+                const pairFieldName = isStartField ? `finishTimeDay${day}` : `startTimeDay${day}`;
+
+                // If the "pair" time already exists, use its date. Otherwise, use today.
+                if (projectData[pairFieldName] && projectData[pairFieldName].toDate) {
+                    baseDate = projectData[pairFieldName].toDate();
+                } else {
+                    baseDate = new Date();
+                }
+                
+                baseDate.setHours(hours, minutes, 0, 0);
+                firestoreTimestamp = firebase.firestore.Timestamp.fromDate(baseDate);
+            }
+        }
+
+        // Prepare the potential new start and finish times for duration calculation
+        let newStartTime = projectData.startTimeDay1;
+        let newFinishTime = projectData.finishTimeDay1;
+        let durationFieldToUpdate = '';
 
         if (fieldName.includes("Day1")) {
             durationFieldToUpdate = "durationDay1Ms";
-            newDuration = calculateDurationMs(updatedProjectData.startTimeDay1, updatedProjectData.finishTimeDay1);
+            if(fieldName.includes("startTime")) newStartTime = firestoreTimestamp;
+            else newFinishTime = firestoreTimestamp;
         } else if (fieldName.includes("Day2")) {
             durationFieldToUpdate = "durationDay2Ms";
-            newDuration = calculateDurationMs(updatedProjectData.startTimeDay2, updatedProjectData.finishTimeDay2);
+            newStartTime = fieldName.includes("startTime") ? firestoreTimestamp : projectData.startTimeDay2;
+            newFinishTime = fieldName.includes("finishTime") ? firestoreTimestamp : projectData.finishTimeDay2;
         } else if (fieldName.includes("Day3")) {
             durationFieldToUpdate = "durationDay3Ms";
-            newDuration = calculateDurationMs(updatedProjectData.startTimeDay3, updatedProjectData.finishTimeDay3);
+            newStartTime = fieldName.includes("startTime") ? firestoreTimestamp : projectData.startTimeDay3;
+            newFinishTime = fieldName.includes("finishTime") ? firestoreTimestamp : projectData.finishTimeDay3;
         }
 
+        let newDuration = calculateDurationMs(newStartTime, newFinishTime);
+
+        // Update both the time field and the duration field in one go
         if (durationFieldToUpdate) {
-            await db.collection("projects").doc(projectId).update({
-                [durationFieldToUpdate]: newDuration
+            await projectRef.update({
+                [fieldName]: firestoreTimestamp,
+                [durationFieldToUpdate]: newDuration,
+                lastModifiedTimestamp: firebase.firestore.FieldValue.serverTimestamp()
             });
         }
+
     } catch (error) {
         console.error(`Error updating ${fieldName}:`, error);
         alert(`Error updating ${fieldName}: ` + error.message);
