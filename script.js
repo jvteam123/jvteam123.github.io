@@ -845,18 +845,46 @@ document.addEventListener('DOMContentLoaded', () => {
                     batchItemDiv.className = 'dashboard-batch-item';
 
                     batchItemDiv.innerHTML = `<h4>Project: ${batch.baseProjectName || "Unknown"} (Batch ID: ${batch.batchId.split('_')[1] || "N/A"})</h4>`;
-                    const stagesPresent = batch.tasksByFix ? Object.keys(batch.tasksByFix).sort((a,b) => this.config.FIX_CATEGORIES.ORDER.indexOf(a) - this.config.FIX_CATEGORIES.ORDER.indexOf(b)) : [];
+                    const allFixStages = this.config.FIX_CATEGORIES.ORDER;
+                    const stagesPresent = batch.tasksByFix ? Object.keys(batch.tasksByFix).sort((a,b) => allFixStages.indexOf(a) - allFixStages.indexOf(b)) : [];
                     batchItemDiv.innerHTML += `<p><strong>Stages Present:</strong> ${stagesPresent.join(', ') || "None"}</p>`;
                     
                     const releaseActionsDiv = document.createElement('div');
                     releaseActionsDiv.className = 'dashboard-batch-actions-release';
-                    // ... release logic (remains complex but now encapsulated)
+
+                    // --- MODIFICATION START: Restored Release Button Logic ---
+                    allFixStages.forEach((currentFix, index) => {
+                        const nextFix = allFixStages[index + 1];
+                        if (!nextFix) return; // This is the last fix stage
+
+                        // Check if the current fix stage exists for this batch and the next one doesn't.
+                        const hasCurrentFix = batch.tasksByFix && batch.tasksByFix[currentFix];
+                        const hasNextFix = batch.tasksByFix && batch.tasksByFix[nextFix];
+
+                        if (hasCurrentFix && !hasNextFix) {
+                            // Check if there are any tasks in the current stage that haven't been released yet.
+                            const unreleasedTasks = batch.tasksByFix[currentFix].filter(task => !task.releasedToNextStage && task.status !== "Reassigned_TechAbsent");
+
+                            if (unreleasedTasks.length > 0) {
+                                const releaseBtn = document.createElement('button');
+                                releaseBtn.textContent = `Release ${currentFix} to ${nextFix}`;
+                                releaseBtn.className = 'btn btn-primary';
+                                releaseBtn.onclick = () => {
+                                    if (confirm(`Are you sure you want to release all remaining tasks from ${currentFix} to ${nextFix} for project '${batch.baseProjectName}'?`)) {
+                                        this.methods.releaseBatchToNextFix.call(this, batch.batchId, currentFix, nextFix);
+                                    }
+                                };
+                                releaseActionsDiv.appendChild(releaseBtn);
+                            }
+                        }
+                    });
+                    // --- MODIFICATION END ---
                     batchItemDiv.appendChild(releaseActionsDiv);
 
                     const deleteActionsDiv = document.createElement('div');
                     deleteActionsDiv.className = 'dashboard-batch-actions-delete';
                      if (batch.tasksByFix) {
-                        Object.keys(batch.tasksByFix).forEach(fixCat => {
+                        stagesPresent.forEach(fixCat => {
                             const btn = document.createElement('button');
                             btn.textContent = `Delete ${fixCat} Tasks`;
                             btn.className = 'btn btn-danger';
@@ -870,8 +898,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                     batchItemDiv.appendChild(deleteActionsDiv);
 
-                    // --- MODIFICATION START ---
-                    // Add a new container for the full project deletion button for better separation and styling.
                     const deleteAllContainer = document.createElement('div');
                     deleteAllContainer.style.marginTop = '15px';
                     deleteAllContainer.style.borderTop = '1px solid #cc0000';
@@ -879,15 +905,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     
                     const deleteAllBtn = document.createElement('button');
                     deleteAllBtn.textContent = 'Delete Entire Project (All Fix Stages)';
-                    deleteAllBtn.className = 'btn btn-danger btn-delete-project'; // Use a distinct class for styling if needed
+                    deleteAllBtn.className = 'btn btn-danger btn-delete-project';
                     deleteAllBtn.style.width = '100%';
-
-                    // Attach the new handler function
                     deleteAllBtn.onclick = () => this.methods.handleDeleteEntireProject.call(this, batch.batchId, batch.baseProjectName);
                     
                     deleteAllContainer.appendChild(deleteAllBtn);
                     batchItemDiv.appendChild(deleteAllContainer);
-                    // --- MODIFICATION END ---
 
 
                     const resetActionsDiv = document.createElement('div');
