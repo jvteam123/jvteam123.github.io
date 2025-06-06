@@ -7,7 +7,7 @@
  * global variables, improves performance, and ensures correct
  * timezone handling.
  *
- * @version 2.0.1
+ * @version 2.0.2
  * @author Gemini AI Refactor
  */
 document.addEventListener('DOMContentLoaded', () => {
@@ -84,6 +84,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 this.methods.setupDOMReferences.call(this);
                 this.methods.setupAuthRelatedDOMReferences.call(this);
                 this.methods.attachEventListeners.call(this);
+                
+                // --- FIX APPLIED HERE: This call was missing ---
+                this.methods.setupAuthActions.call(this);
+                // ---------------------------------------------
 
                 this.methods.listenForAuthStateChanges.call(this);
 
