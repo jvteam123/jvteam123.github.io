@@ -1524,7 +1524,7 @@ async function generateTlSummaryData() {
         let allProjectsData = projectsSnapshot.docs.map(doc => doc.data());
 
         const projectFixCategoryTotals = {}; // Totals per project per fix category
-        const overallProjectTotals = {}; // Overall totals per project
+        // Overall project totals are no longer calculated or displayed.
 
         allProjectsData.forEach(p => {
             // Calculate total net work time in milliseconds for the task
@@ -1543,23 +1543,12 @@ async function generateTlSummaryData() {
             const summaryKey = `${projName}_${fixCat}`; // Key for project-fix category total
 
             projectFixCategoryTotals[summaryKey] = (projectFixCategoryTotals[summaryKey] || 0) + minutes;
-            overallProjectTotals[projName] = (overallProjectTotals[projName] || 0) + minutes;
+            // The line for overallProjectTotals has been removed.
         });
         
         let summaryHtml = '<ul style="list-style: none; padding: 0;">';
-        // Display overall project totals
-        const sortedOverallKeys = Object.keys(overallProjectTotals).sort();
-        if (sortedOverallKeys.length > 0) {
-            summaryHtml += "<h3>Overall Project Totals</h3>";
-            sortedOverallKeys.forEach(key => {
-                const totalMinutes = overallProjectTotals[key];
-                const hoursDecimal = (totalMinutes / 60).toFixed(2); // Convert to hours
-                summaryHtml += `<li><strong>${key}:</strong> ${totalMinutes} minutes (${hoursDecimal} hours)</li>`;
-            });
-            summaryHtml += '<hr style="margin: 20px 0;">';
-        }
-
-        // Display totals by project and fix category
+        // The section for "Overall Project Totals" has been removed.
+        
         summaryHtml += "<h3>Totals by Project and Fix Category</h3>";
         const sortedFixCatKeys = Object.keys(projectFixCategoryTotals).sort();
         if (sortedFixCatKeys.length > 0) {
@@ -1567,11 +1556,14 @@ async function generateTlSummaryData() {
                 const [projName, fixCat] = key.split('_');
                 const totalMinutes = projectFixCategoryTotals[key];
                 const hoursDecimal = (totalMinutes / 60).toFixed(2);
-                summaryHtml += `<li><strong>${projName} (${fixCat}):</strong> ${totalMinutes} minutes (${hoursDecimal} hours)</li>`;
+                const bgColor = FIX_CATEGORY_COLORS[fixCat] || FIX_CATEGORY_COLORS["default"];
+                // Added style for background color, padding, and margin for better visual separation
+                summaryHtml += `<li style="background-color: ${bgColor}; padding: 5px; margin-bottom: 3px; border-radius: 4px;"><strong>${projName} (${fixCat}):</strong> ${totalMinutes} minutes (${hoursDecimal} hours)</li>`;
             });
         }
         
-        if (sortedFixCatKeys.length === 0 && sortedOverallKeys.length === 0) {
+        // Adjusted condition for "No data" message
+        if (sortedFixCatKeys.length === 0) {
             summaryHtml = "<p>No project time data found to generate a summary.</p>";
         } else {
             summaryHtml += "</ul>";
@@ -1585,6 +1577,7 @@ async function generateTlSummaryData() {
         hideLoading();
     }
 }
+
 
 // --- AUTHENTICATION ---
 // Function to set up Firebase Authentication event listeners (Sign In/Out)
