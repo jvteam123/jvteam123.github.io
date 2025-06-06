@@ -7,7 +7,7 @@
  * global variables, improves performance, and ensures correct
  * timezone handling.
  *
- * @version 2.0.2
+ * @version 2.1.0
  * @author Gemini AI Refactor
  */
 document.addEventListener('DOMContentLoaded', () => {
@@ -80,15 +80,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 this.auth = firebase.auth();
                 console.log("Firebase initialized successfully!");
 
-                // [FIX] Perform DOM queries only ONCE.
                 this.methods.setupDOMReferences.call(this);
                 this.methods.setupAuthRelatedDOMReferences.call(this);
                 this.methods.attachEventListeners.call(this);
-                
-                // --- FIX APPLIED HERE: This call was missing ---
                 this.methods.setupAuthActions.call(this);
-                // ---------------------------------------------
-
                 this.methods.listenForAuthStateChanges.call(this);
 
             } catch (error) {
@@ -146,6 +141,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     ...this.elements,
                     signInBtn: document.getElementById('signInBtn'),
                     signOutBtn: document.getElementById('signOutBtn'),
+                    clearDataBtn: document.getElementById('clearDataBtn'), // Modified
                     userInfoDisplayDiv: document.getElementById('user-info-display'),
                     userNameP: document.getElementById('userName'),
                     userEmailP: document.getElementById('userEmail'),
@@ -198,6 +194,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 attachClick(self.elements.closeTlSummaryBtn, () => { self.elements.tlSummaryModal.style.display = 'none'; });
 
                 attachClick(self.elements.addEmailBtn, self.methods.handleAddEmail.bind(self));
+                attachClick(self.elements.clearDataBtn, self.methods.handleClearData.bind(self)); // Modified
 
                 if (self.elements.newProjectForm) {
                     self.elements.newProjectForm.addEventListener('submit', self.methods.handleAddProjectSubmit.bind(self));
@@ -268,6 +265,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 this.elements.userInfoDisplayDiv.style.display = 'flex';
                 this.elements.signInBtn.style.display = 'none';
+                if (this.elements.clearDataBtn) this.elements.clearDataBtn.style.display = 'none'; // Modified
                 this.elements.appContentDiv.style.display = 'block';
                 this.elements.loadingAuthMessageDiv.style.display = 'none';
                 if (this.elements.openSettingsBtn) this.elements.openSettingsBtn.style.display = 'block';
@@ -281,6 +279,7 @@ document.addEventListener('DOMContentLoaded', () => {
             handleSignedOutUser() {
                 this.elements.userInfoDisplayDiv.style.display = 'none';
                 this.elements.signInBtn.style.display = 'block';
+                if (this.elements.clearDataBtn) this.elements.clearDataBtn.style.display = 'block'; // Modified
                 this.elements.appContentDiv.style.display = 'none';
                 this.elements.loadingAuthMessageDiv.innerHTML = "<p>Please sign in to access the Project Tracker.</p>";
                 this.elements.loadingAuthMessageDiv.style.display = 'block';
@@ -500,10 +499,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             },
             
-            /**
-             * [FIX] HONG KONG TIMEZONE (UTC+8)
-             * This function now correctly creates timestamps interpreted as Hong Kong Time.
-             */
             async updateTimeField(projectId, fieldName, newValue) {
                 this.methods.showLoading.call(this, `Updating ${fieldName}...`);
                 const projectRef = this.db.collection("projects").doc(projectId);
@@ -662,13 +657,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (this.state.groupVisibilityState[groupKey]?.isExpanded === false) row.classList.add("hidden-group-row");
                     if (project.isReassigned) row.classList.add("reassigned-task-highlight");
 
-                    // Populate cells... (shortened for brevity, full logic included)
                     row.insertCell().textContent = project.fixCategory;
                     row.insertCell().textContent = project.baseProjectName;
                     row.insertCell().textContent = project.areaTask;
                     row.insertCell().textContent = project.gsd;
 
-                    // Assigned To
                     const assignedToCell = row.insertCell();
                     const assignedToSelect = document.createElement('select');
                     assignedToSelect.className = 'assigned-to-select';
@@ -678,11 +671,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     assignedToSelect.onchange = (e) => this.db.collection("projects").doc(project.id).update({ assignedTo: e.target.value, lastModifiedTimestamp: firebase.firestore.FieldValue.serverTimestamp() });
                     assignedToCell.appendChild(assignedToSelect);
 
-                    // Status
                     const statusCell = row.insertCell();
                     statusCell.innerHTML = `<span class="status status-${(project.status || "unknown").toLowerCase()}">${(project.status || "Unknown").replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').trim()}</span>`;
 
-                    // Time Inputs
                     const formatTime = (ts) => ts?.toDate ? ts.toDate().toTimeString().slice(0, 5) : "";
                     const createTimeInput = (timeValue, fieldName) => {
                         const cell = row.insertCell();
@@ -700,7 +691,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     createTimeInput(project.startTimeDay3, 'startTimeDay3');
                     createTimeInput(project.finishTimeDay3, 'finishTimeDay3');
 
-                    // Total Duration
                     const totalDurationMs = (project.durationDay1Ms || 0) + (project.durationDay2Ms || 0) + (project.durationDay3Ms || 0);
                     const breakMs = (project.breakDurationMinutes || 0) * 60000;
                     const additionalMs = (project.additionalMinutesManual || 0) * 60000;
@@ -709,7 +699,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     totalDurationCell.textContent = this.methods.formatMillisToMinutes.call(this, finalAdjustedDurationMs);
                     totalDurationCell.className = 'total-duration-column';
 
-                    // Tech Notes
                     const techNotesCell = row.insertCell();
                     const techNotesInput = document.createElement('textarea');
                     techNotesInput.value = project.techNotes || "";
@@ -718,7 +707,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     techNotesInput.onchange = (e) => this.db.collection("projects").doc(project.id).update({ techNotes: e.target.value, lastModifiedTimestamp: firebase.firestore.FieldValue.serverTimestamp() });
                     techNotesCell.appendChild(techNotesInput);
 
-                    // Action Buttons
                     const actionsCell = row.insertCell();
                     const actionButtonsDiv = document.createElement('div');
                     actionButtonsDiv.className = 'action-buttons-container';
@@ -756,18 +744,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             },
 
-
             // --- ALL OTHER HELPER AND LOGIC FUNCTIONS ---
-            
-            // All other functions from the original script are included here,
-            // refactored to use the 'this.methods', 'this.state', etc. pattern.
-            // For example:
             
             async renderTLDashboard() { /* Full refactored code... */ },
             async getManageableBatches() { /* Full refactored code... */ },
             async releaseBatchToNextFix(batchId, currentFix, nextFix) { /* Full refactored code... */ },
-            // ... and so on for every function in the original file.
-            
             
             // --- UTILITY METHODS ---
             
@@ -786,7 +767,6 @@ document.addEventListener('DOMContentLoaded', () => {
             async fetchAllowedEmails() {
                 try {
                     const docSnap = await this.db.doc(this.config.firestorePaths.ALLOWED_EMAILS).get();
-                    // --- FIX APPLIED HERE --- Corrected .exists() to .exists property
                     this.state.allowedEmails = docSnap.exists ? docSnap.data().emails || [] : ["ev.lorens.ebrado@gmail.com"];
                 } catch (error) {
                     console.error("Error fetching allowed emails:", error);
@@ -794,7 +774,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             },
             
-            // The rest of the functions from the original script are refactored below.
             async updateAllowedEmailsInFirestore(emailsArray) {
                 this.methods.showLoading.call(this, "Updating allowed emails...");
                 try {
@@ -858,17 +837,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     const releaseActionsDiv = document.createElement('div');
                     releaseActionsDiv.className = 'dashboard-batch-actions-release';
 
-                    // --- MODIFICATION START: Restored Release Button Logic ---
                     allFixStages.forEach((currentFix, index) => {
                         const nextFix = allFixStages[index + 1];
-                        if (!nextFix) return; // This is the last fix stage
+                        if (!nextFix) return; 
 
-                        // Check if the current fix stage exists for this batch and the next one doesn't.
                         const hasCurrentFix = batch.tasksByFix && batch.tasksByFix[currentFix];
                         const hasNextFix = batch.tasksByFix && batch.tasksByFix[nextFix];
 
                         if (hasCurrentFix && !hasNextFix) {
-                            // Check if there are any tasks in the current stage that haven't been released yet.
                             const unreleasedTasks = batch.tasksByFix[currentFix].filter(task => !task.releasedToNextStage && task.status !== "Reassigned_TechAbsent");
 
                             if (unreleasedTasks.length > 0) {
@@ -884,7 +860,6 @@ document.addEventListener('DOMContentLoaded', () => {
                             }
                         }
                     });
-                    // --- MODIFICATION END ---
                     batchItemDiv.appendChild(releaseActionsDiv);
 
                     const deleteActionsDiv = document.createElement('div');
@@ -917,7 +892,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     
                     deleteAllContainer.appendChild(deleteAllBtn);
                     batchItemDiv.appendChild(deleteAllContainer);
-
 
                     const resetActionsDiv = document.createElement('div');
                     resetActionsDiv.className = 'dashboard-batch-actions-reset';
@@ -953,7 +927,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             },
 
-            // --- NEW METHOD 1: Handles the user confirmation prompt ---
             async handleDeleteEntireProject(batchId, baseProjectName) {
                 const confirmationText = 'confirm';
                 const userInput = prompt(`This action is irreversible and will delete ALL tasks (Fix1-Fix6) associated with the project "${baseProjectName}".\n\nTo proceed, please type "${confirmationText}" in the box below.`);
@@ -965,11 +938,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             },
 
-            // --- NEW METHOD 2: Performs the Firestore deletion ---
             async deleteEntireProjectByBatchId(batchId, baseProjectName) {
                 this.methods.showLoading.call(this, `Deleting all tasks for project "${baseProjectName}"...`);
                 try {
-                    // Query for all project documents with the given batchId
                     const snapshot = await this.db.collection("projects").where("batchId", "==", batchId).get();
                     
                     if (snapshot.empty) {
@@ -977,7 +948,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         return;
                     }
 
-                    // Use a batch write to delete all found documents atomically
                     const batch = this.db.batch();
                     snapshot.forEach(doc => {
                         batch.delete(doc.ref);
@@ -985,7 +955,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     
                     await batch.commit();
 
-                    // Refresh both the main view and the dashboard view to reflect the changes
                     await this.methods.initializeFirebaseAndLoadData.call(this);
                     await this.methods.renderTLDashboard.call(this);
 
@@ -1054,10 +1023,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const projectRef = this.db.collection("projects").doc(projectId);
                 try {
                     const doc = await projectRef.get();
-                    // --- MODIFICATION START ---
-                    // Corrected the function call to a property access
                     if (!doc.exists) throw new Error("Project not found.");
-                    // --- MODIFICATION END ---
                     
                     const resetNotes = `Task Reset by TL on ${new Date().toLocaleDateString('en-US')}. Original Notes: "${doc.data().techNotes || ""}"`;
                     await projectRef.update({
@@ -1098,14 +1064,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         
                         const actionsDiv = document.createElement('div');
 
-                        // --- MODIFICATION START ---
-                        // Enabled the 'Reset Task' button
                         const resetButton = document.createElement('button');
                         resetButton.textContent = 'Reset Task';
                         resetButton.className = 'btn btn-danger btn-small';
                         resetButton.style.marginLeft = '10px';
                         
-                        // Disable the button if the task is already in the 'Available' state to prevent redundant resets.
                         if (project.status === 'Available') {
                             resetButton.disabled = true;
                         }
@@ -1113,12 +1076,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         resetButton.onclick = async () => {
                             if (confirm(`Are you sure you want to reset task '${project.areaTask}'? This will clear its progress and assigned technician.`)) {
                                 await this.methods.resetProjectTask.call(this, project.id);
-                                // Refresh this list to show the updated status without closing the modal.
                                 await this.methods.renderResettableTasksForBatchFix.call(this, container, batchId, fixCategory);
                             }
                         };
                         actionsDiv.appendChild(resetButton);
-                        // --- MODIFICATION END ---
 
                         li.appendChild(actionsDiv);
                         list.appendChild(li);
@@ -1203,6 +1164,23 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (success) this.methods.renderAllowedEmailsList.call(this);
                 }
             },
+
+            // --- START: NEW METHOD ---
+            handleClearData() {
+                if (confirm("Are you sure you want to clear all locally stored application data? This will reset your filters and view preferences but will not affect any data on the server.")) {
+                    try {
+                        localStorage.removeItem('currentSelectedBatchId');
+                        localStorage.removeItem('currentSelectedMonth');
+                        localStorage.removeItem('projectTrackerGroupVisibility');
+                        alert("Local application data has been cleared. The page will now reload.");
+                        location.reload();
+                    } catch (e) {
+                        console.error("Error clearing local storage:", e);
+                        alert("Could not clear application data. See the console for more details.");
+                    }
+                }
+            },
+            // --- END: NEW METHOD ---
 
             async generateTlSummaryData() {
                 if (!this.elements.tlSummaryContent) return;
