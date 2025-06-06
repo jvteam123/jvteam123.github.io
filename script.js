@@ -676,7 +676,7 @@ async function renderTLDashboard() {
         const resetActionsDiv = document.createElement('div');
         resetActionsDiv.classList.add('dashboard-batch-actions-reset');
         resetActionsDiv.style.marginTop = '10px';
-        resetActionsDiv.innerHTML = '<strong>Reset Individual Tasks:</strong>';
+        resetActionsDiv.innerHTML = '<strong>Manage Individual Tasks:</strong>';
 
         const taskResetContainer = document.createElement('div');
         taskResetContainer.className = 'task-reset-container';
@@ -866,11 +866,55 @@ async function renderResettableTasksForBatchFix(containerElement, batchId, fixCa
         querySnapshot.forEach(doc => {
             const project = { id: doc.id, ...doc.data() };
             const li = document.createElement('li');
-            li.innerHTML = `
+            li.style.display = 'flex';
+            li.style.justifyContent = 'space-between';
+            li.style.alignItems = 'center';
+            li.style.marginBottom = '8px';
+
+            const taskInfoDiv = document.createElement('div');
+            taskInfoDiv.innerHTML = `
                 <strong>${project.areaTask}</strong> - 
                 Status: ${project.status.replace(/([A-Z])/g, ' $1').trim()} - 
                 Assigned: ${project.assignedTo || 'N/A'}
             `;
+
+            const taskActionsDiv = document.createElement('div');
+
+            // --- Manual Minutes Input ---
+            const manualMinutesContainer = document.createElement('span');
+            manualMinutesContainer.style.marginRight = '10px';
+
+            const manualMinutesLabel = document.createElement('label');
+            manualMinutesLabel.textContent = "Manual Mins: ";
+            manualMinutesLabel.htmlFor = `tl-manual-mins-${project.id}`;
+
+            const manualMinutesInput = document.createElement('input');
+            manualMinutesInput.type = 'number';
+            manualMinutesInput.id = `tl-manual-mins-${project.id}`;
+            manualMinutesInput.value = project.additionalMinutesManual || 0;
+            manualMinutesInput.style.width = '60px';
+
+            manualMinutesInput.onchange = (event) => {
+                const newMinutes = parseInt(event.target.value, 10);
+                if (isNaN(newMinutes) || newMinutes < 0) {
+                    alert("Please enter a valid, non-negative number.");
+                    event.target.value = project.additionalMinutesManual || 0;
+                    return;
+                }
+                showLoading("Updating manual minutes...");
+                db.collection("projects").doc(project.id).update({
+                    additionalMinutesManual: newMinutes,
+                    lastModifiedTimestamp: firebase.firestore.FieldValue.serverTimestamp()
+                }).catch(error => {
+                    alert("Failed to update minutes. Error: " + error.message);
+                }).finally(() => {
+                    hideLoading();
+                });
+            };
+            manualMinutesContainer.appendChild(manualMinutesLabel);
+            manualMinutesContainer.appendChild(manualMinutesInput);
+            taskActionsDiv.appendChild(manualMinutesContainer);
+            // --- End Manual Minutes Input ---
             
             const resetButton = document.createElement('button');
             resetButton.textContent = "Reset Task";
@@ -890,7 +934,10 @@ async function renderResettableTasksForBatchFix(containerElement, batchId, fixCa
                 }
             };
 
-            li.appendChild(resetButton);
+            taskActionsDiv.appendChild(resetButton);
+
+            li.appendChild(taskInfoDiv);
+            li.appendChild(taskActionsDiv);
             taskListUl.appendChild(li);
         });
 
@@ -1114,17 +1161,21 @@ async function updateTimeField(projectId, fieldName, newValue) {
             const [hours, minutes] = newValue.split(':').map(Number);
             if (!isNaN(hours) && !isNaN(minutes)) {
                 
-                // Determine the base date to use
                 let baseDate;
                 const isStartField = fieldName.includes('startTime');
-                const day = fieldName.match(/Day(\d)/)[1];
-                const pairFieldName = isStartField ? `finishTimeDay${day}` : `startTimeDay${day}`;
-
-                // If the "pair" time already exists, use its date. Otherwise, use today.
-                if (projectData[pairFieldName] && projectData[pairFieldName].toDate) {
-                    baseDate = projectData[pairFieldName].toDate();
+                const dayMatch = fieldName.match(/Day(\d)/);
+                
+                if (dayMatch) {
+                    const day = dayMatch[1];
+                    const pairFieldName = isStartField ? `finishTimeDay${day}` : `startTimeDay${day}`;
+                    
+                    if (projectData[pairFieldName] && projectData[pairFieldName].toDate) {
+                        baseDate = projectData[pairFieldName].toDate();
+                    } else {
+                        baseDate = new Date();
+                    }
                 } else {
-                    baseDate = new Date();
+                     baseDate = new Date();
                 }
                 
                 baseDate.setHours(hours, minutes, 0, 0);
@@ -1132,15 +1183,13 @@ async function updateTimeField(projectId, fieldName, newValue) {
             }
         }
 
-        // Prepare the potential new start and finish times for duration calculation
-        let newStartTime = projectData.startTimeDay1;
-        let newFinishTime = projectData.finishTimeDay1;
+        let newStartTime, newFinishTime;
         let durationFieldToUpdate = '';
 
         if (fieldName.includes("Day1")) {
             durationFieldToUpdate = "durationDay1Ms";
-            if(fieldName.includes("startTime")) newStartTime = firestoreTimestamp;
-            else newFinishTime = firestoreTimestamp;
+            newStartTime = fieldName.includes("startTime") ? firestoreTimestamp : projectData.startTimeDay1;
+            newFinishTime = fieldName.includes("finishTime") ? firestoreTimestamp : projectData.finishTimeDay1;
         } else if (fieldName.includes("Day2")) {
             durationFieldToUpdate = "durationDay2Ms";
             newStartTime = fieldName.includes("startTime") ? firestoreTimestamp : projectData.startTimeDay2;
@@ -1153,11 +1202,16 @@ async function updateTimeField(projectId, fieldName, newValue) {
 
         let newDuration = calculateDurationMs(newStartTime, newFinishTime);
 
-        // Update both the time field and the duration field in one go
         if (durationFieldToUpdate) {
             await projectRef.update({
                 [fieldName]: firestoreTimestamp,
                 [durationFieldToUpdate]: newDuration,
+                lastModifiedTimestamp: firebase.firestore.FieldValue.serverTimestamp()
+            });
+        } else {
+            // Fallback for fields that don't have a duration pair
+             await projectRef.update({
+                [fieldName]: firestoreTimestamp,
                 lastModifiedTimestamp: firebase.firestore.FieldValue.serverTimestamp()
             });
         }
@@ -1379,11 +1433,12 @@ async function generateTlSummaryData() {
 
         allProjectsData.forEach(p => {
             const totalWorkMs = (p.durationDay1Ms || 0) + (p.durationDay2Ms || 0) + (p.durationDay3Ms || 0);
-            if (totalWorkMs <= 0) return;
-
             const breakMs = (p.breakDurationMinutes || 0) * 60000;
             const additionalMs = (p.additionalMinutesManual || 0) * 60000;
             const adjustedNetMs = Math.max(0, totalWorkMs - breakMs) + additionalMs;
+
+            if (adjustedNetMs <= 0) return;
+
             const minutes = Math.floor(adjustedNetMs / 60000);
             if (minutes <= 0) return;
 
