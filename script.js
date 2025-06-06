@@ -870,6 +870,26 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                     batchItemDiv.appendChild(deleteActionsDiv);
 
+                    // --- MODIFICATION START ---
+                    // Add a new container for the full project deletion button for better separation and styling.
+                    const deleteAllContainer = document.createElement('div');
+                    deleteAllContainer.style.marginTop = '15px';
+                    deleteAllContainer.style.borderTop = '1px solid #cc0000';
+                    deleteAllContainer.style.paddingTop = '10px';
+                    
+                    const deleteAllBtn = document.createElement('button');
+                    deleteAllBtn.textContent = 'Delete Entire Project (All Fix Stages)';
+                    deleteAllBtn.className = 'btn btn-danger btn-delete-project'; // Use a distinct class for styling if needed
+                    deleteAllBtn.style.width = '100%';
+
+                    // Attach the new handler function
+                    deleteAllBtn.onclick = () => this.methods.handleDeleteEntireProject.call(this, batch.batchId, batch.baseProjectName);
+                    
+                    deleteAllContainer.appendChild(deleteAllBtn);
+                    batchItemDiv.appendChild(deleteAllContainer);
+                    // --- MODIFICATION END ---
+
+
                     const resetActionsDiv = document.createElement('div');
                     resetActionsDiv.className = 'dashboard-batch-actions-reset';
                     resetActionsDiv.style.marginTop = '10px';
@@ -902,6 +922,50 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     this.elements.tlDashboardContentElement.appendChild(batchItemDiv);
                 });
+            },
+
+            // --- NEW METHOD 1: Handles the user confirmation prompt ---
+            async handleDeleteEntireProject(batchId, baseProjectName) {
+                const confirmationText = 'confirm';
+                const userInput = prompt(`This action is irreversible and will delete ALL tasks (Fix1-Fix6) associated with the project "${baseProjectName}".\n\nTo proceed, please type "${confirmationText}" in the box below.`);
+
+                if (userInput === confirmationText) {
+                    await this.methods.deleteEntireProjectByBatchId.call(this, batchId, baseProjectName);
+                } else {
+                    alert('Deletion cancelled. The confirmation text did not match.');
+                }
+            },
+
+            // --- NEW METHOD 2: Performs the Firestore deletion ---
+            async deleteEntireProjectByBatchId(batchId, baseProjectName) {
+                this.methods.showLoading.call(this, `Deleting all tasks for project "${baseProjectName}"...`);
+                try {
+                    // Query for all project documents with the given batchId
+                    const snapshot = await this.db.collection("projects").where("batchId", "==", batchId).get();
+                    
+                    if (snapshot.empty) {
+                        alert("No tasks found for this project batch. It might have been deleted already.");
+                        return;
+                    }
+
+                    // Use a batch write to delete all found documents atomically
+                    const batch = this.db.batch();
+                    snapshot.forEach(doc => {
+                        batch.delete(doc.ref);
+                    });
+                    
+                    await batch.commit();
+
+                    // Refresh both the main view and the dashboard view to reflect the changes
+                    await this.methods.initializeFirebaseAndLoadData.call(this);
+                    await this.methods.renderTLDashboard.call(this);
+
+                } catch (error) {
+                    console.error(`Error deleting entire project (batchId: ${batchId}):`, error);
+                    alert("An error occurred while deleting the project: " + error.message);
+                } finally {
+                    this.methods.hideLoading.call(this);
+                }
             },
 
             async releaseBatchToNextFix(batchId, currentFixCategory, nextFixCategory) {
