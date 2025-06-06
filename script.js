@@ -779,15 +779,15 @@ document.addEventListener('DOMContentLoaded', () => {
             loadGroupVisibilityState() { this.state.groupVisibilityState = JSON.parse(localStorage.getItem('projectTrackerGroupVisibility') || '{}'); },
             saveGroupVisibilityState() { localStorage.setItem('projectTrackerGroupVisibility', JSON.stringify(this.state.groupVisibilityState)); },
            async fetchAllowedEmails() {
-    try {
+                try {
         const docSnap = await this.db.doc(this.config.firestorePaths.ALLOWED_EMAILS).get();
-        // Corrected line: removed parentheses from .exists
-        this.state.allowedEmails = docSnap.exists ? docSnap.data().emails || [] : ["ev.lorens.ebrado@gmail.com"];
-    } catch (error) {
-        console.error("Error fetching allowed emails:", error);
-        this.state.allowedEmails = ["ev.lorens.ebrado@gmail.com"];
-    }
-},
+           // Corrected line: removed parentheses from .exists
+          this.state.allowedEmails = docSnap.exists ? docSnap.data().emails || [] : ["ev.lorens.ebrado@gmail.com"];
+           } catch (error) {
+           console.error("Error fetching allowed emails:", error);
+           this.state.allowedEmails = ["ev.lorens.ebrado@gmail.com"];
+           }
+       },
             
             // The rest of the functions from the original script are refactored below.
             async updateAllowedEmailsInFirestore(emailsArray) {
