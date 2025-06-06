@@ -714,7 +714,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const breakSelect = document.createElement('select');
                     breakSelect.className = 'break-select';
                     breakSelect.disabled = project.status === "Reassigned_TechAbsent";
-                    breakSelect.innerHTML = `<option value="0">No Break</option><option value="15">15m Break</option><option value="60">1h Break</option><option value="90">1h30m Break</option>`;
+                    breakSelect.innerHTML = `<option value="0">No Break</option><option value="15">15m Break</option><option value="60">1h Break</option><option value="75">1h15m Break</option><option value="90">1h30m Break</option>`;
                     breakSelect.value = project.breakDurationMinutes || 0;
                     breakSelect.onchange = (e) => this.db.collection("projects").doc(project.id).update({ breakDurationMinutes: parseInt(e.target.value, 10), lastModifiedTimestamp: firebase.firestore.FieldValue.serverTimestamp() });
                     actionButtonsDiv.appendChild(breakSelect);
