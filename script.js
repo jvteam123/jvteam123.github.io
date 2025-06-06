@@ -978,12 +978,15 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (task.status === "Reassigned_TechAbsent") continue;
 
                         const newNextFixTask = { ...task,
-                            fixCategory: nextFixCategory, status: "Available",
-                            startTimeDay1: null, finishTimeDay1: null, durationDay1Ms: null,
-                            startTimeDay2: null, finishTimeDay2: null, durationDay2Ms: null,
-                            startTimeDay3: null, finishTimeDay3: null, durationDay3Ms: null,
-                            releasedToNextStage: false, lastModifiedTimestamp: serverTimestamp,
-                            originalProjectId: task.id,
+                        fixCategory: nextFixCategory, status: "Available",
+                        techNotes: "", // <-- Add this to clear notes
+                        breakDurationMinutes: 0, // <-- Add this to reset break time
+                        additionalMinutesManual: 0, // <-- Add this to reset additional time
+                        startTimeDay1: null, finishTimeDay1: null, durationDay1Ms: null,
+                        startTimeDay2: null, finishTimeDay2: null, durationDay2Ms: null,
+                        startTimeDay3: null, finishTimeDay3: null, durationDay3Ms: null,
+                        releasedToNextStage: false, lastModifiedTimestamp: serverTimestamp,
+                        originalProjectId: task.id,
                         };
                         delete newNextFixTask.id;
                         const newDocRef = this.db.collection("projects").doc();
