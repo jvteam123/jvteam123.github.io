@@ -961,7 +961,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 const projectRef = this.db.collection("projects").doc(projectId);
                 try {
                     const doc = await projectRef.get();
-                    if (!doc.exists()) throw new Error("Project not found.");
+                    // --- MODIFICATION START ---
+                    // Corrected the function call to a property access
+                    if (!doc.exists) throw new Error("Project not found.");
+                    // --- MODIFICATION END ---
+                    
                     const resetNotes = `Task Reset by TL on ${new Date().toLocaleDateString('en-US')}. Original Notes: "${doc.data().techNotes || ""}"`;
                     await projectRef.update({
                         status: "Available", assignedTo: "", techNotes: resetNotes,
