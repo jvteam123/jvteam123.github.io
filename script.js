@@ -979,7 +979,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             },
 
-            async renderResettableTasksForBatchFix(container, batchId, fixCategory) {
+           async renderResettableTasksForBatchFix(container, batchId, fixCategory) {
                 container.innerHTML = `<p>Loading tasks for ${fixCategory}...</p>`;
                 try {
                     const snapshot = await this.db.collection("projects").where("batchId", "==", batchId).where("fixCategory", "==", fixCategory).orderBy("areaTask").get();
@@ -993,10 +993,36 @@ document.addEventListener('DOMContentLoaded', () => {
                     snapshot.forEach(doc => {
                         const project = { id: doc.id, ...doc.data() };
                         const li = document.createElement('li');
-                        li.style.display = 'flex'; li.style.justifyContent = 'space-between'; li.style.alignItems = 'center'; li.style.marginBottom = '8px';
+                        li.style.display = 'flex';
+                        li.style.justifyContent = 'space-between';
+                        li.style.alignItems = 'center';
+                        li.style.marginBottom = '8px';
                         li.innerHTML = `<div><strong>${project.areaTask}</strong> - Status: ${project.status.replace(/([A-Z])/g, ' $1').trim()} - Assigned: ${project.assignedTo || 'N/A'}</div>`;
+                        
                         const actionsDiv = document.createElement('div');
-                        // ... rendering logic for reset/manual minutes buttons (included)
+
+                        // --- MODIFICATION START ---
+                        // Enabled the 'Reset Task' button
+                        const resetButton = document.createElement('button');
+                        resetButton.textContent = 'Reset Task';
+                        resetButton.className = 'btn btn-danger btn-small';
+                        resetButton.style.marginLeft = '10px';
+                        
+                        // Disable the button if the task is already in the 'Available' state to prevent redundant resets.
+                        if (project.status === 'Available') {
+                            resetButton.disabled = true;
+                        }
+
+                        resetButton.onclick = async () => {
+                            if (confirm(`Are you sure you want to reset task '${project.areaTask}'? This will clear its progress and assigned technician.`)) {
+                                await this.methods.resetProjectTask.call(this, project.id);
+                                // Refresh this list to show the updated status without closing the modal.
+                                await this.methods.renderResettableTasksForBatchFix.call(this, container, batchId, fixCategory);
+                            }
+                        };
+                        actionsDiv.appendChild(resetButton);
+                        // --- MODIFICATION END ---
+
                         li.appendChild(actionsDiv);
                         list.appendChild(li);
                     });
