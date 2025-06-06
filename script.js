@@ -1509,6 +1509,7 @@ async function handleRemoveEmail(emailToRemove) {
 }
 
 // Function to generate and display the TL Summary data
+// Function to generate and display the TL Summary data with colored highlights
 async function generateTlSummaryData() {
     if (!tlSummaryContent) return;
     showLoading("Generating TL Summary...");
@@ -1520,55 +1521,62 @@ async function generateTlSummaryData() {
     }
 
     try {
-        const projectsSnapshot = await db.collection("projects").get(); // Fetch all projects
+        const projectsSnapshot = await db.collection("projects").get();
         let allProjectsData = projectsSnapshot.docs.map(doc => doc.data());
 
-        const projectFixCategoryTotals = {}; // Totals per project per fix category
-        // Overall project totals are no longer calculated or displayed.
+        const projectTotals = {}; // Format: { "ProjectName": { "FixCategory": totalMinutes } }
 
         allProjectsData.forEach(p => {
-            // Calculate total net work time in milliseconds for the task
             const totalWorkMs = (p.durationDay1Ms || 0) + (p.durationDay2Ms || 0) + (p.durationDay3Ms || 0);
             const breakMs = (p.breakDurationMinutes || 0) * 60000;
             const additionalMs = (p.additionalMinutesManual || 0) * 60000;
-            const adjustedNetMs = Math.max(0, totalWorkMs - breakMs) + additionalMs; // Ensure non-negative
+            const adjustedNetMs = Math.max(0, totalWorkMs - breakMs) + additionalMs;
 
-            if (adjustedNetMs <= 0) return; // Skip tasks with no work time
+            if (adjustedNetMs <= 0) return;
 
-            const minutes = Math.floor(adjustedNetMs / 60000); // Convert to minutes
+            const minutes = Math.floor(adjustedNetMs / 60000);
             if (minutes <= 0) return;
 
             const projName = p.baseProjectName || "Unknown Project";
             const fixCat = p.fixCategory || "Unknown Fix";
-            const summaryKey = `${projName}_${fixCat}`; // Key for project-fix category total
 
-            projectFixCategoryTotals[summaryKey] = (projectFixCategoryTotals[summaryKey] || 0) + minutes;
-            // The line for overallProjectTotals has been removed.
+            if (!projectTotals[projName]) {
+                projectTotals[projName] = {};
+            }
+            projectTotals[projName][fixCat] = (projectTotals[projName][fixCat] || 0) + minutes;
         });
-        
+
         let summaryHtml = '<ul style="list-style: none; padding: 0;">';
-        // The section for "Overall Project Totals" has been removed.
-        
         summaryHtml += "<h3>Totals by Project and Fix Category</h3>";
-        const sortedFixCatKeys = Object.keys(projectFixCategoryTotals).sort();
-        if (sortedFixCatKeys.length > 0) {
-            sortedFixCatKeys.forEach(key => {
-                const [projName, fixCat] = key.split('_');
-                const totalMinutes = projectFixCategoryTotals[key];
-                const hoursDecimal = (totalMinutes / 60).toFixed(2);
-                const bgColor = FIX_CATEGORY_COLORS[fixCat] || FIX_CATEGORY_COLORS["default"];
-                // Added style for background color, padding, and margin for better visual separation
-                summaryHtml += `<li style="background-color: ${bgColor}; padding: 5px; margin-bottom: 3px; border-radius: 4px;"><strong>${projName} (${fixCat}):</strong> ${totalMinutes} minutes (${hoursDecimal} hours)</li>`;
-            });
-        }
+
+        const sortedProjectNames = Object.keys(projectTotals).sort();
         
-        // Adjusted condition for "No data" message
-        if (sortedFixCatKeys.length === 0) {
+        if (sortedProjectNames.length === 0) {
             summaryHtml = "<p>No project time data found to generate a summary.</p>";
         } else {
+            sortedProjectNames.forEach(projName => {
+                const fixCategoryTotals = projectTotals[projName];
+                const sortedFixCategories = Object.keys(fixCategoryTotals).sort((a, b) => {
+                    const orderA = FIX_CATEGORIES_ORDER.indexOf(a);
+                    const orderB = FIX_CATEGORIES_ORDER.indexOf(b);
+                    return orderA - orderB;
+                });
+
+                sortedFixCategories.forEach(fixCat => {
+                    const totalMinutes = fixCategoryTotals[fixCat];
+                    const hoursDecimal = (totalMinutes / 60).toFixed(2);
+                    
+                    // *** This line gets the correct color for the fix category ***
+                    const bgColor = FIX_CATEGORY_COLORS[fixCat] || FIX_CATEGORY_COLORS["default"];
+                    
+                    // *** The background color is applied directly to the <li> style ***
+                    summaryHtml += `<li style="background-color: ${bgColor}; padding: 8px; margin-bottom: 5px; border-radius: 4px;"><strong>${projName} - ${fixCat}:</strong> ${totalMinutes} minutes (${hoursDecimal} hours)</li>`;
+                });
+            });
             summaryHtml += "</ul>";
         }
-        tlSummaryContent.innerHTML = summaryHtml; // Display the generated HTML
+        
+        tlSummaryContent.innerHTML = summaryHtml;
 
     } catch (error) {
         console.error("Error generating TL Summary:", error);
