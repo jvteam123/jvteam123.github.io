@@ -646,9 +646,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (newValue) {
                             const [hours, minutes] = newValue.split(':').map(Number);
                             if (!isNaN(hours) && !isNaN(minutes)) {
-                                const baseDate = projectData.creationTimestamp?.toDate() || // Should be checked 1st
-                                projectData[startFieldForDay]?.toDate() ||
+                                const baseDate = projectData[startFieldForDay]?.toDate() ||
                                 projectData[finishTimeDay]?.toDate() ||
+                                projectData.creationTimestamp?.toDate() || // Checked 3rd
                                 new Date();
 
                                 const year = baseDate.getFullYear();
