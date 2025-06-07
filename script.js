@@ -7,8 +7,12 @@
  * global variables, improves performance, and ensures correct
  * timezone handling.
  *
- * @version 2.1.0
+ * @version 2.7.2
  * @author Gemini AI Refactor
+ * @changeLog
+ * - Integrated new login UI. Script now handles showing/hiding the login screen and the main dashboard.
+ * - Added DOM references for new UI elements (`auth-wrapper`, `body`, `mainContainer`).
+ * - Updated auth state handlers (`handleAuthorizedUser`, `handleSignedOutUser`) to toggle view visibility.
  */
 document.addEventListener('DOMContentLoaded', () => {
 
@@ -39,7 +43,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     "default": "#FFFFFF"
                 }
             },
-            NUM_TABLE_COLUMNS: 15
+            NUM_TABLE_COLUMNS: 18
         },
 
         // --- 2. FIREBASE SERVICES ---
@@ -57,7 +61,16 @@ document.addEventListener('DOMContentLoaded', () => {
             filters: {
                 batchId: localStorage.getItem('currentSelectedBatchId') || "",
                 fixCategory: "",
-                month: localStorage.getItem('currentSelectedMonth') || ""
+                month: localStorage.getItem('currentSelectedMonth') || "",
+                sortBy: localStorage.getItem('currentSortBy') || 'newest'
+            },
+            pagination: {
+                currentPage: 1,
+                projectsPerPage: 2,
+                paginatedProjectNameList: [],
+                totalPages: 0,
+                sortOrderForPaging: 'newest',
+                monthForPaging: '' // Track which month the list was built for
             }
         },
 
@@ -67,7 +80,6 @@ document.addEventListener('DOMContentLoaded', () => {
         /**
          * =================================================================
          * INITIALIZATION METHOD
-         * This is the entry point for the entire application.
          * =================================================================
          */
         init() {
@@ -100,7 +112,6 @@ document.addEventListener('DOMContentLoaded', () => {
         /**
          * =================================================================
          * ALL APPLICATION METHODS
-         * All functions are now organized as methods of this object.
          * =================================================================
          */
         methods: {
@@ -124,24 +135,34 @@ document.addEventListener('DOMContentLoaded', () => {
                     closeTlSummaryBtn: document.getElementById('closeTlSummaryBtn'),
                     newProjectForm: document.getElementById('newProjectForm'),
                     projectTableBody: document.getElementById('projectTableBody'),
+                    loadingOverlay: document.getElementById('loadingOverlay'),
+                    batchIdSelect: document.getElementById('batchIdSelect'),
+                    fixCategoryFilter: document.getElementById('fixCategoryFilter'),
+                    monthFilter: document.getElementById('monthFilter'),
+                    sortByFilter: document.getElementById('sortByFilter'),
+                    paginationControls: document.getElementById('paginationControls'),
+                    prevPageBtn: document.getElementById('prevPageBtn'),
+                    nextPageBtn: document.getElementById('nextPageBtn'),
+                    pageInfo: document.getElementById('pageInfo'),
                     tlDashboardContentElement: document.getElementById('tlDashboardContent'),
                     allowedEmailsList: document.getElementById('allowedEmailsList'),
                     addEmailInput: document.getElementById('addEmailInput'),
                     addEmailBtn: document.getElementById('addEmailBtn'),
                     tlSummaryContent: document.getElementById('tlSummaryContent'),
-                    loadingOverlay: document.getElementById('loadingOverlay'),
-                    batchIdSelect: document.getElementById('batchIdSelect'),
-                    fixCategoryFilter: document.getElementById('fixCategoryFilter'),
-                    monthFilter: document.getElementById('monthFilter'),
                 };
             },
 
             setupAuthRelatedDOMReferences() {
                 this.elements = {
                     ...this.elements,
+                    // --- MODIFICATION: Added elements for new UI ---
+                    body: document.body,
+                    authWrapper: document.getElementById('auth-wrapper'),
+                    mainContainer: document.querySelector('.container'),
+                    // --- End Modification ---
                     signInBtn: document.getElementById('signInBtn'),
                     signOutBtn: document.getElementById('signOutBtn'),
-                    clearDataBtn: document.getElementById('clearDataBtn'), // Modified
+                    clearDataBtn: document.getElementById('clearDataBtn'),
                     userInfoDisplayDiv: document.getElementById('user-info-display'),
                     userNameP: document.getElementById('userName'),
                     userEmailP: document.getElementById('userEmail'),
@@ -194,23 +215,32 @@ document.addEventListener('DOMContentLoaded', () => {
                 attachClick(self.elements.closeTlSummaryBtn, () => { self.elements.tlSummaryModal.style.display = 'none'; });
 
                 attachClick(self.elements.addEmailBtn, self.methods.handleAddEmail.bind(self));
-                attachClick(self.elements.clearDataBtn, self.methods.handleClearData.bind(self)); // Modified
+                attachClick(self.elements.clearDataBtn, self.methods.handleClearData.bind(self));
+                attachClick(self.elements.nextPageBtn, self.methods.handleNextPage.bind(self));
+                attachClick(self.elements.prevPageBtn, self.methods.handlePrevPage.bind(self));
+
 
                 if (self.elements.newProjectForm) {
                     self.elements.newProjectForm.addEventListener('submit', self.methods.handleAddProjectSubmit.bind(self));
                 }
 
+                const resetPaginationAndReload = () => {
+                    self.state.pagination.currentPage = 1;
+                    self.state.pagination.paginatedProjectNameList = [];
+                    self.methods.initializeFirebaseAndLoadData.call(self);
+                };
+
                 if (self.elements.batchIdSelect) {
                     self.elements.batchIdSelect.onchange = (e) => {
                         self.state.filters.batchId = e.target.value;
                         localStorage.setItem('currentSelectedBatchId', self.state.filters.batchId);
-                        self.methods.initializeFirebaseAndLoadData.call(self);
+                        resetPaginationAndReload();
                     };
                 }
                 if (self.elements.fixCategoryFilter) {
                     self.elements.fixCategoryFilter.onchange = (e) => {
                         self.state.filters.fixCategory = e.target.value;
-                        self.methods.initializeFirebaseAndLoadData.call(self);
+                        resetPaginationAndReload();
                     };
                 }
                 if (self.elements.monthFilter) {
@@ -219,12 +249,20 @@ document.addEventListener('DOMContentLoaded', () => {
                         localStorage.setItem('currentSelectedMonth', self.state.filters.month);
                         self.state.filters.batchId = "";
                         localStorage.setItem('currentSelectedBatchId', "");
-                        self.methods.initializeFirebaseAndLoadData.call(self);
+                        resetPaginationAndReload();
+                    };
+                }
+                
+                if (self.elements.sortByFilter) {
+                    self.elements.sortByFilter.value = self.state.filters.sortBy;
+                    self.elements.sortByFilter.onchange = (e) => {
+                        self.state.filters.sortBy = e.target.value;
+                        localStorage.setItem('currentSortBy', e.target.value);
+                        resetPaginationAndReload();
                     };
                 }
 
                 window.onclick = (event) => {
-                    if (event.target == self.elements.projectFormModal) self.elements.projectFormModal.style.display = 'none';
                     if (event.target == self.elements.tlDashboardModal) self.elements.tlDashboardModal.style.display = 'none';
                     if (event.target == self.elements.settingsModal) self.elements.settingsModal.style.display = 'none';
                     if (event.target == self.elements.tlSummaryModal) self.elements.tlSummaryModal.style.display = 'none';
@@ -232,7 +270,20 @@ document.addEventListener('DOMContentLoaded', () => {
             },
 
 
-            // --- AUTHENTICATION FLOW ---
+            handleNextPage() {
+                if (this.state.pagination.currentPage < this.state.pagination.totalPages) {
+                    this.state.pagination.currentPage++;
+                    this.methods.initializeFirebaseAndLoadData.call(this);
+                }
+            },
+
+            handlePrevPage() {
+                if (this.state.pagination.currentPage > 1) {
+                    this.state.pagination.currentPage--;
+                    this.methods.initializeFirebaseAndLoadData.call(this);
+                }
+            },
+
 
             listenForAuthStateChanges() {
                 if (!this.auth) {
@@ -259,13 +310,19 @@ document.addEventListener('DOMContentLoaded', () => {
             },
 
             handleAuthorizedUser(user) {
+                // --- MODIFICATION: Added logic to show the app and hide the login UI ---
+                this.elements.body.classList.remove('login-view-active');
+                this.elements.authWrapper.style.display = 'none';
+                this.elements.mainContainer.style.display = 'block';
+                // --- End Modification ---
+
                 this.elements.userNameP.textContent = user.displayName || "N/A";
                 this.elements.userEmailP.textContent = user.email || "N/A";
                 if (this.elements.userPhotoImg) this.elements.userPhotoImg.src = user.photoURL || 'default-user.png';
 
                 this.elements.userInfoDisplayDiv.style.display = 'flex';
-                this.elements.signInBtn.style.display = 'none';
-                if (this.elements.clearDataBtn) this.elements.clearDataBtn.style.display = 'none'; // Modified
+                // The main signInBtn is inside the auth-wrapper which is now hidden, so no need to hide it separately.
+                if (this.elements.clearDataBtn) this.elements.clearDataBtn.style.display = 'none';
                 this.elements.appContentDiv.style.display = 'block';
                 this.elements.loadingAuthMessageDiv.style.display = 'none';
                 if (this.elements.openSettingsBtn) this.elements.openSettingsBtn.style.display = 'block';
@@ -277,12 +334,18 @@ document.addEventListener('DOMContentLoaded', () => {
             },
 
             handleSignedOutUser() {
+                // --- MODIFICATION: Added logic to show the login UI and hide the app ---
+                this.elements.body.classList.add('login-view-active');
+                this.elements.authWrapper.style.display = 'block';
+                this.elements.mainContainer.style.display = 'none';
+                // --- End Modification ---
+
                 this.elements.userInfoDisplayDiv.style.display = 'none';
-                this.elements.signInBtn.style.display = 'block';
-                if (this.elements.clearDataBtn) this.elements.clearDataBtn.style.display = 'block'; // Modified
+                // The main signInBtn is now inside auth-wrapper, which is shown by the lines above.
+                if (this.elements.clearDataBtn) this.elements.clearDataBtn.style.display = 'block';
                 this.elements.appContentDiv.style.display = 'none';
                 this.elements.loadingAuthMessageDiv.innerHTML = "<p>Please sign in to access the Project Tracker.</p>";
-                this.elements.loadingAuthMessageDiv.style.display = 'block';
+                this.elements.loadingAuthMessageDiv.style.display = 'block'; // This is hidden by body class, but good practice
                 if (this.elements.openSettingsBtn) this.elements.openSettingsBtn.style.display = 'none';
 
                 if (this.firestoreListenerUnsubscribe) {
@@ -297,6 +360,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 provider.addScope('email');
 
                 if (this.elements.signInBtn) {
+                    // This now correctly refers to the new button in the login card since it has the ID 'signInBtn'
                     this.elements.signInBtn.onclick = () => {
                         this.methods.showLoading.call(this, "Signing in...");
                         this.auth.signInWithPopup(provider).catch((error) => {
@@ -320,45 +384,100 @@ document.addEventListener('DOMContentLoaded', () => {
             },
 
 
-            // --- DATA HANDLING AND FIREBASE INTERACTIONS ---
-
             async initializeFirebaseAndLoadData() {
                 this.methods.showLoading.call(this, "Loading projects...");
-                if (!this.db) {
-                    console.error("Firestore not initialized.");
+                if (!this.db || !this.elements.paginationControls) {
+                    console.error("Firestore or crucial UI elements not initialized.");
                     this.methods.hideLoading.call(this);
                     return;
                 }
                 if (this.firestoreListenerUnsubscribe) this.firestoreListenerUnsubscribe();
-
+            
                 this.methods.loadGroupVisibilityState.call(this);
-
                 await this.methods.populateMonthFilter.call(this);
                 await this.methods.populateProjectNameFilter.call(this);
-
+            
+                const sortDirection = this.state.filters.sortBy === 'oldest' ? 'asc' : 'desc';
+                const shouldPaginate = !this.state.filters.batchId && !this.state.filters.fixCategory;
+                
                 let projectsQuery = this.db.collection("projects");
-
-                if (this.state.filters.month) {
-                    const [year, month] = this.state.filters.month.split('-');
-                    const startDate = new Date(parseInt(year), parseInt(month) - 1, 1);
-                    const endDate = new Date(parseInt(year), parseInt(month), 0, 23, 59, 59, 999);
-                    projectsQuery = projectsQuery.where("creationTimestamp", ">=", startDate).where("creationTimestamp", "<=", endDate);
+            
+                if (shouldPaginate) {
+                    this.elements.paginationControls.style.display = 'block';
+            
+                    if (this.state.pagination.paginatedProjectNameList.length === 0 || 
+                        this.state.pagination.sortOrderForPaging !== this.state.filters.sortBy ||
+                        this.state.pagination.monthForPaging !== this.state.filters.month) {
+                        
+                        this.methods.showLoading.call(this, "Building project list for pagination...");
+                        
+                        let nameQuery = this.db.collection("projects");
+                        
+                        if (this.state.filters.month) {
+                            const [year, month] = this.state.filters.month.split('-');
+                            const startDate = new Date(parseInt(year), parseInt(month) - 1, 1);
+                            const endDate = new Date(parseInt(year), parseInt(month), 0, 23, 59, 59, 999);
+                            nameQuery = nameQuery.where("creationTimestamp", ">=", startDate).where("creationTimestamp", "<=", endDate);
+                        }
+            
+                        const allTasksSnapshot = await nameQuery.orderBy("creationTimestamp", sortDirection).get();
+                        const uniqueNames = new Set();
+                        const sortedNames = [];
+                        allTasksSnapshot.forEach(doc => {
+                            const name = doc.data().baseProjectName;
+                            if (name && !uniqueNames.has(name)) {
+                                uniqueNames.add(name);
+                                sortedNames.push(name);
+                            }
+                        });
+            
+                        this.state.pagination.paginatedProjectNameList = sortedNames;
+                        this.state.pagination.totalPages = Math.ceil(sortedNames.length / this.state.pagination.projectsPerPage);
+                        this.state.pagination.sortOrderForPaging = this.state.filters.sortBy;
+                        this.state.pagination.monthForPaging = this.state.filters.month;
+                    }
+            
+                    const startIndex = (this.state.pagination.currentPage - 1) * this.state.pagination.projectsPerPage;
+                    const endIndex = startIndex + this.state.pagination.projectsPerPage;
+                    const projectsToDisplay = this.state.pagination.paginatedProjectNameList.slice(startIndex, endIndex);
+            
+                    if (projectsToDisplay.length > 0) {
+                        projectsQuery = projectsQuery.where("baseProjectName", "in", projectsToDisplay);
+                    } else {
+                        projectsQuery = projectsQuery.where("baseProjectName", "==", "no-projects-exist-yet-dummy-value");
+                    }
+                } else { 
+                    this.elements.paginationControls.style.display = 'none';
+                    if (this.state.filters.month) {
+                        const [year, month] = this.state.filters.month.split('-');
+                        const startDate = new Date(parseInt(year), parseInt(month) - 1, 1);
+                        const endDate = new Date(parseInt(year), parseInt(month), 0, 23, 59, 59, 999);
+                        projectsQuery = projectsQuery.where("creationTimestamp", ">=", startDate).where("creationTimestamp", "<=", endDate);
+                    }
+                    if (this.state.filters.batchId) {
+                        projectsQuery = projectsQuery.where("baseProjectName", "==", this.state.filters.batchId);
+                    }
+                    if (this.state.filters.fixCategory) {
+                        projectsQuery = projectsQuery.where("fixCategory", "==", this.state.filters.fixCategory);
+                    }
                 }
-                if (this.state.filters.batchId) {
-                    projectsQuery = projectsQuery.where("baseProjectName", "==", this.state.filters.batchId);
-                }
-                if (this.state.filters.fixCategory) {
-                    projectsQuery = projectsQuery.where("fixCategory", "==", this.state.filters.fixCategory);
-                }
-                projectsQuery = projectsQuery.orderBy("creationTimestamp", "desc");
-
+            
+                projectsQuery = projectsQuery.orderBy("creationTimestamp", sortDirection);
+            
                 this.firestoreListenerUnsubscribe = projectsQuery.onSnapshot(snapshot => {
-                    const newProjects = [];
+                    let newProjects = [];
                     snapshot.forEach(doc => {
                         if (doc.exists) newProjects.push({ id: doc.id, ...doc.data() });
                     });
+            
+                    if (shouldPaginate) {
+                         newProjects = newProjects.filter(p => this.state.pagination.paginatedProjectNameList.includes(p.baseProjectName));
+                    }
+                    
                     this.state.projects = newProjects.map(p => ({
-                        breakDurationMinutes: 0,
+                        breakDurationMinutesDay1: 0,
+                        breakDurationMinutesDay2: 0,
+                        breakDurationMinutesDay3: 0,
                         additionalMinutesManual: 0,
                         ...p
                     }));
@@ -369,7 +488,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     this.methods.refreshAllViews.call(this);
                     alert("Error loading projects: " + error.message);
                 });
-                this.methods.hideLoading.call(this);
             },
 
             async populateMonthFilter() {
@@ -447,7 +565,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 event.preventDefault();
                 this.methods.showLoading.call(this, "Adding project(s)...");
 
-                const fixCategory = document.getElementById('fixCategorySelect').value;
+                const fixCategory = "Fix1";
                 const numRows = parseInt(document.getElementById('numRows').value, 10);
                 const baseProjectName = document.getElementById('baseProjectName').value.trim();
                 const gsd = document.getElementById('gsd').value;
@@ -472,7 +590,11 @@ document.addEventListener('DOMContentLoaded', () => {
                             startTimeDay2: null, finishTimeDay2: null, durationDay2Ms: null,
                             startTimeDay3: null, finishTimeDay3: null, durationDay3Ms: null,
                             releasedToNextStage: false, isReassigned: false, originalProjectId: null,
-                            lastModifiedTimestamp: creationTimestamp, breakDurationMinutes: 0, additionalMinutesManual: 0,
+                            lastModifiedTimestamp: creationTimestamp, 
+                            breakDurationMinutesDay1: 0,
+                            breakDurationMinutesDay2: 0,
+                            breakDurationMinutesDay3: 0,
+                            additionalMinutesManual: 0,
                         };
                         const newProjectRef = this.db.collection("projects").doc();
                         batch.set(newProjectRef, projectData);
@@ -486,8 +608,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     localStorage.setItem('currentSelectedBatchId', baseProjectName);
                     this.state.filters.month = "";
                     localStorage.setItem('currentSelectedMonth', "");
-                    this.state.filters.fixCategory = fixCategory;
-                    if (this.elements.fixCategoryFilter) this.elements.fixCategoryFilter.value = fixCategory;
+                    this.state.filters.fixCategory = "";
 
                     this.methods.initializeFirebaseAndLoadData.call(this);
 
@@ -504,39 +625,59 @@ document.addEventListener('DOMContentLoaded', () => {
                 const projectRef = this.db.collection("projects").doc(projectId);
 
                 try {
-                    const doc = await projectRef.get();
-                    if (!doc.exists) throw new Error("Document not found.");
-
-                    const projectData = doc.data();
-                    let firestoreTimestamp = null;
-
-                    if (newValue) {
-                        const [hours, minutes] = newValue.split(':').map(Number);
-                        if (!isNaN(hours) && !isNaN(minutes)) {
-                            const dayMatch = fieldName.match(/Day(\d)/);
-                            const pairFieldName = fieldName.includes('startTime') ? `finishTimeDay${dayMatch[1]}` : `startTimeDay${dayMatch[1]}`;
-                            const baseDate = projectData[pairFieldName]?.toDate() || projectData.creationTimestamp?.toDate() || new Date();
-                            
-                            const year = baseDate.getFullYear();
-                            const month = String(baseDate.getMonth() + 1).padStart(2, '0');
-                            const day = String(baseDate.getDate()).padStart(2, '0');
-                            const time = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00`;
-
-                            const isoStringWithTimezone = `${year}-${month}-${day}T${time}+08:00`;
-                            firestoreTimestamp = firebase.firestore.Timestamp.fromDate(new Date(isoStringWithTimezone));
+                    await this.db.runTransaction(async (transaction) => {
+                        const doc = await transaction.get(projectRef);
+                        if (!doc.exists) {
+                            throw new Error("Document not found.");
                         }
-                    }
 
-                    const dayNum = fieldName.match(/Day(\d)/)[1];
-                    const durationFieldToUpdate = `durationDay${dayNum}Ms`;
-                    const newStartTime = fieldName.includes("startTime") ? firestoreTimestamp : projectData[`startTimeDay${dayNum}`];
-                    const newFinishTime = fieldName.includes("finishTime") ? firestoreTimestamp : projectData[`finishTimeDay${dayNum}`];
-                    const newDuration = this.methods.calculateDurationMs.call(this, newStartTime, newFinishTime);
+                        const projectData = doc.data();
+                        let firestoreTimestamp = null;
+                        const dayMatch = fieldName.match(/Day(\d)/);
 
-                    await projectRef.update({
-                        [fieldName]: firestoreTimestamp,
-                        [durationFieldToUpdate]: newDuration,
-                        lastModifiedTimestamp: firebase.firestore.FieldValue.serverTimestamp()
+                        if (!dayMatch) {
+                            throw new Error("Invalid field name for time update.");
+                        }
+
+                        const dayNum = dayMatch[1];
+                        const startFieldForDay = `startTimeDay${dayNum}`;
+                        const finishFieldForDay = `finishTimeDay${dayNum}`;
+
+                        if (newValue) {
+                            const [hours, minutes] = newValue.split(':').map(Number);
+                            if (!isNaN(hours) && !isNaN(minutes)) {
+                                const baseDate = projectData[startFieldForDay]?.toDate() ||
+                                                 projectData[finishFieldForDay]?.toDate() ||
+                                                 projectData.creationTimestamp?.toDate() ||
+                                                 new Date();
+
+                                const year = baseDate.getFullYear();
+                                const month = String(baseDate.getMonth() + 1).padStart(2, '0');
+                                const day = String(baseDate.getDate()).padStart(2, '0');
+                                const time = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00`;
+                                const isoStringWithTimezone = `${year}-${month}-${day}T${time}+08:00`;
+                                firestoreTimestamp = firebase.firestore.Timestamp.fromDate(new Date(isoStringWithTimezone));
+                            }
+                        }
+
+                        let newStartTime, newFinishTime;
+
+                        if (fieldName.includes("startTime")) {
+                            newStartTime = firestoreTimestamp;
+                            newFinishTime = projectData[finishFieldForDay];
+                        } else {
+                            newStartTime = projectData[startFieldForDay];
+                            newFinishTime = firestoreTimestamp;
+                        }
+                        
+                        const durationFieldToUpdate = `durationDay${dayNum}Ms`;
+                        const newDuration = this.methods.calculateDurationMs.call(this, newStartTime, newFinishTime);
+                        
+                        transaction.update(projectRef, {
+                            [fieldName]: firestoreTimestamp,
+                            [durationFieldToUpdate]: newDuration,
+                            lastModifiedTimestamp: firebase.firestore.FieldValue.serverTimestamp()
+                        });
                     });
 
                 } catch (error) {
@@ -546,7 +687,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     this.methods.hideLoading.call(this);
                 }
             },
-
+            
             async updateProjectState(projectId, action) {
                 this.methods.showLoading.call(this, "Updating project state...");
                 const projectRef = this.db.collection("projects").doc(projectId);
@@ -592,15 +733,29 @@ document.addEventListener('DOMContentLoaded', () => {
             },
 
 
-            // --- UI RENDERING ---
-
             refreshAllViews() {
                 try {
                     this.methods.renderProjects.call(this);
+                    this.methods.updatePaginationUI.call(this);
                 } catch (error) {
                     console.error("Error during refreshAllViews:", error);
                     if (this.elements.projectTableBody) this.elements.projectTableBody.innerHTML = `<tr><td colspan="${this.config.NUM_TABLE_COLUMNS}" style="color:red;text-align:center;">Error loading projects.</td></tr>`;
                 }
+                 this.methods.hideLoading.call(this);
+            },
+            
+            updatePaginationUI() {
+                if (!this.elements.paginationControls || this.elements.paginationControls.style.display === 'none') {
+                    return;
+                }
+                const { currentPage, totalPages } = this.state.pagination;
+                if (totalPages > 0) {
+                    this.elements.pageInfo.textContent = `Page ${currentPage} of ${totalPages}`;
+                } else {
+                    this.elements.pageInfo.textContent = "No projects found";
+                }
+                this.elements.prevPageBtn.disabled = currentPage <= 1;
+                this.elements.nextPageBtn.disabled = currentPage >= totalPages;
             },
             
             renderProjects() {
@@ -622,6 +777,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
 
                 let currentBaseProjectNameHeader = null, currentFixCategoryHeader = null;
+
+                 if (sortedProjects.length === 0) {
+                    const row = this.elements.projectTableBody.insertRow();
+                    row.innerHTML = `<td colspan="${this.config.NUM_TABLE_COLUMNS}" style="text-align:center; padding: 20px;">No projects to display for the current filter or page.</td>`;
+                    return;
+                }
 
                 sortedProjects.forEach(project => {
                     if (!project?.id || !project.baseProjectName || !project.fixCategory) return;
@@ -675,6 +836,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     statusCell.innerHTML = `<span class="status status-${(project.status || "unknown").toLowerCase()}">${(project.status || "Unknown").replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').trim()}</span>`;
 
                     const formatTime = (ts) => ts?.toDate ? ts.toDate().toTimeString().slice(0, 5) : "";
+                    
                     const createTimeInput = (timeValue, fieldName) => {
                         const cell = row.insertCell();
                         const input = document.createElement('input');
@@ -684,17 +846,43 @@ document.addEventListener('DOMContentLoaded', () => {
                         input.onchange = (e) => this.methods.updateTimeField.call(this, project.id, fieldName, e.target.value);
                         cell.appendChild(input);
                     };
+
+                    const createBreakSelect = (day, currentProject) => {
+                        const cell = row.insertCell();
+                        cell.className = "break-cell";
+                        const select = document.createElement('select');
+                        select.className = 'break-select';
+                        select.disabled = currentProject.status === "Reassigned_TechAbsent";
+                        select.innerHTML = `<option value="0">No Break</option><option value="15">15m</option><option value="60">1h</option><option value="75">1h15m</option><option value="90">1h30m</option>`;
+                        
+                        select.value = currentProject[`breakDurationMinutesDay${day}`] || 0;
+                    
+                        select.onchange = (e) => this.db.collection("projects").doc(currentProject.id).update({
+                            [`breakDurationMinutesDay${day}`]: parseInt(e.target.value, 10),
+                            lastModifiedTimestamp: firebase.firestore.FieldValue.serverTimestamp()
+                        });
+                        cell.appendChild(select);
+                    };
+                    
                     createTimeInput(project.startTimeDay1, 'startTimeDay1');
                     createTimeInput(project.finishTimeDay1, 'finishTimeDay1');
+                    createBreakSelect(1, project); 
+
                     createTimeInput(project.startTimeDay2, 'startTimeDay2');
                     createTimeInput(project.finishTimeDay2, 'finishTimeDay2');
+                    createBreakSelect(2, project);
+
                     createTimeInput(project.startTimeDay3, 'startTimeDay3');
                     createTimeInput(project.finishTimeDay3, 'finishTimeDay3');
-
+                    createBreakSelect(3, project);
+                    
                     const totalDurationMs = (project.durationDay1Ms || 0) + (project.durationDay2Ms || 0) + (project.durationDay3Ms || 0);
-                    const breakMs = (project.breakDurationMinutes || 0) * 60000;
+                    const totalBreakMs = ((project.breakDurationMinutesDay1 || 0) +
+                                         (project.breakDurationMinutesDay2 || 0) +
+                                         (project.breakDurationMinutesDay3 || 0)) * 60000;
                     const additionalMs = (project.additionalMinutesManual || 0) * 60000;
-                    const finalAdjustedDurationMs = Math.max(0, totalDurationMs - breakMs) + additionalMs;
+                    const finalAdjustedDurationMs = Math.max(0, totalDurationMs - totalBreakMs) + additionalMs;
+                    
                     const totalDurationCell = row.insertCell();
                     totalDurationCell.textContent = this.methods.formatMillisToMinutes.call(this, finalAdjustedDurationMs);
                     totalDurationCell.className = 'total-duration-column';
@@ -710,14 +898,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     const actionsCell = row.insertCell();
                     const actionButtonsDiv = document.createElement('div');
                     actionButtonsDiv.className = 'action-buttons-container';
-
-                    const breakSelect = document.createElement('select');
-                    breakSelect.className = 'break-select';
-                    breakSelect.disabled = project.status === "Reassigned_TechAbsent";
-                    breakSelect.innerHTML = `<option value="0">No Break</option><option value="15">15m Break</option><option value="60">1h Break</option><option value="75">1h15m Break</option><option value="90">1h30m Break</option>`;
-                    breakSelect.value = project.breakDurationMinutes || 0;
-                    breakSelect.onchange = (e) => this.db.collection("projects").doc(project.id).update({ breakDurationMinutes: parseInt(e.target.value, 10), lastModifiedTimestamp: firebase.firestore.FieldValue.serverTimestamp() });
-                    actionButtonsDiv.appendChild(breakSelect);
                     
                     const createActionButton = (text, className, disabled, action) => {
                         const button = document.createElement('button');
@@ -743,14 +923,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     actionsCell.appendChild(actionButtonsDiv);
                 });
             },
-
-            // --- ALL OTHER HELPER AND LOGIC FUNCTIONS ---
-            
-            async renderTLDashboard() { /* Full refactored code... */ },
-            async getManageableBatches() { /* Full refactored code... */ },
-            async releaseBatchToNextFix(batchId, currentFix, nextFix) { /* Full refactored code... */ },
-            
-            // --- UTILITY METHODS ---
             
             showLoading(message = "Loading...") { if (this.elements.loadingOverlay) { this.elements.loadingOverlay.querySelector('p').textContent = message; this.elements.loadingOverlay.style.display = 'flex'; } },
             hideLoading() { if (this.elements.loadingOverlay) { this.elements.loadingOverlay.style.display = 'none'; } },
@@ -800,7 +972,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             if (!batches[task.batchId]) batches[task.batchId] = { batchId: task.batchId, baseProjectName: task.baseProjectName || "N/A", tasksByFix: {} };
                             if (task.fixCategory) {
                                 if (!batches[task.batchId].tasksByFix[task.fixCategory]) batches[task.batchId].tasksByFix[task.fixCategory] = [];
-                                batches[task.batchId].tasksByFix[task.fixCategory].push(task);
+                                batches[task.batchId].tasksByFix[task.fixCategory].push({id: doc.id, ...task});
                             }
                         }
                     });
@@ -860,15 +1032,33 @@ document.addEventListener('DOMContentLoaded', () => {
                             }
                         }
                     });
+                    
+                    const addAreaBtn = document.createElement('button');
+                    addAreaBtn.textContent = 'Add Extra Area';
+                    addAreaBtn.className = 'btn btn-success';
+                    addAreaBtn.style.marginLeft = '10px';
+                    addAreaBtn.disabled = stagesPresent.length === 0;
+                    addAreaBtn.onclick = () => this.methods.handleAddExtraArea.call(this, batch.batchId, batch.baseProjectName);
+                    releaseActionsDiv.appendChild(addAreaBtn);
+
                     batchItemDiv.appendChild(releaseActionsDiv);
+
 
                     const deleteActionsDiv = document.createElement('div');
                     deleteActionsDiv.className = 'dashboard-batch-actions-delete';
-                     if (batch.tasksByFix) {
+                    if (batch.tasksByFix && stagesPresent.length > 0) {
+                        const highestStagePresent = stagesPresent[stagesPresent.length - 1];
+
                         stagesPresent.forEach(fixCat => {
                             const btn = document.createElement('button');
                             btn.textContent = `Delete ${fixCat} Tasks`;
                             btn.className = 'btn btn-danger';
+                            
+                            if (fixCat !== highestStagePresent) {
+                                btn.disabled = true;
+                                btn.title = `You must first delete the '${highestStagePresent}' tasks to enable this.`;
+                            }
+
                             btn.onclick = () => {
                                 if (confirm(`Are you sure you want to delete all ${fixCat} tasks for project '${batch.baseProjectName}'? This is IRREVERSIBLE.`)) {
                                     this.methods.deleteSpecificFixTasksForBatch.call(this, batch.batchId, fixCat);
@@ -878,7 +1068,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         });
                     }
                     batchItemDiv.appendChild(deleteActionsDiv);
-
                     const deleteAllContainer = document.createElement('div');
                     deleteAllContainer.style.marginTop = '15px';
                     deleteAllContainer.style.borderTop = '1px solid #cc0000';
@@ -927,6 +1116,96 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             },
 
+            async handleAddExtraArea(batchId, baseProjectName) {
+                this.methods.showLoading.call(this, 'Analyzing project...');
+                try {
+                    const projectTasksSnapshot = await this.db.collection("projects")
+                        .where("batchId", "==", batchId)
+                        .get();
+
+                    if (projectTasksSnapshot.empty) {
+                        throw new Error("Could not find any tasks for this project.");
+                    }
+
+                    const allTasks = [];
+                    projectTasksSnapshot.forEach(doc => allTasks.push(doc.data()));
+
+                    const fixOrder = this.config.FIX_CATEGORIES.ORDER;
+                    let latestFixCategory = allTasks.reduce((latest, task) => {
+                        const currentIndex = fixOrder.indexOf(task.fixCategory);
+                        const latestIndex = fixOrder.indexOf(latest);
+                        return currentIndex > latestIndex ? task.fixCategory : latest;
+                    }, 'Fix1');
+
+                    const tasksInLatestFix = allTasks.filter(task => task.fixCategory === latestFixCategory);
+                    
+                    let lastTask, lastAreaNumber = 0;
+                    if(tasksInLatestFix.length > 0){
+                        lastTask = tasksInLatestFix.reduce((latest, task) => {
+                             const currentNum = parseInt(task.areaTask.replace('Area', ''), 10) || 0;
+                             const latestNum = parseInt(latest.areaTask.replace('Area', ''), 10) || 0;
+                             return currentNum > latestNum ? task : latest;
+                        });
+                        lastAreaNumber = parseInt(lastTask.areaTask.replace('Area', ''), 10) || 0;
+                    } else {
+                        lastTask = allTasks[0];
+                    }
+
+                    const numToAdd = parseInt(prompt(`Adding extra areas to "${baseProjectName}" - ${latestFixCategory}.\nLast known area number is ${lastAreaNumber}.\n\nHow many extra areas do you want to add?`), 10);
+
+                    if (isNaN(numToAdd) || numToAdd < 1) {
+                        if (numToAdd !== null) alert("Invalid number. Please enter a positive number.");
+                        return;
+                    }
+
+                    this.methods.showLoading.call(this, `Adding ${numToAdd} extra area(s)...`);
+
+                    const firestoreBatch = this.db.batch();
+                    const serverTimestamp = firebase.firestore.FieldValue.serverTimestamp();
+
+                    for (let i = 1; i <= numToAdd; i++) {
+                        const newAreaNumber = lastAreaNumber + i;
+                        const newAreaTask = `Area${String(newAreaNumber).padStart(2, '0')}`;
+                        
+                        const newTaskData = {
+                            ...lastTask,
+                            fixCategory: latestFixCategory, 
+                            areaTask: newAreaTask,
+                            assignedTo: "",
+                            techNotes: "",
+                            status: "Available",
+                            startTimeDay1: null, finishTimeDay1: null, durationDay1Ms: null,
+                            startTimeDay2: null, finishTimeDay2: null, durationDay2Ms: null,
+                            startTimeDay3: null, finishTimeDay3: null, durationDay3Ms: null,
+                            releasedToNextStage: false,
+                            isReassigned: false,
+                            originalProjectId: null,
+                            breakDurationMinutesDay1: 0,
+                            breakDurationMinutesDay2: 0,
+                            breakDurationMinutesDay3: 0,
+                            additionalMinutesManual: 0,
+                            creationTimestamp: serverTimestamp,
+                            lastModifiedTimestamp: serverTimestamp
+                        };
+
+                        const newDocRef = this.db.collection("projects").doc();
+                        firestoreBatch.set(newDocRef, newTaskData);
+                    }
+
+                    await firestoreBatch.commit();
+                    alert(`${numToAdd} extra area(s) added successfully to ${latestFixCategory}!`);
+                    
+                    await this.methods.initializeFirebaseAndLoadData.call(this);
+                    await this.methods.renderTLDashboard.call(this);
+
+                } catch (error) {
+                    console.error("Error adding extra area:", error);
+                    alert("Error adding extra area: " + error.message);
+                } finally {
+                    this.methods.hideLoading.call(this);
+                }
+            },
+
             async handleDeleteEntireProject(batchId, baseProjectName) {
                 const confirmationText = 'confirm';
                 const userInput = prompt(`This action is irreversible and will delete ALL tasks (Fix1-Fix6) associated with the project "${baseProjectName}".\n\nTo proceed, please type "${confirmationText}" in the box below.`);
@@ -966,7 +1245,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             },
 
-            async releaseBatchToNextFix(batchId, currentFixCategory, nextFixCategory) {
+          async releaseBatchToNextFix(batchId, currentFixCategory, nextFixCategory) {
                 this.methods.showLoading.call(this, `Releasing ${currentFixCategory} tasks...`);
                 try {
                     const snapshot = await this.db.collection("projects").where("batchId", "==", batchId).where("fixCategory", "==", currentFixCategory).where("releasedToNextStage", "==", false).get();
@@ -978,15 +1257,21 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (task.status === "Reassigned_TechAbsent") continue;
 
                         const newNextFixTask = { ...task,
-                        fixCategory: nextFixCategory, status: "Available",
-                        techNotes: "", // <-- Add this to clear notes
-                        breakDurationMinutes: 0, // <-- Add this to reset break time
-                        additionalMinutesManual: 0, // <-- Add this to reset additional time
-                        startTimeDay1: null, finishTimeDay1: null, durationDay1Ms: null,
-                        startTimeDay2: null, finishTimeDay2: null, durationDay2Ms: null,
-                        startTimeDay3: null, finishTimeDay3: null, durationDay3Ms: null,
-                        releasedToNextStage: false, lastModifiedTimestamp: serverTimestamp,
-                        originalProjectId: task.id,
+                            fixCategory: nextFixCategory,
+                            status: "Available",
+                            techNotes: "", 
+                            additionalMinutesManual: 0,
+                            breakDurationMinutesDay1: 0,
+                            breakDurationMinutesDay2: 0,
+                            breakDurationMinutesDay3: 0,
+                            startTimeDay1: null, finishTimeDay1: null, durationDay1Ms: null,
+                            startTimeDay2: null, finishTimeDay2: null, durationDay2Ms: null,
+                            startTimeDay3: null, finishTimeDay3: null, durationDay3Ms: null,
+                            releasedToNextStage: false,
+                            // This line ensures the highlight is removed for the next stage.
+                            isReassigned: false, 
+                            lastModifiedTimestamp: serverTimestamp,
+                            originalProjectId: task.id,
                         };
                         delete newNextFixTask.id;
                         const newDocRef = this.db.collection("projects").doc();
@@ -995,7 +1280,12 @@ document.addEventListener('DOMContentLoaded', () => {
                         firestoreBatch.update(doc.ref, { releasedToNextStage: true, lastModifiedTimestamp: serverTimestamp });
                     }
                     await firestoreBatch.commit();
+                    
+                    alert(`Release Successful! Tasks from ${currentFixCategory} have been moved to ${nextFixCategory}. The dashboard will now refresh.`);
+
                     this.methods.initializeFirebaseAndLoadData.call(this);
+                    await this.methods.renderTLDashboard.call(this);
+
                 } catch (error) {
                     console.error("Error releasing batch:", error);
                     alert("Error releasing batch: " + error.message);
@@ -1003,16 +1293,48 @@ document.addEventListener('DOMContentLoaded', () => {
                     this.methods.hideLoading.call(this);
                 }
             },
-
+            
             async deleteSpecificFixTasksForBatch(batchId, fixCategory) {
                 this.methods.showLoading.call(this, `Deleting ${fixCategory} tasks...`);
                 try {
+                    const firestoreBatch = this.db.batch();
+                    const serverTimestamp = firebase.firestore.FieldValue.serverTimestamp();
+
+                    // --- START MODIFICATION: Rollback Logic ---
+                    
+                    // Find the previous fix category to roll it back
+                    const fixOrder = this.config.FIX_CATEGORIES.ORDER;
+                    const currentFixIndex = fixOrder.indexOf(fixCategory);
+                    
+                    if (currentFixIndex > 0) {
+                        const previousFixCategory = fixOrder[currentFixIndex - 1];
+                        
+                        // Get all tasks from the previous stage to mark them as "not released"
+                        const previousStageSnapshot = await this.db.collection("projects")
+                            .where("batchId", "==", batchId)
+                            .where("fixCategory", "==", previousFixCategory)
+                            .get();
+
+                        previousStageSnapshot.forEach(doc => {
+                            firestoreBatch.update(doc.ref, {
+                                releasedToNextStage: false,
+                                lastModifiedTimestamp: serverTimestamp
+                            });
+                        });
+                    }
+                    // --- END MODIFICATION ---
+
+                    // Original deletion logic
                     const snapshot = await this.db.collection("projects").where("batchId", "==", batchId).where("fixCategory", "==", fixCategory).get();
-                    const batch = this.db.batch();
-                    snapshot.forEach(doc => batch.delete(doc.ref));
-                    await batch.commit();
+                    snapshot.forEach(doc => firestoreBatch.delete(doc.ref));
+                    
+                    // Commit both the rollback and the deletion as a single atomic operation
+                    await firestoreBatch.commit();
+                    
+                    // Refresh the UI
                     this.methods.initializeFirebaseAndLoadData.call(this);
                     this.methods.renderTLDashboard.call(this);
+
                 } catch (error) {
                     console.error(`Error deleting tasks:`, error);
                     alert("Error deleting tasks: " + error.message);
@@ -1021,20 +1343,24 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             },
 
-            async resetProjectTask(projectId) {
+           async resetProjectTask(projectId) {
                 this.methods.showLoading.call(this, "Resetting task...");
                 const projectRef = this.db.collection("projects").doc(projectId);
                 try {
                     const doc = await projectRef.get();
                     if (!doc.exists) throw new Error("Project not found.");
                     
-                    const resetNotes = `Task Reset by TL on ${new Date().toLocaleDateString('en-US')}. Original Notes: "${doc.data().techNotes || ""}"`;
                     await projectRef.update({
-                        status: "Available", assignedTo: "", techNotes: resetNotes,
+                        status: "Available",
+                        assignedTo: "",
+                        techNotes: "",
                         startTimeDay1: null, finishTimeDay1: null, durationDay1Ms: null,
                         startTimeDay2: null, finishTimeDay2: null, durationDay2Ms: null,
                         startTimeDay3: null, finishTimeDay3: null, durationDay3Ms: null,
-                        breakDurationMinutes: 0, additionalMinutesManual: 0,
+                        breakDurationMinutesDay1: 0,
+                        breakDurationMinutesDay2: 0,
+                        breakDurationMinutesDay3: 0,
+                        additionalMinutesManual: 0,
                         lastModifiedTimestamp: firebase.firestore.FieldValue.serverTimestamp()
                     });
                 } catch (error) {
@@ -1107,12 +1433,17 @@ document.addEventListener('DOMContentLoaded', () => {
                     const newProjectData = { ...projectToReassign,
                         assignedTo: newTechId.trim(), status: "Available",
                         techNotes: `Reassigned from ${projectToReassign.assignedTo || "N/A"}. Original ID: ${projectToReassign.id}`,
-                        creationTimestamp: serverTimestamp, lastModifiedTimestamp: serverTimestamp,
+                        creationTimestamp: serverTimestamp, 
+                        lastModifiedTimestamp: serverTimestamp,
                         isReassigned: true, originalProjectId: projectToReassign.id,
                         startTimeDay1: null, finishTimeDay1: null, durationDay1Ms: null,
                         startTimeDay2: null, finishTimeDay2: null, durationDay2Ms: null,
                         startTimeDay3: null, finishTimeDay3: null, durationDay3Ms: null,
-                        releasedToNextStage: false, breakDurationMinutes: 0, additionalMinutesManual: 0,
+                        releasedToNextStage: false, 
+                        breakDurationMinutesDay1: 0,
+                        breakDurationMinutesDay2: 0,
+                        breakDurationMinutesDay3: 0,
+                        additionalMinutesManual: 0,
                     };
                     delete newProjectData.id;
                     
@@ -1168,13 +1499,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             },
 
-            // --- START: NEW METHOD ---
             handleClearData() {
                 if (confirm("Are you sure you want to clear all locally stored application data? This will reset your filters and view preferences but will not affect any data on the server.")) {
                     try {
                         localStorage.removeItem('currentSelectedBatchId');
                         localStorage.removeItem('currentSelectedMonth');
                         localStorage.removeItem('projectTrackerGroupVisibility');
+                        localStorage.removeItem('currentSortBy');
                         alert("Local application data has been cleared. The page will now reload.");
                         location.reload();
                     } catch (e) {
@@ -1183,7 +1514,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
             },
-            // --- END: NEW METHOD ---
 
             async generateTlSummaryData() {
                 if (!this.elements.tlSummaryContent) return;
@@ -1196,7 +1526,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     snapshot.forEach(doc => {
                         const p = doc.data();
                         const totalWorkMs = (p.durationDay1Ms || 0) + (p.durationDay2Ms || 0) + (p.durationDay3Ms || 0);
-                        const breakMs = (p.breakDurationMinutes || 0) * 60000;
+                        
+                        const breakMs = ((p.breakDurationMinutesDay1 || 0) +
+                                         (p.breakDurationMinutesDay2 || 0) +
+                                         (p.breakDurationMinutesDay3 || 0)) * 60000;
+
                         const additionalMs = (p.additionalMinutesManual || 0) * 60000;
                         const adjustedNetMs = Math.max(0, totalWorkMs - breakMs) + additionalMs;
                         if (adjustedNetMs <= 0) return;
@@ -1225,11 +1559,10 @@ document.addEventListener('DOMContentLoaded', () => {
                                 summaryHtml += `<li style="background-color: ${bgColor}; padding: 8px; margin-bottom: 5px; border-radius: 4px;"><strong>${projName} - ${fixCat}:</strong> ${totalMinutes} minutes (${hoursDecimal} hours)</li>`;
                             });
                         });
-                        summaryHtml += "</ul>";
                     }
-                    this.elements.tlSummaryContent.innerHTML = summaryHtml;
+                    this.elements.tlSummaryContent.innerHTML = summaryHtml + "</ul>";
                 } catch (error) {
-                    console.error("Error generating TL Summary:", error);
+                    console.error("Error generating TL summary:", error);
                     this.elements.tlSummaryContent.innerHTML = `<p style="color:red;">Error generating summary: ${error.message}</p>`;
                 } finally {
                     this.methods.hideLoading.call(this);
@@ -1238,6 +1571,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    // --- APPLICATION START ---
+    // --- KICK OFF THE APPLICATION ---
     ProjectTrackerApp.init();
+
 });
