@@ -7,12 +7,14 @@
  * global variables, improves performance, and ensures correct
  * timezone handling.
  *
- * @version 2.7.2
+ * @version 2.9.0
  * @author Gemini AI Refactor
  * @changeLog
+ * - MODIFIED: Implemented group-level locking. In Project Settings, users can now lock/unlock an entire Fix stage (e.g., "Lock All Fix1").
+ * - MODIFIED: Added status icons (🔒, 🔓, 🔐) to the main table's Fix group headers to show if a group is fully locked, unlocked, or partially locked.
+ * - MODIFIED: Ensured that when tasks are released to a new Fix stage, they are always created in an unlocked state, regardless of the original task's status.
+ * - REMOVED: The per-task "Reset" and "Lock" functionality from the dashboard has been removed in favor of the group-level controls.
  * - Integrated new login UI. Script now handles showing/hiding the login screen and the main dashboard.
- * - Added DOM references for new UI elements (`auth-wrapper`, `body`, `mainContainer`).
- * - Updated auth state handlers (`handleAuthorizedUser`, `handleSignedOutUser`) to toggle view visibility.
  */
 document.addEventListener('DOMContentLoaded', () => {
 
@@ -155,11 +157,9 @@ document.addEventListener('DOMContentLoaded', () => {
             setupAuthRelatedDOMReferences() {
                 this.elements = {
                     ...this.elements,
-                    // --- MODIFICATION: Added elements for new UI ---
                     body: document.body,
                     authWrapper: document.getElementById('auth-wrapper'),
                     mainContainer: document.querySelector('.container'),
-                    // --- End Modification ---
                     signInBtn: document.getElementById('signInBtn'),
                     signOutBtn: document.getElementById('signOutBtn'),
                     clearDataBtn: document.getElementById('clearDataBtn'),
@@ -310,18 +310,15 @@ document.addEventListener('DOMContentLoaded', () => {
             },
 
             handleAuthorizedUser(user) {
-                // --- MODIFICATION: Added logic to show the app and hide the login UI ---
                 this.elements.body.classList.remove('login-view-active');
                 this.elements.authWrapper.style.display = 'none';
                 this.elements.mainContainer.style.display = 'block';
-                // --- End Modification ---
 
                 this.elements.userNameP.textContent = user.displayName || "N/A";
                 this.elements.userEmailP.textContent = user.email || "N/A";
                 if (this.elements.userPhotoImg) this.elements.userPhotoImg.src = user.photoURL || 'default-user.png';
 
                 this.elements.userInfoDisplayDiv.style.display = 'flex';
-                // The main signInBtn is inside the auth-wrapper which is now hidden, so no need to hide it separately.
                 if (this.elements.clearDataBtn) this.elements.clearDataBtn.style.display = 'none';
                 this.elements.appContentDiv.style.display = 'block';
                 this.elements.loadingAuthMessageDiv.style.display = 'none';
@@ -334,18 +331,15 @@ document.addEventListener('DOMContentLoaded', () => {
             },
 
             handleSignedOutUser() {
-                // --- MODIFICATION: Added logic to show the login UI and hide the app ---
                 this.elements.body.classList.add('login-view-active');
                 this.elements.authWrapper.style.display = 'block';
                 this.elements.mainContainer.style.display = 'none';
-                // --- End Modification ---
 
                 this.elements.userInfoDisplayDiv.style.display = 'none';
-                // The main signInBtn is now inside auth-wrapper, which is shown by the lines above.
                 if (this.elements.clearDataBtn) this.elements.clearDataBtn.style.display = 'block';
                 this.elements.appContentDiv.style.display = 'none';
                 this.elements.loadingAuthMessageDiv.innerHTML = "<p>Please sign in to access the Project Tracker.</p>";
-                this.elements.loadingAuthMessageDiv.style.display = 'block'; // This is hidden by body class, but good practice
+                this.elements.loadingAuthMessageDiv.style.display = 'block';
                 if (this.elements.openSettingsBtn) this.elements.openSettingsBtn.style.display = 'none';
 
                 if (this.firestoreListenerUnsubscribe) {
@@ -360,7 +354,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 provider.addScope('email');
 
                 if (this.elements.signInBtn) {
-                    // This now correctly refers to the new button in the login card since it has the ID 'signInBtn'
                     this.elements.signInBtn.onclick = () => {
                         this.methods.showLoading.call(this, "Signing in...");
                         this.auth.signInWithPopup(provider).catch((error) => {
@@ -479,6 +472,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         breakDurationMinutesDay2: 0,
                         breakDurationMinutesDay3: 0,
                         additionalMinutesManual: 0,
+                        isLocked: p.isLocked || false, // Ensure isLocked defaults to false
                         ...p
                     }));
                     this.methods.refreshAllViews.call(this);
@@ -595,6 +589,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             breakDurationMinutesDay2: 0,
                             breakDurationMinutesDay3: 0,
                             additionalMinutesManual: 0,
+                            isLocked: false,
                         };
                         const newProjectRef = this.db.collection("projects").doc();
                         batch.set(newProjectRef, projectData);
@@ -632,6 +627,12 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
 
                         const projectData = doc.data();
+                        if (projectData.isLocked) {
+                            alert("This task is locked. Please unlock it in Project Settings to make changes.");
+                            this.methods.refreshAllViews.call(this);
+                            return;
+                        }
+                        
                         let firestoreTimestamp = null;
                         const dayMatch = fieldName.match(/Day(\d)/);
 
@@ -646,13 +647,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (newValue) {
                             const [hours, minutes] = newValue.split(':').map(Number);
                             if (isNaN(hours) || isNaN(minutes)) {
-                                // Don't proceed if time is invalid
                                 this.methods.hideLoading.call(this);
                                 return;
                             }
-
-                            // --- MODIFICATION START ---
-                            // Determine the base date for the prompt
                             const existingTimestamp = projectData[fieldName]?.toDate();
                             const fallbackTimestamp = projectData[startFieldForDay]?.toDate() ||
                                                     projectData[finishFieldForDay]?.toDate() ||
@@ -668,12 +665,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
                             const dateInput = prompt(`Please confirm or enter the date for this time entry (YYYY-MM-DD):`, defaultDateString);
 
-                            if (!dateInput) { // User cancelled the prompt
+                            if (!dateInput) { 
                                 console.log("Time update cancelled by user.");
-                                // Re-render to revert optimistic UI change from input field
                                 this.methods.refreshAllViews.call(this);
                                 this.methods.hideLoading.call(this);
-                                return; // Abort the transaction
+                                return;
                             }
 
                             const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
@@ -684,7 +680,6 @@ document.addEventListener('DOMContentLoaded', () => {
                                 return;
                             }
                             
-                            // Construct the final date object from user input
                             const finalDate = new Date(`${dateInput}T${newValue}:00`);
                             if (isNaN(finalDate.getTime())) {
                                 alert("Invalid date or time provided. Aborting update.");
@@ -693,9 +688,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 return;
                             }
                             
-                            // Convert to Firestore Timestamp
                             firestoreTimestamp = firebase.firestore.Timestamp.fromDate(finalDate);
-                            // --- MODIFICATION END ---
                         }
 
                         let newStartTime, newFinishTime;
@@ -721,11 +714,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 } catch (error) {
                     console.error(`Error updating ${fieldName}:`, error);
                     alert(`Error updating time: ${error.message}`);
-                    // Ensure view is refreshed on error to discard optimistic change
                     this.methods.refreshAllViews.call(this);
-                } finally {
-                    // Loading is hidden by the refreshAllViews call that is part of the normal flow
-                    // this.methods.hideLoading.call(this);
                 }
             },
             
@@ -738,6 +727,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (!docSnap.exists) throw new Error("Project document not found.");
 
                     const project = docSnap.data();
+                    if (project.isLocked) {
+                        alert("This task is locked and cannot be updated. Please unlock it in Project Settings.");
+                        this.methods.hideLoading.call(this);
+                        return;
+                    }
+
                     const serverTimestamp = firebase.firestore.FieldValue.serverTimestamp();
                     let updates = { lastModifiedTimestamp: serverTimestamp };
 
@@ -817,6 +812,19 @@ document.addEventListener('DOMContentLoaded', () => {
                     return 0;
                 });
 
+                // NEW: Pre-calculate lock status for each group
+                const groupLockStatus = {};
+                sortedProjects.forEach(p => {
+                    const groupKey = `${p.baseProjectName}_${p.fixCategory}`;
+                    if (!groupLockStatus[groupKey]) {
+                        groupLockStatus[groupKey] = { locked: 0, total: 0 };
+                    }
+                    groupLockStatus[groupKey].total++;
+                    if (p.isLocked) {
+                        groupLockStatus[groupKey].locked++;
+                    }
+                });
+
                 let currentBaseProjectNameHeader = null, currentFixCategoryHeader = null;
 
                  if (sortedProjects.length === 0) {
@@ -843,9 +851,23 @@ document.addEventListener('DOMContentLoaded', () => {
                             this.state.groupVisibilityState[groupKey] = { isExpanded: true };
                         }
                         const isExpanded = this.state.groupVisibilityState[groupKey]?.isExpanded !== false;
+                        
+                        // NEW: Determine lock icon based on pre-calculated status
+                        const status = groupLockStatus[groupKey];
+                        let lockIcon = '';
+                        if (status && status.total > 0) {
+                            if (status.locked === status.total) {
+                                lockIcon = ' 🔒'; // All locked
+                            } else if (status.locked > 0) {
+                                lockIcon = ' 🔐'; // Partially locked
+                            } else {
+                                lockIcon = ' 🔓'; // All unlocked
+                            }
+                        }
+
                         const groupHeaderRow = this.elements.projectTableBody.insertRow();
                         groupHeaderRow.className = "fix-group-header";
-                        groupHeaderRow.innerHTML = `<td colspan="${this.config.NUM_TABLE_COLUMNS}">${currentFixCategoryHeader} <button class="btn btn-group-toggle">${isExpanded ? "−" : "+"}</button></td>`;
+                        groupHeaderRow.innerHTML = `<td colspan="${this.config.NUM_TABLE_COLUMNS}">${currentFixCategoryHeader}${lockIcon} <button class="btn btn-group-toggle">${isExpanded ? "−" : "+"}</button></td>`;
                         groupHeaderRow.onclick = () => {
                             this.state.groupVisibilityState[groupKey].isExpanded = !isExpanded;
                             this.methods.saveGroupVisibilityState.call(this);
@@ -858,6 +880,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const groupKey = `${currentBaseProjectNameHeader}_${project.fixCategory}`;
                     if (this.state.groupVisibilityState[groupKey]?.isExpanded === false) row.classList.add("hidden-group-row");
                     if (project.isReassigned) row.classList.add("reassigned-task-highlight");
+                    if (project.isLocked) row.classList.add("locked-task-highlight");
 
                     row.insertCell().textContent = project.fixCategory;
                     row.insertCell().textContent = project.baseProjectName;
@@ -867,7 +890,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const assignedToCell = row.insertCell();
                     const assignedToSelect = document.createElement('select');
                     assignedToSelect.className = 'assigned-to-select';
-                    assignedToSelect.disabled = project.status === "Reassigned_TechAbsent";
+                    assignedToSelect.disabled = project.status === "Reassigned_TechAbsent" || project.isLocked;
                     assignedToSelect.innerHTML = `<option value="">Select Tech ID</option>` + this.config.TECH_IDS.map(id => `<option value="${id}">${id}</option>`).join('');
                     assignedToSelect.value = project.assignedTo || "";
                     assignedToSelect.onchange = (e) => this.db.collection("projects").doc(project.id).update({ assignedTo: e.target.value, lastModifiedTimestamp: firebase.firestore.FieldValue.serverTimestamp() });
@@ -883,7 +906,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         const input = document.createElement('input');
                         input.type = 'time';
                         input.value = formatTime(timeValue);
-                        input.disabled = project.status === "Reassigned_TechAbsent";
+                        input.disabled = project.status === "Reassigned_TechAbsent" || project.isLocked;
                         input.onchange = (e) => this.methods.updateTimeField.call(this, project.id, fieldName, e.target.value);
                         cell.appendChild(input);
                     };
@@ -893,7 +916,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         cell.className = "break-cell";
                         const select = document.createElement('select');
                         select.className = 'break-select';
-                        select.disabled = currentProject.status === "Reassigned_TechAbsent";
+                        select.disabled = currentProject.status === "Reassigned_TechAbsent" || currentProject.isLocked;
                         select.innerHTML = `<option value="0">No Break</option><option value="15">15m</option><option value="60">1h</option><option value="75">1h15m</option><option value="90">1h30m</option>`;
                         
                         select.value = currentProject[`breakDurationMinutesDay${day}`] || 0;
@@ -932,7 +955,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const techNotesInput = document.createElement('textarea');
                     techNotesInput.value = project.techNotes || "";
                     techNotesInput.className = 'tech-notes-input';
-                    techNotesInput.disabled = project.status === "Reassigned_TechAbsent";
+                    techNotesInput.disabled = project.status === "Reassigned_TechAbsent" || project.isLocked;
                     techNotesInput.onchange = (e) => this.db.collection("projects").doc(project.id).update({ techNotes: e.target.value, lastModifiedTimestamp: firebase.firestore.FieldValue.serverTimestamp() });
                     techNotesCell.appendChild(techNotesInput);
 
@@ -944,7 +967,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         const button = document.createElement('button');
                         button.textContent = text;
                         button.className = `btn ${className}`;
-                        button.disabled = project.status === "Reassigned_TechAbsent" || disabled;
+                        button.disabled = project.status === "Reassigned_TechAbsent" || disabled || project.isLocked;
                         button.onclick = () => this.methods.updateProjectState.call(this, project.id, action);
                         return button;
                     };
@@ -1109,6 +1132,33 @@ document.addEventListener('DOMContentLoaded', () => {
                         });
                     }
                     batchItemDiv.appendChild(deleteActionsDiv);
+                    
+                    // NEW: Group Locking Controls
+                    const lockActionsDiv = document.createElement('div');
+                    lockActionsDiv.className = 'dashboard-batch-actions-lock';
+                    lockActionsDiv.innerHTML = '<strong>Locking Controls:</strong>';
+
+                    if (batch.tasksByFix) {
+                        stagesPresent.forEach(fixCat => {
+                            const tasksInFix = batch.tasksByFix[fixCat];
+                            const areAllLocked = tasksInFix.every(t => t.isLocked);
+                            const shouldLock = !areAllLocked;
+
+                            const btn = document.createElement('button');
+                            btn.textContent = `${shouldLock ? 'Lock All' : 'Unlock All'} ${fixCat}`;
+                            btn.className = `btn ${shouldLock ? 'btn-warning' : 'btn-secondary'} btn-small`;
+                            btn.onclick = () => {
+                                const action = shouldLock ? 'lock' : 'unlock';
+                                if (confirm(`Are you sure you want to ${action} all tasks in ${fixCat} for this project?`)) {
+                                    this.methods.toggleLockStateForFixGroup.call(this, batch.batchId, fixCat, shouldLock);
+                                }
+                            };
+                            lockActionsDiv.appendChild(btn);
+                        });
+                    }
+                    batchItemDiv.appendChild(lockActionsDiv);
+
+
                     const deleteAllContainer = document.createElement('div');
                     deleteAllContainer.style.marginTop = '15px';
                     deleteAllContainer.style.borderTop = '1px solid #cc0000';
@@ -1123,38 +1173,36 @@ document.addEventListener('DOMContentLoaded', () => {
                     deleteAllContainer.appendChild(deleteAllBtn);
                     batchItemDiv.appendChild(deleteAllContainer);
 
-                    const resetActionsDiv = document.createElement('div');
-                    resetActionsDiv.className = 'dashboard-batch-actions-reset';
-                    resetActionsDiv.style.marginTop = '10px';
-                    resetActionsDiv.innerHTML = '<strong>Manage Individual Tasks:</strong>';
-                    
-                    const taskResetContainer = document.createElement('div');
-                    taskResetContainer.className = 'task-reset-container';
-                    taskResetContainer.style.display = 'none';
-
-                    if (batch.tasksByFix) {
-                        stagesPresent.forEach(fixCat => {
-                            const btn = document.createElement('button');
-                            btn.textContent = `Manage ${fixCat}`;
-                            btn.className = 'btn btn-secondary btn-small';
-                            btn.onclick = () => {
-                                if (taskResetContainer.style.display === 'block' && taskResetContainer.dataset.activeFix === fixCat) {
-                                    taskResetContainer.style.display = 'none';
-                                    taskResetContainer.dataset.activeFix = '';
-                                } else {
-                                    taskResetContainer.dataset.activeFix = fixCat;
-                                    taskResetContainer.style.display = 'block';
-                                    this.methods.renderResettableTasksForBatchFix.call(this, taskResetContainer, batch.batchId, fixCat);
-                                }
-                            };
-                            resetActionsDiv.appendChild(btn);
-                        });
-                    }
-                    batchItemDiv.appendChild(resetActionsDiv);
-                    batchItemDiv.appendChild(taskResetContainer);
-
                     this.elements.tlDashboardContentElement.appendChild(batchItemDiv);
                 });
+            },
+
+            async toggleLockStateForFixGroup(batchId, fixCategory, shouldBeLocked) {
+                this.methods.showLoading.call(this, `${shouldBeLocked ? 'Locking' : 'Unlocking'} all ${fixCategory} tasks...`);
+                try {
+                    const snapshot = await this.db.collection("projects")
+                        .where("batchId", "==", batchId)
+                        .where("fixCategory", "==", fixCategory)
+                        .get();
+
+                    if (snapshot.empty) {
+                        throw new Error("No tasks found for this Fix category.");
+                    }
+
+                    const batch = this.db.batch();
+                    snapshot.forEach(doc => {
+                        batch.update(doc.ref, { isLocked: shouldBeLocked, lastModifiedTimestamp: firebase.firestore.FieldValue.serverTimestamp() });
+                    });
+                    await batch.commit();
+
+                    // Refresh the dashboard to show the new button state
+                    await this.methods.renderTLDashboard.call(this);
+                } catch (error) {
+                    console.error("Error toggling lock state:", error);
+                    alert("Error updating lock state: " + error.message);
+                } finally {
+                    this.methods.hideLoading.call(this);
+                }
             },
 
             async handleAddExtraArea(batchId, baseProjectName) {
@@ -1221,6 +1269,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             releasedToNextStage: false,
                             isReassigned: false,
                             originalProjectId: null,
+                            isLocked: false,
                             breakDurationMinutesDay1: 0,
                             breakDurationMinutesDay2: 0,
                             breakDurationMinutesDay3: 0,
@@ -1309,8 +1358,8 @@ document.addEventListener('DOMContentLoaded', () => {
                             startTimeDay2: null, finishTimeDay2: null, durationDay2Ms: null,
                             startTimeDay3: null, finishTimeDay3: null, durationDay3Ms: null,
                             releasedToNextStage: false,
-                            // This line ensures the highlight is removed for the next stage.
                             isReassigned: false, 
+                            isLocked: false, // CRUCIAL: Ensure new tasks are always created unlocked
                             lastModifiedTimestamp: serverTimestamp,
                             originalProjectId: task.id,
                         };
@@ -1340,17 +1389,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 try {
                     const firestoreBatch = this.db.batch();
                     const serverTimestamp = firebase.firestore.FieldValue.serverTimestamp();
-
-                    // --- START MODIFICATION: Rollback Logic ---
                     
-                    // Find the previous fix category to roll it back
                     const fixOrder = this.config.FIX_CATEGORIES.ORDER;
                     const currentFixIndex = fixOrder.indexOf(fixCategory);
                     
                     if (currentFixIndex > 0) {
                         const previousFixCategory = fixOrder[currentFixIndex - 1];
                         
-                        // Get all tasks from the previous stage to mark them as "not released"
                         const previousStageSnapshot = await this.db.collection("projects")
                             .where("batchId", "==", batchId)
                             .where("fixCategory", "==", previousFixCategory)
@@ -1363,16 +1408,12 @@ document.addEventListener('DOMContentLoaded', () => {
                             });
                         });
                     }
-                    // --- END MODIFICATION ---
 
-                    // Original deletion logic
                     const snapshot = await this.db.collection("projects").where("batchId", "==", batchId).where("fixCategory", "==", fixCategory).get();
                     snapshot.forEach(doc => firestoreBatch.delete(doc.ref));
                     
-                    // Commit both the rollback and the deletion as a single atomic operation
                     await firestoreBatch.commit();
                     
-                    // Refresh the UI
                     this.methods.initializeFirebaseAndLoadData.call(this);
                     this.methods.renderTLDashboard.call(this);
 
@@ -1384,85 +1425,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             },
 
-           async resetProjectTask(projectId) {
-                this.methods.showLoading.call(this, "Resetting task...");
-                const projectRef = this.db.collection("projects").doc(projectId);
-                try {
-                    const doc = await projectRef.get();
-                    if (!doc.exists) throw new Error("Project not found.");
-                    
-                    await projectRef.update({
-                        status: "Available",
-                        assignedTo: "",
-                        techNotes: "",
-                        startTimeDay1: null, finishTimeDay1: null, durationDay1Ms: null,
-                        startTimeDay2: null, finishTimeDay2: null, durationDay2Ms: null,
-                        startTimeDay3: null, finishTimeDay3: null, durationDay3Ms: null,
-                        breakDurationMinutesDay1: 0,
-                        breakDurationMinutesDay2: 0,
-                        breakDurationMinutesDay3: 0,
-                        additionalMinutesManual: 0,
-                        lastModifiedTimestamp: firebase.firestore.FieldValue.serverTimestamp()
-                    });
-                } catch (error) {
-                    console.error(`Error resetting project:`, error);
-                    alert("Error resetting task: " + error.message);
-                } finally {
-                    this.methods.hideLoading.call(this);
-                }
-            },
-
-           async renderResettableTasksForBatchFix(container, batchId, fixCategory) {
-                container.innerHTML = `<p>Loading tasks for ${fixCategory}...</p>`;
-                try {
-                    const snapshot = await this.db.collection("projects").where("batchId", "==", batchId).where("fixCategory", "==", fixCategory).orderBy("areaTask").get();
-                    if (snapshot.empty) {
-                        container.innerHTML = `<p>No tasks found for ${fixCategory}.</p>`;
-                        return;
-                    }
-                    container.innerHTML = '';
-                    const list = document.createElement('ul');
-                    list.className = 'resettable-tasks-list';
-                    snapshot.forEach(doc => {
-                        const project = { id: doc.id, ...doc.data() };
-                        const li = document.createElement('li');
-                        li.style.display = 'flex';
-                        li.style.justifyContent = 'space-between';
-                        li.style.alignItems = 'center';
-                        li.style.marginBottom = '8px';
-                        li.innerHTML = `<div><strong>${project.areaTask}</strong> - Status: ${project.status.replace(/([A-Z])/g, ' $1').trim()} - Assigned: ${project.assignedTo || 'N/A'}</div>`;
-                        
-                        const actionsDiv = document.createElement('div');
-
-                        const resetButton = document.createElement('button');
-                        resetButton.textContent = 'Reset Task';
-                        resetButton.className = 'btn btn-danger btn-small';
-                        resetButton.style.marginLeft = '10px';
-                        
-                        if (project.status === 'Available') {
-                            resetButton.disabled = true;
-                        }
-
-                        resetButton.onclick = async () => {
-                            if (confirm(`Are you sure you want to reset task '${project.areaTask}'? This will clear its progress and assigned technician.`)) {
-                                await this.methods.resetProjectTask.call(this, project.id);
-                                await this.methods.renderResettableTasksForBatchFix.call(this, container, batchId, fixCategory);
-                            }
-                        };
-                        actionsDiv.appendChild(resetButton);
-
-                        li.appendChild(actionsDiv);
-                        list.appendChild(li);
-                    });
-                    container.appendChild(list);
-                } catch (error) {
-                    console.error("Error rendering resettable tasks:", error);
-                    container.innerHTML = `<p style="color:red;">Error loading tasks: ${error.message}</p>`;
-                }
-            },
-
             async handleReassignment(projectToReassign) {
                 if (!projectToReassign || projectToReassign.status === "Reassigned_TechAbsent") return alert("Cannot re-assign this task.");
+                if (projectToReassign.isLocked) return alert("This task is locked. Please unlock its group in Project Settings before reassigning.");
+                
                 const newTechId = prompt(`Re-assigning task '${projectToReassign.areaTask}'. Enter NEW Tech ID:`, projectToReassign.assignedTo || "");
                 if (!newTechId) return;
 
@@ -1481,6 +1447,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         startTimeDay2: null, finishTimeDay2: null, durationDay2Ms: null,
                         startTimeDay3: null, finishTimeDay3: null, durationDay3Ms: null,
                         releasedToNextStage: false, 
+                        isLocked: false,
                         breakDurationMinutesDay1: 0,
                         breakDurationMinutesDay2: 0,
                         breakDurationMinutesDay3: 0,
