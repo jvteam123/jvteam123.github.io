@@ -620,7 +620,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             },
             
-            async updateTimeField(projectId, fieldName, newValue) {
+           async updateTimeField(projectId, fieldName, newValue) {
                 this.methods.showLoading.call(this, `Updating ${fieldName}...`);
                 const projectRef = this.db.collection("projects").doc(projectId);
 
@@ -645,19 +645,57 @@ document.addEventListener('DOMContentLoaded', () => {
 
                         if (newValue) {
                             const [hours, minutes] = newValue.split(':').map(Number);
-                            if (!isNaN(hours) && !isNaN(minutes)) {
-                                const baseDate = projectData[startFieldForDay]?.toDate() ||
-                                projectData[finishTimeDay]?.toDate() ||
-                                projectData.creationTimestamp?.toDate() || // Checked 3rd
-                                new Date();
-
-                                const year = baseDate.getFullYear();
-                                const month = String(baseDate.getMonth() + 1).padStart(2, '0');
-                                const day = String(baseDate.getDate()).padStart(2, '0');
-                                const time = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00`;
-                                const isoStringWithTimezone = `${year}-${month}-${day}T${time}+08:00`;
-                                firestoreTimestamp = firebase.firestore.Timestamp.fromDate(new Date(isoStringWithTimezone));
+                            if (isNaN(hours) || isNaN(minutes)) {
+                                // Don't proceed if time is invalid
+                                this.methods.hideLoading.call(this);
+                                return;
                             }
+
+                            // --- MODIFICATION START ---
+                            // Determine the base date for the prompt
+                            const existingTimestamp = projectData[fieldName]?.toDate();
+                            const fallbackTimestamp = projectData[startFieldForDay]?.toDate() ||
+                                                    projectData[finishFieldForDay]?.toDate() ||
+                                                    projectData.creationTimestamp?.toDate() ||
+                                                    new Date();
+
+                            const baseDate = existingTimestamp || fallbackTimestamp;
+                            
+                            const yyyy = baseDate.getFullYear();
+                            const mm = String(baseDate.getMonth() + 1).padStart(2, '0');
+                            const dd = String(baseDate.getDate()).padStart(2, '0');
+                            const defaultDateString = `${yyyy}-${mm}-${dd}`;
+
+                            const dateInput = prompt(`Please confirm or enter the date for this time entry (YYYY-MM-DD):`, defaultDateString);
+
+                            if (!dateInput) { // User cancelled the prompt
+                                console.log("Time update cancelled by user.");
+                                // Re-render to revert optimistic UI change from input field
+                                this.methods.refreshAllViews.call(this);
+                                this.methods.hideLoading.call(this);
+                                return; // Abort the transaction
+                            }
+
+                            const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+                            if (!dateRegex.test(dateInput)) {
+                                alert("Invalid date format. Please use YYYY-MM-DD. Aborting update.");
+                                this.methods.refreshAllViews.call(this);
+                                this.methods.hideLoading.call(this);
+                                return;
+                            }
+                            
+                            // Construct the final date object from user input
+                            const finalDate = new Date(`${dateInput}T${newValue}:00`);
+                            if (isNaN(finalDate.getTime())) {
+                                alert("Invalid date or time provided. Aborting update.");
+                                this.methods.refreshAllViews.call(this);
+                                this.methods.hideLoading.call(this);
+                                return;
+                            }
+                            
+                            // Convert to Firestore Timestamp
+                            firestoreTimestamp = firebase.firestore.Timestamp.fromDate(finalDate);
+                            // --- MODIFICATION END ---
                         }
 
                         let newStartTime, newFinishTime;
@@ -683,8 +721,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 } catch (error) {
                     console.error(`Error updating ${fieldName}:`, error);
                     alert(`Error updating time: ${error.message}`);
+                    // Ensure view is refreshed on error to discard optimistic change
+                    this.methods.refreshAllViews.call(this);
                 } finally {
-                    this.methods.hideLoading.call(this);
+                    // Loading is hidden by the refreshAllViews call that is part of the normal flow
+                    // this.methods.hideLoading.call(this);
                 }
             },
             
