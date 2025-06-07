@@ -646,10 +646,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (newValue) {
                             const [hours, minutes] = newValue.split(':').map(Number);
                             if (!isNaN(hours) && !isNaN(minutes)) {
-                                const baseDate = projectData[startFieldForDay]?.toDate() ||
-                                                 projectData[finishFieldForDay]?.toDate() ||
-                                                 projectData.creationTimestamp?.toDate() ||
-                                                 new Date();
+                                const baseDate = projectData.creationTimestamp?.toDate() || // Should be checked 1st
+                                projectData[startFieldForDay]?.toDate() ||
+                                projectData[finishTimeDay]?.toDate() ||
+                                new Date();
 
                                 const year = baseDate.getFullYear();
                                 const month = String(baseDate.getMonth() + 1).padStart(2, '0');
