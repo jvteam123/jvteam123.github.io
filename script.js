@@ -40,8 +40,12 @@ document.addEventListener('DOMContentLoaded', () => {
             FIX_CATEGORIES: {
                 ORDER: ["Fix1", "Fix2", "Fix3", "Fix4", "Fix5", "Fix6"],
                 COLORS: {
-                    "Fix1": "#FFFFE0", "Fix2": "#ADD8E6", "Fix3": "#90EE90",
-                    "Fix4": "#FFB6C1", "Fix5": "#FFDAB9", "Fix6": "#E6E6FA",
+                    "Fix1": "#FFFFE0",
+                    "Fix2": "#ADD8E6",
+                    "Fix3": "#90EE90",
+                    "Fix4": "#FFB6C1",
+                    "Fix5": "#FFDAB9",
+                    "Fix6": "#E6E6FA",
                     "default": "#FFFFFF"
                 }
             },
@@ -210,9 +214,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (self.elements.newProjectForm) self.elements.newProjectForm.reset();
                     self.elements.projectFormModal.style.display = 'none';
                 });
-                attachClick(self.elements.closeTlDashboardBtn, () => { self.elements.tlDashboardModal.style.display = 'none'; });
-                attachClick(self.elements.closeSettingsBtn, () => { self.elements.settingsModal.style.display = 'none'; });
-                attachClick(self.elements.closeTlSummaryBtn, () => { self.elements.tlSummaryModal.style.display = 'none'; });
+                attachClick(self.elements.closeTlDashboardBtn, () => {
+                    self.elements.tlDashboardModal.style.display = 'none';
+                });
+                attachClick(self.elements.closeSettingsBtn, () => {
+                    self.elements.settingsModal.style.display = 'none';
+                });
+                attachClick(self.elements.closeTlSummaryBtn, () => {
+                    self.elements.tlSummaryModal.style.display = 'none';
+                });
 
                 attachClick(self.elements.addEmailBtn, self.methods.handleAddEmail.bind(self));
                 attachClick(self.elements.clearDataBtn, self.methods.handleClearData.bind(self));
@@ -252,7 +262,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         resetPaginationAndReload();
                     };
                 }
-                
+
                 if (self.elements.sortByFilter) {
                     self.elements.sortByFilter.value = self.state.filters.sortBy;
                     self.elements.sortByFilter.onchange = (e) => {
@@ -385,34 +395,34 @@ document.addEventListener('DOMContentLoaded', () => {
                     return;
                 }
                 if (this.firestoreListenerUnsubscribe) this.firestoreListenerUnsubscribe();
-            
+
                 this.methods.loadGroupVisibilityState.call(this);
                 await this.methods.populateMonthFilter.call(this);
                 await this.methods.populateProjectNameFilter.call(this);
-            
+
                 const sortDirection = this.state.filters.sortBy === 'oldest' ? 'asc' : 'desc';
                 const shouldPaginate = !this.state.filters.batchId && !this.state.filters.fixCategory;
-                
+
                 let projectsQuery = this.db.collection("projects");
-            
+
                 if (shouldPaginate) {
                     this.elements.paginationControls.style.display = 'block';
-            
-                    if (this.state.pagination.paginatedProjectNameList.length === 0 || 
+
+                    if (this.state.pagination.paginatedProjectNameList.length === 0 ||
                         this.state.pagination.sortOrderForPaging !== this.state.filters.sortBy ||
                         this.state.pagination.monthForPaging !== this.state.filters.month) {
-                        
+
                         this.methods.showLoading.call(this, "Building project list for pagination...");
-                        
+
                         let nameQuery = this.db.collection("projects");
-                        
+
                         if (this.state.filters.month) {
                             const [year, month] = this.state.filters.month.split('-');
                             const startDate = new Date(parseInt(year), parseInt(month) - 1, 1);
                             const endDate = new Date(parseInt(year), parseInt(month), 0, 23, 59, 59, 999);
                             nameQuery = nameQuery.where("creationTimestamp", ">=", startDate).where("creationTimestamp", "<=", endDate);
                         }
-            
+
                         const allTasksSnapshot = await nameQuery.orderBy("creationTimestamp", sortDirection).get();
                         const uniqueNames = new Set();
                         const sortedNames = [];
@@ -423,23 +433,23 @@ document.addEventListener('DOMContentLoaded', () => {
                                 sortedNames.push(name);
                             }
                         });
-            
+
                         this.state.pagination.paginatedProjectNameList = sortedNames;
                         this.state.pagination.totalPages = Math.ceil(sortedNames.length / this.state.pagination.projectsPerPage);
                         this.state.pagination.sortOrderForPaging = this.state.filters.sortBy;
                         this.state.pagination.monthForPaging = this.state.filters.month;
                     }
-            
+
                     const startIndex = (this.state.pagination.currentPage - 1) * this.state.pagination.projectsPerPage;
                     const endIndex = startIndex + this.state.pagination.projectsPerPage;
                     const projectsToDisplay = this.state.pagination.paginatedProjectNameList.slice(startIndex, endIndex);
-            
+
                     if (projectsToDisplay.length > 0) {
                         projectsQuery = projectsQuery.where("baseProjectName", "in", projectsToDisplay);
                     } else {
                         projectsQuery = projectsQuery.where("baseProjectName", "==", "no-projects-exist-yet-dummy-value");
                     }
-                } else { 
+                } else {
                     this.elements.paginationControls.style.display = 'none';
                     if (this.state.filters.month) {
                         const [year, month] = this.state.filters.month.split('-');
@@ -454,19 +464,22 @@ document.addEventListener('DOMContentLoaded', () => {
                         projectsQuery = projectsQuery.where("fixCategory", "==", this.state.filters.fixCategory);
                     }
                 }
-            
+
                 projectsQuery = projectsQuery.orderBy("creationTimestamp", sortDirection);
-            
+
                 this.firestoreListenerUnsubscribe = projectsQuery.onSnapshot(snapshot => {
                     let newProjects = [];
                     snapshot.forEach(doc => {
-                        if (doc.exists) newProjects.push({ id: doc.id, ...doc.data() });
+                        if (doc.exists) newProjects.push({
+                            id: doc.id,
+                            ...doc.data()
+                        });
                     });
-            
+
                     if (shouldPaginate) {
-                         newProjects = newProjects.filter(p => this.state.pagination.paginatedProjectNameList.includes(p.baseProjectName));
+                        newProjects = newProjects.filter(p => this.state.pagination.paginatedProjectNameList.includes(p.baseProjectName));
                     }
-                    
+
                     this.state.projects = newProjects.map(p => ({
                         breakDurationMinutesDay1: 0,
                         breakDurationMinutesDay2: 0,
@@ -501,7 +514,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         const [year, month] = monthYear.split('-');
                         const option = document.createElement('option');
                         option.value = monthYear;
-                        option.textContent = new Date(year, parseInt(month) - 1, 1).toLocaleString('en-US', { year: 'numeric', month: 'long' });
+                        option.textContent = new Date(year, parseInt(month) - 1, 1).toLocaleString('en-US', {
+                            year: 'numeric',
+                            month: 'long'
+                        });
                         this.elements.monthFilter.appendChild(option);
                     });
 
@@ -554,7 +570,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     this.elements.batchIdSelect.innerHTML = '<option value="" disabled selected>Error</option>';
                 }
             },
-            
+
             async handleAddProjectSubmit(event) {
                 event.preventDefault();
                 this.methods.showLoading.call(this, "Adding project(s)...");
@@ -577,14 +593,28 @@ document.addEventListener('DOMContentLoaded', () => {
                 try {
                     for (let i = 1; i <= numRows; i++) {
                         const projectData = {
-                            batchId, creationTimestamp, fixCategory, baseProjectName, gsd,
+                            batchId,
+                            creationTimestamp,
+                            fixCategory,
+                            baseProjectName,
+                            gsd,
                             areaTask: `Area${String(i).padStart(2, '0')}`,
-                            assignedTo: "", techNotes: "", status: "Available",
-                            startTimeDay1: null, finishTimeDay1: null, durationDay1Ms: null,
-                            startTimeDay2: null, finishTimeDay2: null, durationDay2Ms: null,
-                            startTimeDay3: null, finishTimeDay3: null, durationDay3Ms: null,
-                            releasedToNextStage: false, isReassigned: false, originalProjectId: null,
-                            lastModifiedTimestamp: creationTimestamp, 
+                            assignedTo: "",
+                            techNotes: "",
+                            status: "Available",
+                            startTimeDay1: null,
+                            finishTimeDay1: null,
+                            durationDay1Ms: null,
+                            startTimeDay2: null,
+                            finishTimeDay2: null,
+                            durationDay2Ms: null,
+                            startTimeDay3: null,
+                            finishTimeDay3: null,
+                            durationDay3Ms: null,
+                            releasedToNextStage: false,
+                            isReassigned: false,
+                            originalProjectId: null,
+                            lastModifiedTimestamp: creationTimestamp,
                             breakDurationMinutesDay1: 0,
                             breakDurationMinutesDay2: 0,
                             breakDurationMinutesDay3: 0,
@@ -595,7 +625,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         batch.set(newProjectRef, projectData);
                     }
                     await batch.commit();
-                    
+
                     this.elements.newProjectForm.reset();
                     this.elements.projectFormModal.style.display = 'none';
 
@@ -614,12 +644,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     this.methods.hideLoading.call(this);
                 }
             },
-            
-           async updateTimeField(projectId, fieldName, newValue) {
-                this.methods.showLoading.call(this, `Updating ${fieldName}...`);
-                const projectRef = this.db.collection("projects").doc(projectId);
 
-                try {
+            async updateTimeField(projectId, fieldName, newValue) {
+                this.methods.showLoading.call(this, `Updating ${fieldName}...`);
+                try { // <-- START OF THE MAIN TRY BLOCK
+                    const projectRef = this.db.collection("projects").doc(projectId);
+
                     await this.db.runTransaction(async (transaction) => {
                         const doc = await transaction.get(projectRef);
                         if (!doc.exists) {
@@ -627,12 +657,12 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
 
                         const projectData = doc.data();
+                        // This alert will show, and the finally block will still run to hide the loading screen.
                         if (projectData.isLocked) {
                             alert("This task is locked. Please unlock it in Project Settings to make changes.");
-                            this.methods.refreshAllViews.call(this);
-                            return;
+                            return; // Exit the transaction
                         }
-                        
+
                         let firestoreTimestamp = null;
                         const dayMatch = fieldName.match(/Day(\d)/);
 
@@ -647,17 +677,16 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (newValue) {
                             const [hours, minutes] = newValue.split(':').map(Number);
                             if (isNaN(hours) || isNaN(minutes)) {
-                                this.methods.hideLoading.call(this);
-                                return;
+                                return; // Exit if time is invalid
                             }
                             const existingTimestamp = projectData[fieldName]?.toDate();
                             const fallbackTimestamp = projectData[startFieldForDay]?.toDate() ||
-                                                    projectData[finishFieldForDay]?.toDate() ||
-                                                    projectData.creationTimestamp?.toDate() ||
-                                                    new Date();
+                                projectData[finishFieldForDay]?.toDate() ||
+                                projectData.creationTimestamp?.toDate() ||
+                                new Date();
 
                             const baseDate = existingTimestamp || fallbackTimestamp;
-                            
+
                             const yyyy = baseDate.getFullYear();
                             const mm = String(baseDate.getMonth() + 1).padStart(2, '0');
                             const dd = String(baseDate.getDate()).padStart(2, '0');
@@ -665,29 +694,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
                             const dateInput = prompt(`Please confirm or enter the date for this time entry (YYYY-MM-DD):`, defaultDateString);
 
-                            if (!dateInput) { 
+                            // If user cancels, we simply return. The 'finally' block will handle the cleanup.
+                            if (!dateInput) {
                                 console.log("Time update cancelled by user.");
-                                this.methods.refreshAllViews.call(this);
-                                this.methods.hideLoading.call(this);
                                 return;
                             }
 
                             const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
                             if (!dateRegex.test(dateInput)) {
                                 alert("Invalid date format. Please use YYYY-MM-DD. Aborting update.");
-                                this.methods.refreshAllViews.call(this);
-                                this.methods.hideLoading.call(this);
                                 return;
                             }
-                            
+
                             const finalDate = new Date(`${dateInput}T${newValue}:00`);
                             if (isNaN(finalDate.getTime())) {
                                 alert("Invalid date or time provided. Aborting update.");
-                                this.methods.refreshAllViews.call(this);
-                                this.methods.hideLoading.call(this);
                                 return;
                             }
-                            
+
                             firestoreTimestamp = firebase.firestore.Timestamp.fromDate(finalDate);
                         }
 
@@ -700,10 +724,10 @@ document.addEventListener('DOMContentLoaded', () => {
                             newStartTime = projectData[startFieldForDay];
                             newFinishTime = firestoreTimestamp;
                         }
-                        
+
                         const durationFieldToUpdate = `durationDay${dayNum}Ms`;
                         const newDuration = this.methods.calculateDurationMs.call(this, newStartTime, newFinishTime);
-                        
+
                         transaction.update(projectRef, {
                             [fieldName]: firestoreTimestamp,
                             [durationFieldToUpdate]: newDuration,
@@ -714,10 +738,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 } catch (error) {
                     console.error(`Error updating ${fieldName}:`, error);
                     alert(`Error updating time: ${error.message}`);
+                    // Refresh the view to reset any inputs that failed to update
                     this.methods.refreshAllViews.call(this);
+                } finally {
+                    // THIS BLOCK IS GUARANTEED TO RUN, ensuring the UI never freezes.
+                    this.methods.hideLoading.call(this);
                 }
             },
-            
+
             async updateProjectState(projectId, action) {
                 this.methods.showLoading.call(this, "Updating project state...");
                 const projectRef = this.db.collection("projects").doc(projectId);
@@ -734,15 +762,38 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
 
                     const serverTimestamp = firebase.firestore.FieldValue.serverTimestamp();
-                    let updates = { lastModifiedTimestamp: serverTimestamp };
+                    let updates = {
+                        lastModifiedTimestamp: serverTimestamp
+                    };
 
                     switch (action) {
-                        case "startDay1": updates.status = "InProgressDay1"; updates.startTimeDay1 = serverTimestamp; break;
-                        case "endDay1": updates.status = "Day1Ended_AwaitingNext"; updates.finishTimeDay1 = serverTimestamp; updates.durationDay1Ms = this.methods.calculateDurationMs.call(this, project.startTimeDay1, serverTimestamp); break;
-                        case "startDay2": updates.status = "InProgressDay2"; updates.startTimeDay2 = serverTimestamp; break;
-                        case "endDay2": updates.status = "Day2Ended_AwaitingNext"; updates.finishTimeDay2 = serverTimestamp; updates.durationDay2Ms = this.methods.calculateDurationMs.call(this, project.startTimeDay2, serverTimestamp); break;
-                        case "startDay3": updates.status = "InProgressDay3"; updates.startTimeDay3 = serverTimestamp; break;
-                        case "endDay3": updates.status = "Day3Ended_AwaitingNext"; updates.finishTimeDay3 = serverTimestamp; updates.durationDay3Ms = this.methods.calculateDurationMs.call(this, project.startTimeDay3, serverTimestamp); break;
+                        case "startDay1":
+                            updates.status = "InProgressDay1";
+                            updates.startTimeDay1 = serverTimestamp;
+                            break;
+                        case "endDay1":
+                            updates.status = "Day1Ended_AwaitingNext";
+                            updates.finishTimeDay1 = serverTimestamp;
+                            updates.durationDay1Ms = this.methods.calculateDurationMs.call(this, project.startTimeDay1, serverTimestamp);
+                            break;
+                        case "startDay2":
+                            updates.status = "InProgressDay2";
+                            updates.startTimeDay2 = serverTimestamp;
+                            break;
+                        case "endDay2":
+                            updates.status = "Day2Ended_AwaitingNext";
+                            updates.finishTimeDay2 = serverTimestamp;
+                            updates.durationDay2Ms = this.methods.calculateDurationMs.call(this, project.startTimeDay2, serverTimestamp);
+                            break;
+                        case "startDay3":
+                            updates.status = "InProgressDay3";
+                            updates.startTimeDay3 = serverTimestamp;
+                            break;
+                        case "endDay3":
+                            updates.status = "Day3Ended_AwaitingNext";
+                            updates.finishTimeDay3 = serverTimestamp;
+                            updates.durationDay3Ms = this.methods.calculateDurationMs.call(this, project.startTimeDay3, serverTimestamp);
+                            break;
                         case "markDone":
                             updates.status = "Completed";
                             if (project.status === "InProgressDay1" && !project.finishTimeDay1) {
@@ -756,7 +807,9 @@ document.addEventListener('DOMContentLoaded', () => {
                                 updates.durationDay3Ms = this.methods.calculateDurationMs.call(this, project.startTimeDay3, serverTimestamp);
                             }
                             break;
-                        default: this.methods.hideLoading.call(this); return;
+                        default:
+                            this.methods.hideLoading.call(this);
+                            return;
                     }
 
                     await projectRef.update(updates);
@@ -777,14 +830,17 @@ document.addEventListener('DOMContentLoaded', () => {
                     console.error("Error during refreshAllViews:", error);
                     if (this.elements.projectTableBody) this.elements.projectTableBody.innerHTML = `<tr><td colspan="${this.config.NUM_TABLE_COLUMNS}" style="color:red;text-align:center;">Error loading projects.</td></tr>`;
                 }
-                 this.methods.hideLoading.call(this);
+                this.methods.hideLoading.call(this);
             },
-            
+
             updatePaginationUI() {
                 if (!this.elements.paginationControls || this.elements.paginationControls.style.display === 'none') {
                     return;
                 }
-                const { currentPage, totalPages } = this.state.pagination;
+                const {
+                    currentPage,
+                    totalPages
+                } = this.state.pagination;
                 if (totalPages > 0) {
                     this.elements.pageInfo.textContent = `Page ${currentPage} of ${totalPages}`;
                 } else {
@@ -793,7 +849,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 this.elements.prevPageBtn.disabled = currentPage <= 1;
                 this.elements.nextPageBtn.disabled = currentPage >= totalPages;
             },
-            
+
             renderProjects() {
                 if (!this.elements.projectTableBody) return;
                 this.elements.projectTableBody.innerHTML = "";
@@ -806,9 +862,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     const areaA = a.areaTask || "";
                     const areaB = b.areaTask || "";
 
-                    if (nameA < nameB) return -1; if (nameA > nameB) return 1;
-                    if (fixA < fixB) return -1; if (fixA > fixB) return 1;
-                    if (areaA < areaB) return -1; if (areaA > areaB) return 1;
+                    if (nameA < nameB) return -1;
+                    if (nameA > nameB) return 1;
+                    if (fixA < fixB) return -1;
+                    if (fixA > fixB) return 1;
+                    if (areaA < areaB) return -1;
+                    if (areaA > areaB) return 1;
                     return 0;
                 });
 
@@ -817,7 +876,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 sortedProjects.forEach(p => {
                     const groupKey = `${p.baseProjectName}_${p.fixCategory}`;
                     if (!groupLockStatus[groupKey]) {
-                        groupLockStatus[groupKey] = { locked: 0, total: 0 };
+                        groupLockStatus[groupKey] = {
+                            locked: 0,
+                            total: 0
+                        };
                     }
                     groupLockStatus[groupKey].total++;
                     if (p.isLocked) {
@@ -825,9 +887,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 });
 
-                let currentBaseProjectNameHeader = null, currentFixCategoryHeader = null;
+                let currentBaseProjectNameHeader = null,
+                    currentFixCategoryHeader = null;
 
-                 if (sortedProjects.length === 0) {
+                if (sortedProjects.length === 0) {
                     const row = this.elements.projectTableBody.insertRow();
                     row.innerHTML = `<td colspan="${this.config.NUM_TABLE_COLUMNS}" style="text-align:center; padding: 20px;">No projects to display for the current filter or page.</td>`;
                     return;
@@ -835,7 +898,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 sortedProjects.forEach(project => {
                     if (!project?.id || !project.baseProjectName || !project.fixCategory) return;
-                    
+
                     if (project.baseProjectName !== currentBaseProjectNameHeader) {
                         currentBaseProjectNameHeader = project.baseProjectName;
                         currentFixCategoryHeader = null;
@@ -848,10 +911,12 @@ document.addEventListener('DOMContentLoaded', () => {
                         currentFixCategoryHeader = project.fixCategory;
                         const groupKey = `${currentBaseProjectNameHeader}_${currentFixCategoryHeader}`;
                         if (this.state.groupVisibilityState[groupKey] === undefined) {
-                            this.state.groupVisibilityState[groupKey] = { isExpanded: true };
+                            this.state.groupVisibilityState[groupKey] = {
+                                isExpanded: true
+                            };
                         }
                         const isExpanded = this.state.groupVisibilityState[groupKey]?.isExpanded !== false;
-                        
+
                         // NEW: Determine lock icon based on pre-calculated status
                         const status = groupLockStatus[groupKey];
                         let lockIcon = '';
@@ -893,14 +958,17 @@ document.addEventListener('DOMContentLoaded', () => {
                     assignedToSelect.disabled = project.status === "Reassigned_TechAbsent" || project.isLocked;
                     assignedToSelect.innerHTML = `<option value="">Select Tech ID</option>` + this.config.TECH_IDS.map(id => `<option value="${id}">${id}</option>`).join('');
                     assignedToSelect.value = project.assignedTo || "";
-                    assignedToSelect.onchange = (e) => this.db.collection("projects").doc(project.id).update({ assignedTo: e.target.value, lastModifiedTimestamp: firebase.firestore.FieldValue.serverTimestamp() });
+                    assignedToSelect.onchange = (e) => this.db.collection("projects").doc(project.id).update({
+                        assignedTo: e.target.value,
+                        lastModifiedTimestamp: firebase.firestore.FieldValue.serverTimestamp()
+                    });
                     assignedToCell.appendChild(assignedToSelect);
 
                     const statusCell = row.insertCell();
                     statusCell.innerHTML = `<span class="status status-${(project.status || "unknown").toLowerCase()}">${(project.status || "Unknown").replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').trim()}</span>`;
 
                     const formatTime = (ts) => ts?.toDate ? ts.toDate().toTimeString().slice(0, 5) : "";
-                    
+
                     const createTimeInput = (timeValue, fieldName) => {
                         const cell = row.insertCell();
                         const input = document.createElement('input');
@@ -918,19 +986,19 @@ document.addEventListener('DOMContentLoaded', () => {
                         select.className = 'break-select';
                         select.disabled = currentProject.status === "Reassigned_TechAbsent" || currentProject.isLocked;
                         select.innerHTML = `<option value="0">No Break</option><option value="15">15m</option><option value="60">1h</option><option value="75">1h15m</option><option value="90">1h30m</option>`;
-                        
+
                         select.value = currentProject[`breakDurationMinutesDay${day}`] || 0;
-                    
+
                         select.onchange = (e) => this.db.collection("projects").doc(currentProject.id).update({
                             [`breakDurationMinutesDay${day}`]: parseInt(e.target.value, 10),
                             lastModifiedTimestamp: firebase.firestore.FieldValue.serverTimestamp()
                         });
                         cell.appendChild(select);
                     };
-                    
+
                     createTimeInput(project.startTimeDay1, 'startTimeDay1');
                     createTimeInput(project.finishTimeDay1, 'finishTimeDay1');
-                    createBreakSelect(1, project); 
+                    createBreakSelect(1, project);
 
                     createTimeInput(project.startTimeDay2, 'startTimeDay2');
                     createTimeInput(project.finishTimeDay2, 'finishTimeDay2');
@@ -939,14 +1007,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     createTimeInput(project.startTimeDay3, 'startTimeDay3');
                     createTimeInput(project.finishTimeDay3, 'finishTimeDay3');
                     createBreakSelect(3, project);
-                    
+
                     const totalDurationMs = (project.durationDay1Ms || 0) + (project.durationDay2Ms || 0) + (project.durationDay3Ms || 0);
                     const totalBreakMs = ((project.breakDurationMinutesDay1 || 0) +
-                                         (project.breakDurationMinutesDay2 || 0) +
-                                         (project.breakDurationMinutesDay3 || 0)) * 60000;
+                        (project.breakDurationMinutesDay2 || 0) +
+                        (project.breakDurationMinutesDay3 || 0)) * 60000;
                     const additionalMs = (project.additionalMinutesManual || 0) * 60000;
                     const finalAdjustedDurationMs = Math.max(0, totalDurationMs - totalBreakMs) + additionalMs;
-                    
+
                     const totalDurationCell = row.insertCell();
                     totalDurationCell.textContent = this.methods.formatMillisToMinutes.call(this, finalAdjustedDurationMs);
                     totalDurationCell.className = 'total-duration-column';
@@ -956,13 +1024,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     techNotesInput.value = project.techNotes || "";
                     techNotesInput.className = 'tech-notes-input';
                     techNotesInput.disabled = project.status === "Reassigned_TechAbsent" || project.isLocked;
-                    techNotesInput.onchange = (e) => this.db.collection("projects").doc(project.id).update({ techNotes: e.target.value, lastModifiedTimestamp: firebase.firestore.FieldValue.serverTimestamp() });
+                    techNotesInput.onchange = (e) => this.db.collection("projects").doc(project.id).update({
+                        techNotes: e.target.value,
+                        lastModifiedTimestamp: firebase.firestore.FieldValue.serverTimestamp()
+                    });
                     techNotesCell.appendChild(techNotesInput);
 
                     const actionsCell = row.insertCell();
                     const actionButtonsDiv = document.createElement('div');
                     actionButtonsDiv.className = 'action-buttons-container';
-                    
+
                     const createActionButton = (text, className, disabled, action) => {
                         const button = document.createElement('button');
                         button.textContent = text;
@@ -983,23 +1054,40 @@ document.addEventListener('DOMContentLoaded', () => {
                     const reassignBtn = createActionButton("Re-Assign", "btn-warning", project.status === "Completed" || project.status === "Reassigned_TechAbsent", "reassign");
                     reassignBtn.onclick = () => this.methods.handleReassignment.call(this, project);
                     actionButtonsDiv.appendChild(reassignBtn);
-                    
+
                     actionsCell.appendChild(actionButtonsDiv);
                 });
             },
-            
-            showLoading(message = "Loading...") { if (this.elements.loadingOverlay) { this.elements.loadingOverlay.querySelector('p').textContent = message; this.elements.loadingOverlay.style.display = 'flex'; } },
-            hideLoading() { if (this.elements.loadingOverlay) { this.elements.loadingOverlay.style.display = 'none'; } },
-            generateId() { return Date.now().toString(36) + Math.random().toString(36).substr(2, 5); },
-            formatMillisToMinutes(ms) { return (ms === null || typeof ms !== 'number' || ms < 0) ? "N/A" : Math.floor(ms / 60000); },
+
+            showLoading(message = "Loading...") {
+                if (this.elements.loadingOverlay) {
+                    this.elements.loadingOverlay.querySelector('p').textContent = message;
+                    this.elements.loadingOverlay.style.display = 'flex';
+                }
+            },
+            hideLoading() {
+                if (this.elements.loadingOverlay) {
+                    this.elements.loadingOverlay.style.display = 'none';
+                }
+            },
+            generateId() {
+                return Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
+            },
+            formatMillisToMinutes(ms) {
+                return (ms === null || typeof ms !== 'number' || ms < 0) ? "N/A" : Math.floor(ms / 60000);
+            },
             calculateDurationMs(start, finish) {
                 const startMs = start?.toMillis ? start.toMillis() : start;
                 const finishMs = finish?.toMillis ? finish.toMillis() : finish;
                 return (typeof startMs !== 'number' || typeof finishMs !== 'number' || finishMs < startMs) ? null : finishMs - startMs;
             },
-            loadGroupVisibilityState() { this.state.groupVisibilityState = JSON.parse(localStorage.getItem('projectTrackerGroupVisibility') || '{}'); },
-            saveGroupVisibilityState() { localStorage.setItem('projectTrackerGroupVisibility', JSON.stringify(this.state.groupVisibilityState)); },
-            
+            loadGroupVisibilityState() {
+                this.state.groupVisibilityState = JSON.parse(localStorage.getItem('projectTrackerGroupVisibility') || '{}');
+            },
+            saveGroupVisibilityState() {
+                localStorage.setItem('projectTrackerGroupVisibility', JSON.stringify(this.state.groupVisibilityState));
+            },
+
             async fetchAllowedEmails() {
                 try {
                     const docSnap = await this.db.doc(this.config.firestorePaths.ALLOWED_EMAILS).get();
@@ -1009,11 +1097,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     this.state.allowedEmails = ["ev.lorens.ebrado@gmail.com"];
                 }
             },
-            
+
             async updateAllowedEmailsInFirestore(emailsArray) {
                 this.methods.showLoading.call(this, "Updating allowed emails...");
                 try {
-                    await this.db.doc(this.config.firestorePaths.ALLOWED_EMAILS).set({ emails: emailsArray });
+                    await this.db.doc(this.config.firestorePaths.ALLOWED_EMAILS).set({
+                        emails: emailsArray
+                    });
                     this.state.allowedEmails = emailsArray;
                     return true;
                 } catch (error) {
@@ -1033,10 +1123,17 @@ document.addEventListener('DOMContentLoaded', () => {
                     snapshot.forEach(doc => {
                         const task = doc.data();
                         if (task?.batchId) {
-                            if (!batches[task.batchId]) batches[task.batchId] = { batchId: task.batchId, baseProjectName: task.baseProjectName || "N/A", tasksByFix: {} };
+                            if (!batches[task.batchId]) batches[task.batchId] = {
+                                batchId: task.batchId,
+                                baseProjectName: task.baseProjectName || "N/A",
+                                tasksByFix: {}
+                            };
                             if (task.fixCategory) {
                                 if (!batches[task.batchId].tasksByFix[task.fixCategory]) batches[task.batchId].tasksByFix[task.fixCategory] = [];
-                                batches[task.batchId].tasksByFix[task.fixCategory].push({id: doc.id, ...task});
+                                batches[task.batchId].tasksByFix[task.fixCategory].push({
+                                    id: doc.id,
+                                    ...task
+                                });
                             }
                         }
                     });
@@ -1049,7 +1146,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     this.methods.hideLoading.call(this);
                 }
             },
-            
+
             async renderTLDashboard() {
                 if (!this.elements.tlDashboardContentElement) return;
                 this.elements.tlDashboardContentElement.innerHTML = "";
@@ -1067,15 +1164,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     batchItemDiv.innerHTML = `<h4>Project: ${batch.baseProjectName || "Unknown"} (Batch ID: ${batch.batchId.split('_')[1] || "N/A"})</h4>`;
                     const allFixStages = this.config.FIX_CATEGORIES.ORDER;
-                    const stagesPresent = batch.tasksByFix ? Object.keys(batch.tasksByFix).sort((a,b) => allFixStages.indexOf(a) - allFixStages.indexOf(b)) : [];
+                    const stagesPresent = batch.tasksByFix ? Object.keys(batch.tasksByFix).sort((a, b) => allFixStages.indexOf(a) - allFixStages.indexOf(b)) : [];
                     batchItemDiv.innerHTML += `<p><strong>Stages Present:</strong> ${stagesPresent.join(', ') || "None"}</p>`;
-                    
+
                     const releaseActionsDiv = document.createElement('div');
                     releaseActionsDiv.className = 'dashboard-batch-actions-release';
 
                     allFixStages.forEach((currentFix, index) => {
                         const nextFix = allFixStages[index + 1];
-                        if (!nextFix) return; 
+                        if (!nextFix) return;
 
                         const hasCurrentFix = batch.tasksByFix && batch.tasksByFix[currentFix];
                         const hasNextFix = batch.tasksByFix && batch.tasksByFix[nextFix];
@@ -1096,7 +1193,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             }
                         }
                     });
-                    
+
                     const addAreaBtn = document.createElement('button');
                     addAreaBtn.textContent = 'Add Extra Area';
                     addAreaBtn.className = 'btn btn-success';
@@ -1117,7 +1214,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             const btn = document.createElement('button');
                             btn.textContent = `Delete ${fixCat} Tasks`;
                             btn.className = 'btn btn-danger';
-                            
+
                             if (fixCat !== highestStagePresent) {
                                 btn.disabled = true;
                                 btn.title = `You must first delete the '${highestStagePresent}' tasks to enable this.`;
@@ -1132,7 +1229,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         });
                     }
                     batchItemDiv.appendChild(deleteActionsDiv);
-                    
+
                     // NEW: Group Locking Controls
                     const lockActionsDiv = document.createElement('div');
                     lockActionsDiv.className = 'dashboard-batch-actions-lock';
@@ -1163,13 +1260,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     deleteAllContainer.style.marginTop = '15px';
                     deleteAllContainer.style.borderTop = '1px solid #cc0000';
                     deleteAllContainer.style.paddingTop = '10px';
-                    
+
                     const deleteAllBtn = document.createElement('button');
                     deleteAllBtn.textContent = 'Delete Entire Project (All Fix Stages)';
                     deleteAllBtn.className = 'btn btn-danger btn-delete-project';
                     deleteAllBtn.style.width = '100%';
                     deleteAllBtn.onclick = () => this.methods.handleDeleteEntireProject.call(this, batch.batchId, batch.baseProjectName);
-                    
+
                     deleteAllContainer.appendChild(deleteAllBtn);
                     batchItemDiv.appendChild(deleteAllContainer);
 
@@ -1191,7 +1288,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     const batch = this.db.batch();
                     snapshot.forEach(doc => {
-                        batch.update(doc.ref, { isLocked: shouldBeLocked, lastModifiedTimestamp: firebase.firestore.FieldValue.serverTimestamp() });
+                        batch.update(doc.ref, {
+                            isLocked: shouldBeLocked,
+                            lastModifiedTimestamp: firebase.firestore.FieldValue.serverTimestamp()
+                        });
                     });
                     await batch.commit();
 
@@ -1227,13 +1327,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     }, 'Fix1');
 
                     const tasksInLatestFix = allTasks.filter(task => task.fixCategory === latestFixCategory);
-                    
+
                     let lastTask, lastAreaNumber = 0;
-                    if(tasksInLatestFix.length > 0){
+                    if (tasksInLatestFix.length > 0) {
                         lastTask = tasksInLatestFix.reduce((latest, task) => {
-                             const currentNum = parseInt(task.areaTask.replace('Area', ''), 10) || 0;
-                             const latestNum = parseInt(latest.areaTask.replace('Area', ''), 10) || 0;
-                             return currentNum > latestNum ? task : latest;
+                            const currentNum = parseInt(task.areaTask.replace('Area', ''), 10) || 0;
+                            const latestNum = parseInt(latest.areaTask.replace('Area', ''), 10) || 0;
+                            return currentNum > latestNum ? task : latest;
                         });
                         lastAreaNumber = parseInt(lastTask.areaTask.replace('Area', ''), 10) || 0;
                     } else {
@@ -1255,17 +1355,23 @@ document.addEventListener('DOMContentLoaded', () => {
                     for (let i = 1; i <= numToAdd; i++) {
                         const newAreaNumber = lastAreaNumber + i;
                         const newAreaTask = `Area${String(newAreaNumber).padStart(2, '0')}`;
-                        
+
                         const newTaskData = {
                             ...lastTask,
-                            fixCategory: latestFixCategory, 
+                            fixCategory: latestFixCategory,
                             areaTask: newAreaTask,
                             assignedTo: "",
                             techNotes: "",
                             status: "Available",
-                            startTimeDay1: null, finishTimeDay1: null, durationDay1Ms: null,
-                            startTimeDay2: null, finishTimeDay2: null, durationDay2Ms: null,
-                            startTimeDay3: null, finishTimeDay3: null, durationDay3Ms: null,
+                            startTimeDay1: null,
+                            finishTimeDay1: null,
+                            durationDay1Ms: null,
+                            startTimeDay2: null,
+                            finishTimeDay2: null,
+                            durationDay2Ms: null,
+                            startTimeDay3: null,
+                            finishTimeDay3: null,
+                            durationDay3Ms: null,
                             releasedToNextStage: false,
                             isReassigned: false,
                             originalProjectId: null,
@@ -1284,7 +1390,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     await firestoreBatch.commit();
                     alert(`${numToAdd} extra area(s) added successfully to ${latestFixCategory}!`);
-                    
+
                     await this.methods.initializeFirebaseAndLoadData.call(this);
                     await this.methods.renderTLDashboard.call(this);
 
@@ -1311,7 +1417,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 this.methods.showLoading.call(this, `Deleting all tasks for project "${baseProjectName}"...`);
                 try {
                     const snapshot = await this.db.collection("projects").where("batchId", "==", batchId).get();
-                    
+
                     if (snapshot.empty) {
                         alert("No tasks found for this project batch. It might have been deleted already.");
                         return;
@@ -1321,7 +1427,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     snapshot.forEach(doc => {
                         batch.delete(doc.ref);
                     });
-                    
+
                     await batch.commit();
 
                     await this.methods.initializeFirebaseAndLoadData.call(this);
@@ -1335,7 +1441,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             },
 
-          async releaseBatchToNextFix(batchId, currentFixCategory, nextFixCategory) {
+            async releaseBatchToNextFix(batchId, currentFixCategory, nextFixCategory) {
                 this.methods.showLoading.call(this, `Releasing ${currentFixCategory} tasks...`);
                 try {
                     const snapshot = await this.db.collection("projects").where("batchId", "==", batchId).where("fixCategory", "==", currentFixCategory).where("releasedToNextStage", "==", false).get();
@@ -1343,22 +1449,32 @@ document.addEventListener('DOMContentLoaded', () => {
                     const serverTimestamp = firebase.firestore.FieldValue.serverTimestamp();
 
                     for (const doc of snapshot.docs) {
-                        const task = { id: doc.id, ...doc.data() };
+                        const task = {
+                            id: doc.id,
+                            ...doc.data()
+                        };
                         if (task.status === "Reassigned_TechAbsent") continue;
 
-                        const newNextFixTask = { ...task,
+                        const newNextFixTask = {
+                            ...task,
                             fixCategory: nextFixCategory,
                             status: "Available",
-                            techNotes: "", 
+                            techNotes: "",
                             additionalMinutesManual: 0,
                             breakDurationMinutesDay1: 0,
                             breakDurationMinutesDay2: 0,
                             breakDurationMinutesDay3: 0,
-                            startTimeDay1: null, finishTimeDay1: null, durationDay1Ms: null,
-                            startTimeDay2: null, finishTimeDay2: null, durationDay2Ms: null,
-                            startTimeDay3: null, finishTimeDay3: null, durationDay3Ms: null,
+                            startTimeDay1: null,
+                            finishTimeDay1: null,
+                            durationDay1Ms: null,
+                            startTimeDay2: null,
+                            finishTimeDay2: null,
+                            durationDay2Ms: null,
+                            startTimeDay3: null,
+                            finishTimeDay3: null,
+                            durationDay3Ms: null,
                             releasedToNextStage: false,
-                            isReassigned: false, 
+                            isReassigned: false,
                             isLocked: false, // CRUCIAL: Ensure new tasks are always created unlocked
                             lastModifiedTimestamp: serverTimestamp,
                             originalProjectId: task.id,
@@ -1366,11 +1482,14 @@ document.addEventListener('DOMContentLoaded', () => {
                         delete newNextFixTask.id;
                         const newDocRef = this.db.collection("projects").doc();
                         firestoreBatch.set(newDocRef, newNextFixTask);
-                        
-                        firestoreBatch.update(doc.ref, { releasedToNextStage: true, lastModifiedTimestamp: serverTimestamp });
+
+                        firestoreBatch.update(doc.ref, {
+                            releasedToNextStage: true,
+                            lastModifiedTimestamp: serverTimestamp
+                        });
                     }
                     await firestoreBatch.commit();
-                    
+
                     alert(`Release Successful! Tasks from ${currentFixCategory} have been moved to ${nextFixCategory}. The dashboard will now refresh.`);
 
                     this.methods.initializeFirebaseAndLoadData.call(this);
@@ -1383,19 +1502,19 @@ document.addEventListener('DOMContentLoaded', () => {
                     this.methods.hideLoading.call(this);
                 }
             },
-            
+
             async deleteSpecificFixTasksForBatch(batchId, fixCategory) {
                 this.methods.showLoading.call(this, `Deleting ${fixCategory} tasks...`);
                 try {
                     const firestoreBatch = this.db.batch();
                     const serverTimestamp = firebase.firestore.FieldValue.serverTimestamp();
-                    
+
                     const fixOrder = this.config.FIX_CATEGORIES.ORDER;
                     const currentFixIndex = fixOrder.indexOf(fixCategory);
-                    
+
                     if (currentFixIndex > 0) {
                         const previousFixCategory = fixOrder[currentFixIndex - 1];
-                        
+
                         const previousStageSnapshot = await this.db.collection("projects")
                             .where("batchId", "==", batchId)
                             .where("fixCategory", "==", previousFixCategory)
@@ -1411,9 +1530,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     const snapshot = await this.db.collection("projects").where("batchId", "==", batchId).where("fixCategory", "==", fixCategory).get();
                     snapshot.forEach(doc => firestoreBatch.delete(doc.ref));
-                    
+
                     await firestoreBatch.commit();
-                    
+
                     this.methods.initializeFirebaseAndLoadData.call(this);
                     this.methods.renderTLDashboard.call(this);
 
@@ -1428,7 +1547,7 @@ document.addEventListener('DOMContentLoaded', () => {
             async handleReassignment(projectToReassign) {
                 if (!projectToReassign || projectToReassign.status === "Reassigned_TechAbsent") return alert("Cannot re-assign this task.");
                 if (projectToReassign.isLocked) return alert("This task is locked. Please unlock its group in Project Settings before reassigning.");
-                
+
                 const newTechId = prompt(`Re-assigning task '${projectToReassign.areaTask}'. Enter NEW Tech ID:`, projectToReassign.assignedTo || "");
                 if (!newTechId) return;
 
@@ -1436,17 +1555,26 @@ document.addEventListener('DOMContentLoaded', () => {
                     this.methods.showLoading.call(this, "Reassigning task...");
                     const batch = this.db.batch();
                     const serverTimestamp = firebase.firestore.FieldValue.serverTimestamp();
-                    
-                    const newProjectData = { ...projectToReassign,
-                        assignedTo: newTechId.trim(), status: "Available",
+
+                    const newProjectData = {
+                        ...projectToReassign,
+                        assignedTo: newTechId.trim(),
+                        status: "Available",
                         techNotes: `Reassigned from ${projectToReassign.assignedTo || "N/A"}. Original ID: ${projectToReassign.id}`,
-                        creationTimestamp: serverTimestamp, 
+                        creationTimestamp: serverTimestamp,
                         lastModifiedTimestamp: serverTimestamp,
-                        isReassigned: true, originalProjectId: projectToReassign.id,
-                        startTimeDay1: null, finishTimeDay1: null, durationDay1Ms: null,
-                        startTimeDay2: null, finishTimeDay2: null, durationDay2Ms: null,
-                        startTimeDay3: null, finishTimeDay3: null, durationDay3Ms: null,
-                        releasedToNextStage: false, 
+                        isReassigned: true,
+                        originalProjectId: projectToReassign.id,
+                        startTimeDay1: null,
+                        finishTimeDay1: null,
+                        durationDay1Ms: null,
+                        startTimeDay2: null,
+                        finishTimeDay2: null,
+                        durationDay2Ms: null,
+                        startTimeDay3: null,
+                        finishTimeDay3: null,
+                        durationDay3Ms: null,
+                        releasedToNextStage: false,
                         isLocked: false,
                         breakDurationMinutesDay1: 0,
                         breakDurationMinutesDay2: 0,
@@ -1454,13 +1582,21 @@ document.addEventListener('DOMContentLoaded', () => {
                         additionalMinutesManual: 0,
                     };
                     delete newProjectData.id;
-                    
+
                     batch.set(this.db.collection("projects").doc(), newProjectData);
-                    batch.update(this.db.collection("projects").doc(projectToReassign.id), { status: "Reassigned_TechAbsent", lastModifiedTimestamp: serverTimestamp });
-                    
-                    try { await batch.commit(); }
-                    catch (error) { console.error("Error in re-assignment:", error); alert("Error during re-assignment: " + error.message); }
-                    finally { this.methods.hideLoading.call(this); }
+                    batch.update(this.db.collection("projects").doc(projectToReassign.id), {
+                        status: "Reassigned_TechAbsent",
+                        lastModifiedTimestamp: serverTimestamp
+                    });
+
+                    try {
+                        await batch.commit();
+                    } catch (error) {
+                        console.error("Error in re-assignment:", error);
+                        alert("Error during re-assignment: " + error.message);
+                    } finally {
+                        this.methods.hideLoading.call(this);
+                    }
                 }
             },
 
@@ -1490,7 +1626,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const emailToAdd = this.elements.addEmailInput.value.trim().toLowerCase();
                 if (!emailToAdd || !emailToAdd.includes('@')) return alert("Please enter a valid email address.");
                 if (this.state.allowedEmails.map(e => e.toLowerCase()).includes(emailToAdd)) return alert("This email is already in the list.");
-                
+
                 const success = await this.methods.updateAllowedEmailsInFirestore.call(this, [...this.state.allowedEmails, emailToAdd].sort());
                 if (success) {
                     this.elements.addEmailInput.value = "";
@@ -1534,10 +1670,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     snapshot.forEach(doc => {
                         const p = doc.data();
                         const totalWorkMs = (p.durationDay1Ms || 0) + (p.durationDay2Ms || 0) + (p.durationDay3Ms || 0);
-                        
+
                         const breakMs = ((p.breakDurationMinutesDay1 || 0) +
-                                         (p.breakDurationMinutesDay2 || 0) +
-                                         (p.breakDurationMinutesDay3 || 0)) * 60000;
+                            (p.breakDurationMinutesDay2 || 0) +
+                            (p.breakDurationMinutesDay3 || 0)) * 60000;
 
                         const additionalMs = (p.additionalMinutesManual || 0) * 60000;
                         const adjustedNetMs = Math.max(0, totalWorkMs - breakMs) + additionalMs;
@@ -1551,7 +1687,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (!projectTotals[projName]) projectTotals[projName] = {};
                         projectTotals[projName][fixCat] = (projectTotals[projName][fixCat] || 0) + minutes;
                     });
-                    
+
                     let summaryHtml = '<h3>Totals by Project and Fix Category</h3><ul style="list-style: none; padding: 0;">';
                     const sortedProjectNames = Object.keys(projectTotals).sort();
                     if (sortedProjectNames.length === 0) {
