@@ -7,9 +7,10 @@
  * global variables, improves performance, and ensures correct
  * timezone handling.
  *
- * @version 2.9.1
+ * @version 2.9.2
  * @author Gemini AI Refactor & Bug-Fix
  * @changeLog
+ * - ADDED: A "Recalc Totals" button in Project Settings to fix old tasks with missing duration calculations in a single batch.
  * - FIXED: Corrected a critical bug in `updateProjectState` where `serverTimestamp` was used for client-side calculations, causing "End Day" and "Mark Done" buttons to fail. Replaced with `firebase.firestore.Timestamp.now()` for consistent and correct duration calculation.
  * - MODIFIED: Implemented group-level locking. In Project Settings, users can now lock/unlock an entire Fix stage (e.g., "Lock All Fix1").
  * - MODIFIED: Added status icons (白, 箔, 柏) to the main table's Fix group headers to show if a group is fully locked, unlocked, or partially locked.
@@ -936,7 +937,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                         const groupHeaderRow = this.elements.projectTableBody.insertRow();
                         groupHeaderRow.className = "fix-group-header";
-                        groupHeaderRow.innerHTML = `<td colspan="${this.config.NUM_TABLE_COLUMNS}">${currentFixCategoryHeader}${lockIcon} <button class="btn btn-group-toggle">${isExpanded ? "竏� : "+"}</button></td>`;
+                        groupHeaderRow.innerHTML = `<td colspan="${this.config.NUM_TABLE_COLUMNS}">${currentFixCategoryHeader}${lockIcon} <button class="btn btn-group-toggle">${isExpanded ? "Collapse" : "Expand"}</button></td>`;
                         groupHeaderRow.onclick = () => {
                             this.state.groupVisibilityState[groupKey].isExpanded = !isExpanded;
                             this.methods.saveGroupVisibilityState.call(this);
@@ -1234,10 +1235,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                     batchItemDiv.appendChild(deleteActionsDiv);
 
-                    // NEW: Group Locking Controls
                     const lockActionsDiv = document.createElement('div');
                     lockActionsDiv.className = 'dashboard-batch-actions-lock';
-                    lockActionsDiv.innerHTML = '<strong>Locking Controls:</strong>';
+                    lockActionsDiv.innerHTML = '<strong>Locking & Utility:</strong>';
 
                     if (batch.tasksByFix) {
                         stagesPresent.forEach(fixCat => {
@@ -1245,16 +1245,31 @@ document.addEventListener('DOMContentLoaded', () => {
                             const areAllLocked = tasksInFix.every(t => t.isLocked);
                             const shouldLock = !areAllLocked;
 
-                            const btn = document.createElement('button');
-                            btn.textContent = `${shouldLock ? 'Lock All' : 'Unlock All'} ${fixCat}`;
-                            btn.className = `btn ${shouldLock ? 'btn-warning' : 'btn-secondary'} btn-small`;
-                            btn.onclick = () => {
+                            // Lock/Unlock Button
+                            const lockBtn = document.createElement('button');
+                            lockBtn.textContent = `${shouldLock ? 'Lock All' : 'Unlock All'} ${fixCat}`;
+                            lockBtn.className = `btn ${shouldLock ? 'btn-warning' : 'btn-secondary'} btn-small`;
+                            lockBtn.onclick = () => {
                                 const action = shouldLock ? 'lock' : 'unlock';
                                 if (confirm(`Are you sure you want to ${action} all tasks in ${fixCat} for this project?`)) {
                                     this.methods.toggleLockStateForFixGroup.call(this, batch.batchId, fixCat, shouldLock);
                                 }
                             };
-                            lockActionsDiv.appendChild(btn);
+                            lockActionsDiv.appendChild(lockBtn);
+
+                            // --- NEW RECALC BUTTON ---
+                            const recalcBtn = document.createElement('button');
+                            recalcBtn.textContent = `Recalc ${fixCat} Totals`;
+                            recalcBtn.className = 'btn btn-info btn-small';
+                            recalcBtn.style.marginLeft = '5px';
+                            recalcBtn.title = `Fixes tasks in ${fixCat} that have a missing total duration.`;
+                            recalcBtn.onclick = () => {
+                                if (confirm(`This will recalculate totals for all tasks in ${fixCat} that have a start and finish time but a missing duration. Continue?`)) {
+                                    this.methods.recalculateFixStageTotals.call(this, batch.batchId, fixCat);
+                                }
+                            };
+                            lockActionsDiv.appendChild(recalcBtn);
+                            // --- END OF NEW CODE ---
                         });
                     }
                     batchItemDiv.appendChild(lockActionsDiv);
@@ -1276,6 +1291,66 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     this.elements.tlDashboardContentElement.appendChild(batchItemDiv);
                 });
+            },
+            
+            async recalculateFixStageTotals(batchId, fixCategory) {
+                this.methods.showLoading.call(this, `Recalculating totals for ${fixCategory}...`);
+                try {
+                    const snapshot = await this.db.collection("projects")
+                        .where("batchId", "==", batchId)
+                        .where("fixCategory", "==", fixCategory)
+                        .get();
+
+                    if (snapshot.empty) {
+                        alert(`No tasks found for ${fixCategory} in this project.`);
+                        return;
+                    }
+
+                    const batch = this.db.batch();
+                    let tasksToUpdate = 0;
+
+                    snapshot.forEach(doc => {
+                        const task = doc.data();
+                        let needsUpdate = false;
+
+                        // Calculate what the duration SHOULD be for each day
+                        const newDurationDay1 = this.methods.calculateDurationMs.call(this, task.startTimeDay1, task.finishTimeDay1);
+                        const newDurationDay2 = this.methods.calculateDurationMs.call(this, task.startTimeDay2, task.finishTimeDay2);
+                        const newDurationDay3 = this.methods.calculateDurationMs.call(this, task.startTimeDay3, task.finishTimeDay3);
+
+                        // Check if the stored duration is different from the calculated one
+                        if ((newDurationDay1 || null) !== (task.durationDay1Ms || null) ||
+                            (newDurationDay2 || null) !== (task.durationDay2Ms || null) ||
+                            (newDurationDay3 || null) !== (task.durationDay3Ms || null)) {
+                            
+                            needsUpdate = true;
+                        }
+
+                        if (needsUpdate) {
+                            tasksToUpdate++;
+                            const updates = {
+                                durationDay1Ms: newDurationDay1,
+                                durationDay2Ms: newDurationDay2,
+                                durationDay3Ms: newDurationDay3,
+                                lastModifiedTimestamp: firebase.firestore.FieldValue.serverTimestamp()
+                            };
+                            batch.update(doc.ref, updates);
+                        }
+                    });
+
+                    if (tasksToUpdate > 0) {
+                        await batch.commit();
+                        alert(`Success! Recalculated and updated ${tasksToUpdate} task(s) in ${fixCategory}.`);
+                    } else {
+                        alert(`No tasks in ${fixCategory} required an update.`);
+                    }
+
+                } catch (error) {
+                    console.error("Error recalculating totals:", error);
+                    alert("An error occurred during recalculation: " + error.message);
+                } finally {
+                    this.methods.hideLoading.call(this);
+                }
             },
 
             async toggleLockStateForFixGroup(batchId, fixCategory, shouldBeLocked) {
