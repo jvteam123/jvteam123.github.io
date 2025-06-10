@@ -1,17 +1,18 @@
 /**
  * =================================================================
- * Project Tracker Application - Refactored
+ * Project Tracker Application - Refactored and Bug-Fixed
  * =================================================================
  * This script has been fully refactored to encapsulate all logic
  * within the `ProjectTrackerApp` object. This approach eliminates
  * global variables, improves performance, and ensures correct
  * timezone handling.
  *
- * @version 2.9.0
- * @author Gemini AI Refactor
+ * @version 2.9.1
+ * @author Gemini AI Refactor & Bug-Fix
  * @changeLog
+ * - FIXED: Corrected a critical bug in `updateProjectState` where `serverTimestamp` was used for client-side calculations, causing "End Day" and "Mark Done" buttons to fail. Replaced with `firebase.firestore.Timestamp.now()` for consistent and correct duration calculation.
  * - MODIFIED: Implemented group-level locking. In Project Settings, users can now lock/unlock an entire Fix stage (e.g., "Lock All Fix1").
- * - MODIFIED: Added status icons (🔒, 🔓, 🔐) to the main table's Fix group headers to show if a group is fully locked, unlocked, or partially locked.
+ * - MODIFIED: Added status icons (白, 箔, 柏) to the main table's Fix group headers to show if a group is fully locked, unlocked, or partially locked.
  * - MODIFIED: Ensured that when tasks are released to a new Fix stage, they are always created in an unlocked state, regardless of the original task's status.
  * - REMOVED: The per-task "Reset" and "Lock" functionality from the dashboard has been removed in favor of the group-level controls.
  * - Integrated new login UI. Script now handles showing/hiding the login screen and the main dashboard.
@@ -647,7 +648,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             async updateTimeField(projectId, fieldName, newValue) {
                 this.methods.showLoading.call(this, `Updating ${fieldName}...`);
-                try { // <-- START OF THE MAIN TRY BLOCK
+                try { 
                     const projectRef = this.db.collection("projects").doc(projectId);
 
                     await this.db.runTransaction(async (transaction) => {
@@ -657,10 +658,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
 
                         const projectData = doc.data();
-                        // This alert will show, and the finally block will still run to hide the loading screen.
+                        
                         if (projectData.isLocked) {
                             alert("This task is locked. Please unlock it in Project Settings to make changes.");
-                            return; // Exit the transaction
+                            return; 
                         }
 
                         let firestoreTimestamp = null;
@@ -677,7 +678,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (newValue) {
                             const [hours, minutes] = newValue.split(':').map(Number);
                             if (isNaN(hours) || isNaN(minutes)) {
-                                return; // Exit if time is invalid
+                                return;
                             }
                             const existingTimestamp = projectData[fieldName]?.toDate();
                             const fallbackTimestamp = projectData[startFieldForDay]?.toDate() ||
@@ -694,7 +695,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
                             const dateInput = prompt(`Please confirm or enter the date for this time entry (YYYY-MM-DD):`, defaultDateString);
 
-                            // If user cancels, we simply return. The 'finally' block will handle the cleanup.
                             if (!dateInput) {
                                 console.log("Time update cancelled by user.");
                                 return;
@@ -738,10 +738,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 } catch (error) {
                     console.error(`Error updating ${fieldName}:`, error);
                     alert(`Error updating time: ${error.message}`);
-                    // Refresh the view to reset any inputs that failed to update
                     this.methods.refreshAllViews.call(this);
                 } finally {
-                    // THIS BLOCK IS GUARANTEED TO RUN, ensuring the UI never freezes.
                     this.methods.hideLoading.call(this);
                 }
             },
@@ -773,8 +771,9 @@ document.addEventListener('DOMContentLoaded', () => {
                             break;
                         case "endDay1":
                             updates.status = "Day1Ended_AwaitingNext";
-                            updates.finishTimeDay1 = serverTimestamp;
-                            updates.durationDay1Ms = this.methods.calculateDurationMs.call(this, project.startTimeDay1, serverTimestamp);
+                            const finishTimeD1 = firebase.firestore.Timestamp.now(); // Create a client-side timestamp
+                            updates.finishTimeDay1 = finishTimeD1; // Use it for the database field
+                            updates.durationDay1Ms = this.methods.calculateDurationMs.call(this, project.startTimeDay1, finishTimeD1); // And for the calculation
                             break;
                         case "startDay2":
                             updates.status = "InProgressDay2";
@@ -782,8 +781,9 @@ document.addEventListener('DOMContentLoaded', () => {
                             break;
                         case "endDay2":
                             updates.status = "Day2Ended_AwaitingNext";
-                            updates.finishTimeDay2 = serverTimestamp;
-                            updates.durationDay2Ms = this.methods.calculateDurationMs.call(this, project.startTimeDay2, serverTimestamp);
+                            const finishTimeD2 = firebase.firestore.Timestamp.now();
+                            updates.finishTimeDay2 = finishTimeD2;
+                            updates.durationDay2Ms = this.methods.calculateDurationMs.call(this, project.startTimeDay2, finishTimeD2);
                             break;
                         case "startDay3":
                             updates.status = "InProgressDay3";
@@ -791,20 +791,24 @@ document.addEventListener('DOMContentLoaded', () => {
                             break;
                         case "endDay3":
                             updates.status = "Day3Ended_AwaitingNext";
-                            updates.finishTimeDay3 = serverTimestamp;
-                            updates.durationDay3Ms = this.methods.calculateDurationMs.call(this, project.startTimeDay3, serverTimestamp);
+                            const finishTimeD3 = firebase.firestore.Timestamp.now();
+                            updates.finishTimeDay3 = finishTimeD3;
+                            updates.durationDay3Ms = this.methods.calculateDurationMs.call(this, project.startTimeDay3, finishTimeD3);
                             break;
                         case "markDone":
                             updates.status = "Completed";
                             if (project.status === "InProgressDay1" && !project.finishTimeDay1) {
-                                updates.finishTimeDay1 = serverTimestamp;
-                                updates.durationDay1Ms = this.methods.calculateDurationMs.call(this, project.startTimeDay1, serverTimestamp);
+                                const finishTime = firebase.firestore.Timestamp.now();
+                                updates.finishTimeDay1 = finishTime;
+                                updates.durationDay1Ms = this.methods.calculateDurationMs.call(this, project.startTimeDay1, finishTime);
                             } else if (project.status === "InProgressDay2" && !project.finishTimeDay2) {
-                                updates.finishTimeDay2 = serverTimestamp;
-                                updates.durationDay2Ms = this.methods.calculateDurationMs.call(this, project.startTimeDay2, serverTimestamp);
+                                const finishTime = firebase.firestore.Timestamp.now();
+                                updates.finishTimeDay2 = finishTime;
+                                updates.durationDay2Ms = this.methods.calculateDurationMs.call(this, project.startTimeDay2, finishTime);
                             } else if (project.status === "InProgressDay3" && !project.finishTimeDay3) {
-                                updates.finishTimeDay3 = serverTimestamp;
-                                updates.durationDay3Ms = this.methods.calculateDurationMs.call(this, project.startTimeDay3, serverTimestamp);
+                                const finishTime = firebase.firestore.Timestamp.now();
+                                updates.finishTimeDay3 = finishTime;
+                                updates.durationDay3Ms = this.methods.calculateDurationMs.call(this, project.startTimeDay3, finishTime);
                             }
                             break;
                         default:
@@ -922,17 +926,17 @@ document.addEventListener('DOMContentLoaded', () => {
                         let lockIcon = '';
                         if (status && status.total > 0) {
                             if (status.locked === status.total) {
-                                lockIcon = ' 🔒'; // All locked
+                                lockIcon = ' 白'; // All locked
                             } else if (status.locked > 0) {
-                                lockIcon = ' 🔐'; // Partially locked
+                                lockIcon = ' 柏'; // Partially locked
                             } else {
-                                lockIcon = ' 🔓'; // All unlocked
+                                lockIcon = ' 箔'; // All unlocked
                             }
                         }
 
                         const groupHeaderRow = this.elements.projectTableBody.insertRow();
                         groupHeaderRow.className = "fix-group-header";
-                        groupHeaderRow.innerHTML = `<td colspan="${this.config.NUM_TABLE_COLUMNS}">${currentFixCategoryHeader}${lockIcon} <button class="btn btn-group-toggle">${isExpanded ? "−" : "+"}</button></td>`;
+                        groupHeaderRow.innerHTML = `<td colspan="${this.config.NUM_TABLE_COLUMNS}">${currentFixCategoryHeader}${lockIcon} <button class="btn btn-group-toggle">${isExpanded ? "竏� : "+"}</button></td>`;
                         groupHeaderRow.onclick = () => {
                             this.state.groupVisibilityState[groupKey].isExpanded = !isExpanded;
                             this.methods.saveGroupVisibilityState.call(this);
