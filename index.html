@@ -156,6 +156,12 @@
             h2 { font-size: 1.3em; }
             h3 { font-size: 1.1em; text-align: left; margin-top: 15px; border-bottom: 1px solid #ccc; padding-bottom: 5px;}
             
+            .table-scroll-wrapper {
+                    width: 100%;
+                    max-height: 75vh;
+                    overflow-y: auto;
+                    overflow-x: scroll;
+              }
             .action-bar {
                 margin-bottom: 15px;
                 display: flex;
@@ -333,8 +339,9 @@
                         <option value="Fix3">Fix3</option> <option value="Fix4">Fix4</option> <option value="Fix5">Fix5</option> <option value="Fix6">Fix6</option>
                     </select>
                 </div>
+
+                <div class="table-scroll-wrapper">
                 
-                <div style="width: 100%; overflow-x: scroll;">
                     <table id="projectTable">
                         <thead>
                             <tr>
