@@ -50,7 +50,7 @@ document.addEventListener('DOMContentLoaded', () => {
             },
             firestorePaths: {
                 ALLOWED_EMAILS: "settings/allowedEmails",
-                NOTIFICATIONS: "notifications" 
+                NOTIFICATIONS: "notifications"
             },
             TECH_IDS: ["4232JD", "7248AA", "4426KV", "4472JS", "7236LE", "4475JT", "7039NO", "7231NR", "7240HH", "7247JA", "7249SS", "7244AA", "7314VP"].sort(),
             FIX_CATEGORIES: {
@@ -752,10 +752,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
 
                         const projectData = doc.data();
-                        
+
                         if (projectData.isLocked) {
                             alert("This task is locked. Please unlock it in Project Settings to make changes.");
-                            return; 
+                            return;
                         }
 
                         let firestoreTimestamp = null;
@@ -782,7 +782,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                             const baseDate = existingTimestamp || fallbackTimestamp;
 
-                            const yearForDate = baseDate.getFullYear(); 
+                            const yearForDate = baseDate.getFullYear();
                             const mm = String(baseDate.getMonth() + 1).padStart(2, '0');
                             const dd = String(baseDate.getDate()).padStart(2, '0');
                             const defaultDateString = `${yearForDate}-${mm}-${dd}`;
@@ -924,8 +924,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 try {
                     this.methods.renderProjects.call(this);
                     this.methods.updatePaginationUI.call(this);
-                }
-                catch (error) {
+                } catch (error) {
                     console.error("Error during refreshAllViews:", error);
                     if (this.elements.projectTableBody) this.elements.projectTableBody.innerHTML = `<tr><td colspan="${this.config.NUM_TABLE_COLUMNS}" style="color:red;text-align:center;">Error loading projects.</td></tr>`;
                 }
@@ -1047,7 +1046,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (project.isLocked) row.classList.add("locked-task-highlight");
 
                     row.insertCell().textContent = project.fixCategory;
-                    row.insertCell().textContent = project.baseProjectName;
+                    const projectNameCell = row.insertCell();
+                    projectNameCell.textContent = project.baseProjectName;
+                    projectNameCell.className = 'column-project-name'; // Add a specific class
                     row.insertCell().textContent = project.areaTask;
                     row.insertCell().textContent = project.gsd;
 
@@ -1217,8 +1218,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 try {
                     const docSnap = await this.db.doc(this.config.firestorePaths.ALLOWED_EMAILS).get();
                     this.state.allowedEmails = docSnap.exists ? docSnap.data().emails || [] : ["ev.lorens.ebrado@gmail.com"];
-                }
-                catch (error) {
+                } catch (error) {
                     console.error("Error fetching allowed emails:", error);
                     this.state.allowedEmails = ["ev.lorens.ebrado@gmail.com"];
                 }
@@ -1232,13 +1232,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     });
                     this.state.allowedEmails = emailsArray;
                     return true;
-                }
-                catch (error) {
+                } catch (error) {
                     console.error("Error updating allowed emails:", error);
                     alert("Error saving allowed emails: " + error.message);
                     return false;
-                }
-                finally {
+                } finally {
                     this.methods.hideLoading.call(this);
                 }
             },
@@ -1278,20 +1276,18 @@ document.addEventListener('DOMContentLoaded', () => {
                     });
 
                     return sortedBatches;
-                }
-                catch (error) {
+                } catch (error) {
                     console.error("Error fetching batches for dashboard:", error);
                     alert("Error fetching batches: " + error.message);
                     return [];
-                }
-                finally {
+                } finally {
                     this.methods.hideLoading.call(this);
                 }
             },
 
             // --- Start of script.js modifications ---
 
-// REPLACE the existing 'renderTLDashboard' function with the following:
+            // REPLACE the existing 'renderTLDashboard' function with the following:
             async renderTLDashboard() {
                 if (!this.elements.tlDashboardContentElement) return;
                 this.elements.tlDashboardContentElement.innerHTML = "";
@@ -1434,8 +1430,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     this.elements.tlDashboardContentElement.appendChild(batchItemDiv);
                 });
             },
-// --- End of script.js modifications ---
-            
+            // --- End of script.js modifications ---
+
             async recalculateFixStageTotals(batchId, fixCategory) {
                 this.methods.showLoading.call(this, `Recalculating totals for ${fixCategory}...`);
                 try {
@@ -1463,7 +1459,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         if ((newDurationDay1 || null) !== (task.durationDay1Ms || null)) needsUpdate = true;
                         if ((newDurationDay2 || null) !== (task.durationDay2Ms || null)) needsUpdate = true;
                         if ((newDurationDay3 || null) !== (task.durationDay3Ms || null)) needsUpdate = true;
-                        
+
                         if (needsUpdate) {
                             tasksToUpdate++;
                             const updates = {
@@ -2213,7 +2209,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (lines.length === 0) return [];
 
                 const headers = lines[0].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(h => h.trim().replace(/^"|"$/g, ''));
-                
+
                 const missingHeaders = this.config.CSV_HEADERS_FOR_IMPORT.filter(expected => !headers.includes(expected));
                 if (missingHeaders.length > 0) {
                     throw new Error(`CSV is missing required headers: ${missingHeaders.join(', ')}. Please use the exact headers from the export format.`);
@@ -2231,12 +2227,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     let projectData = {};
                     for (let j = 0; j < headers.length; j++) {
                         const header = headers[j];
-                        const fieldName = this.config.CSV_HEADER_TO_FIELD_MAP[header]; 
-                        
+                        const fieldName = this.config.CSV_HEADER_TO_FIELD_MAP[header];
+
                         if (fieldName === null) {
-                            continue; 
+                            continue;
                         }
-                        
+
                         let value = values[j];
 
                         if (fieldName.startsWith('breakDurationMinutes')) {
@@ -2267,8 +2263,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 // For simplicity, let's map it to "Available" for new imports unless specific logic is needed.
                                 // If you want it to represent 'Day1Ended_AwaitingNext' you can set that.
                                 cleanedStatus = 'Available'; // Or 'Day1Ended_AwaitingNext' if that's the intended internal state after "Started Available"
-                            }
-                            else if (cleanedStatus.includes('inprogressday1')) cleanedStatus = 'InProgressDay1';
+                            } else if (cleanedStatus.includes('inprogressday1')) cleanedStatus = 'InProgressDay1';
                             else if (cleanedStatus.includes('day1ended_awaitingnext')) cleanedStatus = 'Day1Ended_AwaitingNext';
                             else if (cleanedStatus.includes('inprogressday2')) cleanedStatus = 'InProgressDay2';
                             else if (cleanedStatus.includes('day2ended_awaitingnext')) cleanedStatus = 'Day2Ended_AwaitingNext';
@@ -2280,8 +2275,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                             projectData[fieldName] = cleanedStatus;
                             // --- MODIFICATION END ---
-                        }
-                        else {
+                        } else {
                             projectData[fieldName] = value;
                         }
                     }
