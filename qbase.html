@@ -266,9 +266,8 @@
         // --- Firestore Functions ---
         async function saveProjectToFirestore(projectData) {
             try {
-                // Compress rawData before saving
                 const compressedData = pako.deflate(projectData.rawData, { to: 'string' });
-                const dataToSave = { ...projectData, rawData: btoa(compressedData) }; // Store as base64
+                const dataToSave = { ...projectData, rawData: btoa(compressedData) }; 
                 
                 const projectRef = doc(db, "public_projects", projectData.id);
                 await setDoc(projectRef, dataToSave);
@@ -281,20 +280,21 @@
         }
 
         function listenForPublicProjectChanges() {
-            if (unsubscribe) unsubscribe(); // Stop any previous listener
+            if (unsubscribe) unsubscribe(); 
 
+            alert("Connecting to project database...");
             const projectsCol = collection(db, "public_projects");
+            let isInitialLoad = true;
+
             unsubscribe = onSnapshot(projectsCol, (snapshot) => {
                 const loadedProjects = {};
                 snapshot.forEach((doc) => {
                     const project = doc.data();
                     let decompressedData;
                     try {
-                        // Try to decode and decompress
                         const compressed = atob(project.rawData);
                         decompressedData = pako.inflate(compressed, { to: 'string' });
                     } catch (e) {
-                        // If it fails, assume it's old, uncompressed data
                         console.warn(`Could not decompress project "${project.name}". Assuming it's uncompressed data.`);
                         decompressedData = project.rawData;
                     }
@@ -303,12 +303,18 @@
                 });
                 savedProjects = loadedProjects;
                 updateProjectDropdown();
-                showUpdateNotification();
+
+                if (isInitialLoad) {
+                    alert(`${Object.keys(savedProjects).length} public projects loaded. The list will now update automatically.`);
+                    isInitialLoad = false;
+                } else {
+                    showUpdateNotification();
+                }
+
             }, (error) => {
                 console.error("Error with real-time listener:", error);
                 alert("Lost connection to the project database.");
             });
-            alert("Live connection to public projects established. The list will now update automatically.");
         }
 
         async function deleteProjectFromFirestore(projectId) {
@@ -326,23 +332,30 @@
             const projectSelect = document.getElementById('project-select');
             const currentVal = projectSelect.value;
             projectSelect.innerHTML = '<option value="">Select a Project</option>';
-            for (const id in savedProjects) {
-                const project = savedProjects[id];
+            const sortedProjects = Object.values(savedProjects).sort((a,b) => a.name.localeCompare(b.name));
+            
+            sortedProjects.forEach(project => {
                 const option = document.createElement('option');
-                option.value = id;
+                option.value = project.id;
                 const displayName = project.isIR ? `${project.name} (IR)` : project.name;
                 option.textContent = displayName;
                 projectSelect.appendChild(option);
+            });
+
+            if (savedProjects[currentVal]) {
+                projectSelect.value = currentVal;
             }
-            projectSelect.value = currentVal;
+            
             manageButtonState();
         }
         
         function manageButtonState() {
-            document.getElementById('delete-project-btn').disabled = !isAdmin;
+            const projectSelect = document.getElementById('project-select');
+            const projectId = projectSelect.value;
+            document.getElementById('delete-project-btn').disabled = !isAdmin || !projectId;
             document.getElementById('save-project-btn').disabled = !isAdmin;
-            document.getElementById('edit-data-btn').classList.toggle('hidden', !isAdmin);
-            document.getElementById('techData').readOnly = !isAdmin;
+            document.getElementById('edit-data-btn').classList.toggle('hidden', !isAdmin || !projectId);
+            document.getElementById('techData').readOnly = !isAdmin && projectId;
         }
         
         function handleAdminLogin() {
@@ -353,9 +366,9 @@
                 isAdmin = true;
                 document.getElementById('logout-btn').classList.remove('hidden');
                 document.getElementById('admin-login-btn').classList.add('hidden');
-                document.getElementById('load-public-projects-btn').click(); // Automatically load projects for admin
                 document.getElementById('load-public-projects-btn').classList.add('hidden');
                 document.getElementById('admin-dashboard').classList.add('visible');
+                listenForPublicProjectChanges();
                 manageButtonState();
                 alert("Admin Mode Activated. You are now editing the live database.");
             } else {
@@ -372,7 +385,7 @@
             savedProjects = {};
             updateProjectDropdown();
             manageButtonState();
-            if (unsubscribe) unsubscribe(); // Stop listener on logout
+            if (unsubscribe) unsubscribe(); 
             alert("You have been logged out.");
         }
 
@@ -419,6 +432,7 @@
 
                 const success = await saveProjectToFirestore(projectData);
                 if(success) {
+                    // The snapshot listener will handle the UI update.
                     alert(`Project "${projectName}" saved successfully to Firestore.`);
                 }
             });
@@ -452,6 +466,7 @@
                     irCheckbox.checked = false;
                     lastFilterValue = "";
                 }
+                manageButtonState();
             });
             
             document.getElementById('edit-data-btn').addEventListener('click', () => {
@@ -744,7 +759,7 @@
                         const round = colName.match(/\d+/)[0];
                         const fixTechId = values[headerMap[`fix${round}_id`]]?.trim();
                         if (fixTechId && techStats[fixTechId]) {
-                            techStats[fixTechId].warnings += 1;
+                            techStats[techId].warnings += 1;
                         }
                     }
                 });
