@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Phili Fixpoint Advanced Bonus Calculator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        #tech-results-container {
+             max-height: 0;
+             overflow: hidden;
+             opacity: 0;
+             transition: all 0.5s ease-in-out;
+        }
+        #tech-results-container.visible {
+            max-height: 1500px; /* Adjust as needed */
+            opacity: 1;
+        }
+        .table-container {
+            max-height: 600px;
+            overflow-y: auto;
+        }
+        .info-icon {
+            cursor: pointer;
+            display: inline-block;
+            margin-left: 4px;
+            color: #6b7280;
+            vertical-align: middle;
+        }
+        .info-icon:hover {
+            color: #1d4ed8;
+        }
+        /* Modal styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+            transition: opacity 0.3s ease;
+        }
+        .modal-content {
+            background: white;
+            padding: 2rem;
+            border-radius: 0.75rem;
+            max-width: 600px;
+            width: 90%;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            transform: scale(0.95);
+            transition: transform 0.3s ease;
+        }
+        .modal-overlay:not(.hidden) .modal-content {
+            transform: scale(1);
+        }
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        textarea:read-only {
+            background-color: #f3f4f6;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+
+    <div class="w-full max-w-screen-xl mx-auto p-4 md:p-8">
+        <div class="bg-white rounded-2xl shadow-lg overflow-hidden">
+            <div class="p-6 md:p-8 bg-gray-800 text-white flex justify-between items-center">
+                <div>
+                    <h1 class="text-2xl md:text-3xl font-bold">Phili Fixpoint Advanced Bonus Calculator 1.0</h1>
+                    <p class="mt-2 text-gray-300">Save, load, and calculate bonuses for multiple projects.</p>
+                </div>
+                <button id="how-it-works-btn" class="bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors duration-300 shadow-md flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="mr-2" viewBox="0 0 16 16"><path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/><path d="m8.93 6.588-2.29.287-.082.38.45.083c.294.07.352.176.288.469l-.738 3.468c-.064.293.006.399.287.47l.45.083.082.38-2.29.287-.082-.38.45-.083a.89.89 0 0 1 .352-.176c.24-.11.24-.216.06-.563l-.738-3.468c-.18-.84.48-1.133 1.17-1.133H8l.084.38zM8 5.5a1 1 0 1 0 0-2 1 1 0 0 0 0 2z"/></svg>
+                    How It Works
+                </button>
+            </div>
+
+            <div class="p-6 md:p-8 grid grid-cols-1 lg:grid-cols-5 gap-8">
+
+                <div class="lg:col-span-2 space-y-6">
+                     <div class="bg-gray-50 p-6 rounded-xl border">
+                        <h2 class="text-xl font-semibold text-gray-800 border-b pb-3 mb-4">Project Management</h2>
+                         <div class="flex items-center gap-2">
+                            <select id="project-select" class="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                                <option value="">New Project</option>
+                            </select>
+                             <button id="delete-project-btn" title="Delete Selected Project" class="p-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:bg-red-300 transition-colors">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>
+                             </button>
+                        </div>
+                        <div class="mt-4">
+                            <button id="calculate-all-btn" class="w-full bg-green-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-700 transition-colors duration-300 shadow-md">Calculate All Projects (Combined)</button>
+                        </div>
+                    </div>
+                    <div class="bg-gray-50 p-6 rounded-xl border">
+                        <h2 class="text-xl font-semibold text-gray-800 border-b pb-3 mb-4">Calculation Settings</h2>
+                        <div>
+                            <label for="bonusMultiplierDirect" class="block text-sm font-medium text-gray-600 mb-1">
+                                Bonus Multiplier (PHP)
+                                <span class="info-icon" data-key="bonusMultiplier">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/><path d="m8.93 6.588-2.29.287-.082.38.45.083c.294.07.352.176.288.469l-.738 3.468c-.064.293.006.399.287.47l.45.083.082.38-2.29.287-.082-.38.45-.083a.89.89 0 0 1 .352-.176c.24-.11.24-.216.06-.563l-.738-3.468c-.18-.84.48-1.133 1.17-1.133H8l.084.38zM8 5.5a1 1 0 1 0 0-2 1 1 0 0 0 0 2z"/></svg>
+                                </span>
+                            </label>
+                            <input type="number" id="bonusMultiplierDirect" class="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Default: 1 (No multiplier)">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="lg:col-span-3 space-y-6">
+                    <div>
+                        <div class="flex justify-between items-center border-b pb-3 mb-4">
+                            <h2 class="text-xl font-semibold text-gray-800">Project Data Entry</h2>
+                            <button id="edit-data-btn" title="Edit Project Data" class="p-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 hidden">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M12.146.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1 0 .708l-10 10a.5.5 0 0 1-.168.11l-5 2a.5.5 0 0 1-.65-.65l2-5a.5.5 0 0 1 .11-.168l10-10zM11.207 2.5 13.5 4.793 14.793 3.5 12.5 1.207 11.207 2.5zm1.586 3L10.5 3.207 4 9.707V10h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.293l6.5-6.5zm-9.761 5.175-.106.106-1.528 3.821 3.821-1.528.106-.106A.5.5 0 0 1 5 12.5V12h-.5a.5.5 0 0 1-.5-.5V11h-.5a.5.5 0 0 1-.468-.325z"/></svg>
+                            </button>
+                        </div>
+                        
+                        <div class="bg-yellow-50 border border-yellow-200 p-3 rounded-lg mb-4">
+                             <div class="flex items-center">
+                                <input id="is-ir-project-checkbox" type="checkbox" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded">
+                                <label for="is-ir-project-checkbox" class="ml-3 block text-sm font-medium text-yellow-800">
+                                    Mark Project as IR (for Fix Tasks)
+                                    <span class="block text-xs text-yellow-700">Applies 1.5x points multiplier to Fix Tasks only. This setting is saved.</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <label for="techData" class="block text-sm font-medium text-gray-600 mb-2">Paste your raw, tab-separated project data here.</label>
+                        <textarea id="techData" rows="12" class="w-full p-3 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none font-mono text-sm" placeholder="Paste all rows and columns from your project data..."></textarea>
+                    </div>
+                    <div class="flex gap-4">
+                        <input type="text" id="project-name" class="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Enter Project Name to Save/Update">
+                        <button id="save-project-btn" class="bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-indigo-700 transition-colors duration-300 shadow-md whitespace-nowrap">Save Project</button>
+                    </div>
+                    <button id="calculateCurrentBtn" class="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 transition-colors duration-300 shadow-md">
+                        Calculate Current Project
+                    </button>
+                </div>
+            </div>
+
+            <div id="tech-results-container" class="px-6 md:px-8 pb-8">
+                 <h2 id="results-title" class="text-xl font-semibold text-gray-800 border-b pb-3 mb-4">Technician Bonus Results</h2>
+                 <div class="mb-4">
+                    <input type="text" id="search-tech-id" class="w-full md:w-1/3 px-4 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Search by Tech ID...">
+                 </div>
+                 <div id="results-summary" class="text-sm text-gray-600 bg-blue-50 p-3 rounded-md mb-4"></div>
+                 <div class="table-container border rounded-lg bg-white">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead id="results-thead" class="bg-gray-50 sticky top-0">
+                            </thead>
+                        <tbody id="tech-results-body" class="divide-y divide-gray-200">
+                            </tbody>
+                    </table>
+                 </div>
+            </div>
+        </div>
+        <p class="text-center text-xs text-gray-500 mt-4 px-4">Disclaimer: This calculator is based on the formulas and tables in the "Phili IC Fixpoints App Documentation v1.0".</p>
+    </div>
+
+    <div id="info-modal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <h3 id="modal-title" class="text-xl font-bold text-gray-800 mb-4"></h3>
+            <div id="modal-body" class="text-gray-600 space-y-2"></div>
+            <button id="modal-close" class="mt-6 w-full bg-gray-200 text-gray-800 font-bold py-2 px-4 rounded-lg hover:bg-gray-300 transition-colors">Close</button>
+        </div>
+    </div>
+
+    <script>
+        // --- GLOBAL VARIABLES ---
+        const STORAGE_KEY = 'philiFixpointProjects';
+        let savedProjects = {}; // In-memory cache
+        let currentTechStats = {}; // Cache for the latest calculation to power modals
+        let lastUsedBonusMultiplier = 1; 
+        let lastCalculationUsedMultiplier = false;
+        let lastFilterValue = ""; // Stores the last used search term
+
+        // --- DATA FROM DOCUMENTATION ---
+        const categoryValues = { 1: { points: 2.19 }, 2: { points: 5.86 }, 3: { points: 7.44 }, 4: { points: 2.29 }, 5: { points: 1.55 }, 6: { points: 1.84 }, 7: { points: 1.00 }, 8: { points: 3.74 }, 9: { points: 1.73 } };
+        const irModifierValue = 1.5;
+        const calculationInfo = {
+            howItWorks: {
+                title: 'How It Works & How to Use',
+                body: `<div class="space-y-6 text-sm">
+                        <div>
+                            <h4 class="text-lg font-bold text-gray-900 mb-2">How to Use This Site</h4>
+                            <ol class="list-decimal list-inside space-y-2">
+                                <li><strong>New Calculation:</strong> Paste your tab-separated data, including the 'COMBO?' column, into the main text area.</li>
+                                <li><strong>Set IR for Fix Tasks:</strong> Check the "Mark Project as IR" box if Fix Tasks should get the 1.5x points bonus. This setting is saved with the project.</li>
+                                <li><strong>Save Your Work:</strong> Type a name in the "Enter Project Name" field and click "Save Project".</li>
+                                <li><strong>Load a Project:</strong> Select a previously saved project from the dropdown menu at the top-left.</li>
+                                <li><strong>Calculate:</strong> Click "Calculate Current Project" for the loaded data or "Calculate All Projects" to get a combined total.</li>
+                                <li><strong>Filter Results:</strong> After calculating, use the "Search by Tech ID" bar above the results table to find specific technicians.</li>
+                            </ol>
+                        </div>
+                        <hr>
+                        <div>
+                            <h4 class="text-lg font-bold text-gray-900 mb-2">How The Calculation Works</h4>
+                            <div class="space-y-4">
+                                <div>
+                                    <strong class="text-gray-900">Step 1: Data Parsing</strong>
+                                    <p>The calculator reads the raw, tab-separated data you paste. It identifies all tasks and the technician assigned to each one.</p>
+                                </div>
+                                <div>
+                                    <strong class="text-gray-900">Step 2: Point Calculation (per Task)</strong>
+                                    <p>For each task, points are assigned based on the rules. The "Mark Project as IR" checkbox applies a 1.5x multiplier to Fix Tasks only. The 'COMBO?' column in your data applies the IR bonus to RV1 tasks.</p>
+                                </div>
+                                <div>
+                                    <strong class="text-gray-900">Step 3: Aggregation</strong>
+                                    <p>It sums up all stats for each unique technician to get their totals.</p>
+                                </div>
+                                <div>
+                                    <strong class="text-gray-900">Step 4: Quality & Bonus Calculation</strong>
+                                    <p>Using the aggregated stats and the Bonus Multiplier, it calculates the final values for each technician and displays them in the results table.</p>
+                                </div>
+                            </div>
+                        </div>
+                       </div>`
+            },
+            bonusMultiplier: {
+                title: 'Bonus Multiplier (PHP)',
+                body: `<p>An optional multiplier for the final payout. If left blank, it defaults to 1 (no change). This value is multiplied by the Total Points and the % of Bonus Earned.</p>
+                       <p class="text-xs mt-2 text-gray-500">Reference: PDF Pages 15 & 19</p>`
+            },
+            totalPoints: {
+                title: 'Total Points Calculation',
+                body: `<p>Points are calculated for each individual task and then summed for each technician.</p>
+                       <ul class="list-disc list-inside mt-2 space-y-1">
+                        <li><strong>Fix Task:</strong> Points based on Category. Multiplied by 1.5 if IR checkbox is checked.</li>
+                        <li><strong>Refix Task:</strong> 0 points.</li>
+                        <li><strong>QC / Initial Tagging:</strong> 1/8 (0.125) points.</li>
+                        <li><strong>i3QA Task:</strong> 1/12 (~0.083) points.</li>
+                        <li><strong>RV1 Task:</strong> 1/5 (0.2) points, or 1/4 (0.25) if 'COMBO?' column is 'Y'.</li>
+                        <li><strong>RV2 Task:</strong> 1/2 (0.5) points.</li>
+                       </ul>
+                       <p class="text-xs mt-2 text-gray-500">Reference: PDF Pages 13 & 14</p>`
+            },
+            fixQuality: {
+                title: 'Fix Quality % Calculation',
+                body: `<p>This is calculated for each technician per month using the formula:</p>
+                       <p class="mt-2 p-2 bg-gray-100 rounded"><code>[# of Fix Tasks] / ([# of Fix Tasks] + [# of Refix Tasks] + [# of Warnings])</code></p>
+                       <p class="text-xs mt-2 text-gray-500">Reference: PDF Page 20</p>`
+            },
+            bonusEarned: {
+                title: '% of Bonus Earned Calculation',
+                body: `<p>This percentage is determined by looking up the <strong>Fix Quality %</strong> in the Quality Percentage Modifier table.</p>
+                       <p class="mt-2">For example, a quality rate of 80% earns 30% of the bonus, while a rate of 99% would earn a much higher percentage.</p>
+                       <p class="text-xs mt-2 text-gray-500">Reference: PDF Page 20</p>`
+            },
+            totalBonus: {
+                title: 'Final Payout (PHP) Calculation',
+                body: `<p>The final payout for a technician is calculated with the formula:</p>
+                       <p class="mt-2 p-2 bg-gray-100 rounded"><code>Total Points * Bonus Multiplier * % of Bonus Earned</code></p>`
+            }
+        };
+
+        function createNewTechStat() {
+            return {
+                id: '',
+                points: 0,
+                fixTasks: 0,
+                refixTasks: 0,
+                warnings: 0,
+                categoryCounts: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0, 8: 0, 9: 0 },
+                pointsBreakdown: { fix: 0, qc: 0, i3qa: 0, rv: 0 }
+            };
+        }
+        
+        function saveProjectsToLocalStorage() {
+            try {
+                const jsonString = JSON.stringify(savedProjects);
+                const compressed = pako.deflate(jsonString, { to: 'string' });
+                localStorage.setItem(STORAGE_KEY, btoa(compressed));
+            } catch (e) {
+                console.error("Error saving to localStorage:", e);
+                alert("Could not save projects. Your browser's storage might be full.");
+            }
+        }
+
+        function loadProjectsFromLocalStorage() {
+            try {
+                const compressedB64 = localStorage.getItem(STORAGE_KEY);
+                if (compressedB64) {
+                    const compressed = atob(compressedB64);
+                    const restoredJson = pako.inflate(compressed, { to: 'string' });
+                    savedProjects = JSON.parse(restoredJson);
+                } else {
+                    savedProjects = {};
+                }
+            } catch (e) {
+                console.error("Error loading from localStorage:", e);
+                alert("Could not load saved projects. Data might be corrupted.");
+                savedProjects = {};
+            }
+            updateProjectDropdown();
+        }
+
+        function updateProjectDropdown() {
+            const projectSelect = document.getElementById('project-select');
+            const currentVal = projectSelect.value;
+            projectSelect.innerHTML = '<option value="">New Project</option>';
+            for (const id in savedProjects) {
+                const project = savedProjects[id];
+                const option = document.createElement('option');
+                option.value = id;
+                const displayName = project.isIR ? `${project.name} (IR)` : project.name;
+                option.textContent = displayName;
+                projectSelect.appendChild(option);
+            }
+            projectSelect.value = currentVal;
+            manageButtonState();
+        }
+        
+        function manageButtonState() {
+            const projectId = document.getElementById('project-select').value;
+            document.getElementById('delete-project-btn').disabled = !projectId;
+            
+            const techDataTextarea = document.getElementById('techData');
+            const editDataBtn = document.getElementById('edit-data-btn');
+
+            if (projectId) {
+                techDataTextarea.readOnly = true;
+                editDataBtn.classList.remove('hidden');
+            } else {
+                techDataTextarea.readOnly = false;
+                editDataBtn.classList.add('hidden');
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadProjectsFromLocalStorage();
+
+            document.getElementById('save-project-btn').addEventListener('click', () => {
+                const projectName = document.getElementById('project-name').value.trim();
+                const rawData = document.getElementById('techData').value.trim();
+                const isIR = document.getElementById('is-ir-project-checkbox').checked;
+
+                if (!projectName || !rawData) {
+                    alert("Please enter a project name and paste project data before saving/updating.");
+                    return;
+                }
+                
+                let projectId = document.getElementById('project-select').value;
+                let isUpdate = false;
+                
+                if (projectId) {
+                    isUpdate = true;
+                } else {
+                    projectId = Date.now().toString();
+                }
+
+                savedProjects[projectId] = {
+                    id: projectId,
+                    name: projectName,
+                    rawData: rawData,
+                    isIR: isIR,
+                    createdAt: savedProjects[projectId]?.createdAt || new Date().toISOString()
+                };
+                
+                saveProjectsToLocalStorage();
+                alert(`Project "${projectName}" ${isUpdate ? 'updated' : 'saved'} successfully!`);
+                updateProjectDropdown();
+                document.getElementById('project-select').value = projectId;
+                manageButtonState();
+            });
+            
+            document.getElementById('delete-project-btn').addEventListener('click', () => {
+                const projectId = document.getElementById('project-select').value;
+                if (!projectId) {
+                    alert("Please select a project to delete.");
+                    return;
+                }
+                
+                const projectName = savedProjects[projectId].name;
+                if (confirm(`Are you sure you want to delete the project "${projectName}"? This action cannot be undone.`)) {
+                    delete savedProjects[projectId];
+                    saveProjectsToLocalStorage();
+                    
+                    document.getElementById('techData').value = '';
+                    document.getElementById('project-name').value = '';
+                    document.getElementById('is-ir-project-checkbox').checked = false;
+                    lastFilterValue = "";
+                    updateProjectDropdown();
+                    alert(`Project "${projectName}" has been deleted.`);
+                }
+            });
+
+            document.getElementById('project-select').addEventListener('change', (e) => {
+                const projectId = e.target.value;
+                const irCheckbox = document.getElementById('is-ir-project-checkbox');
+
+                if (projectId && savedProjects[projectId]) {
+                    const project = savedProjects[projectId];
+                    document.getElementById('techData').value = project.rawData;
+                    document.getElementById('project-name').value = project.name;
+                    irCheckbox.checked = project.isIR || false;
+                } else {
+                    document.getElementById('techData').value = '';
+                    document.getElementById('project-name').value = '';
+                    irCheckbox.checked = false;
+                    lastFilterValue = "";
+                }
+                manageButtonState();
+            });
+            
+            document.getElementById('edit-data-btn').addEventListener('click', () => {
+                const techDataTextarea = document.getElementById('techData');
+                techDataTextarea.readOnly = false;
+                techDataTextarea.focus();
+            });
+            
+            document.getElementById('calculateCurrentBtn').addEventListener('click', () => calculateAndRender(false));
+            document.getElementById('calculate-all-btn').addEventListener('click', () => calculateAndRender(true));
+
+            document.getElementById('search-tech-id').addEventListener('input', (e) => {
+                lastFilterValue = e.target.value;
+                filterTable();
+            });
+            
+            document.body.addEventListener('click', (e) => {
+                if (e.target.closest('.info-icon')) {
+                    e.stopPropagation();
+                    const icon = e.target.closest('.info-icon');
+                    const key = icon.dataset.key;
+                    const techId = icon.dataset.techId;
+                    if (key) {
+                        openModal(key);
+                    } else if (techId) {
+                        openTechSummaryModal(techId);
+                    }
+                }
+            });
+
+            document.getElementById('how-it-works-btn').addEventListener('click', () => openModal('howItWorks'));
+            document.getElementById('modal-close').addEventListener('click', closeModal);
+            document.getElementById('info-modal').addEventListener('click', (e) => {
+                if (e.target === document.getElementById('info-modal')) {
+                    closeModal();
+                }
+            });
+        });
+
+        function calculateAndRender(isAllProjects) {
+            let bonusMultiplier = 1;
+            let isMultiplierUsed = false;
+            const directMultiplierInput = document.getElementById('bonusMultiplierDirect').value;
+
+            if (directMultiplierInput.trim() !== '') {
+                const parsedMultiplier = parseFloat(directMultiplierInput);
+                if (!isNaN(parsedMultiplier) && parsedMultiplier >= 0) {
+                    bonusMultiplier = parsedMultiplier;
+                    isMultiplierUsed = true;
+                } else {
+                    alert("Bonus Multiplier must be a valid number.");
+                    return;
+                }
+            }
+            
+            lastUsedBonusMultiplier = bonusMultiplier;
+            lastCalculationUsedMultiplier = isMultiplierUsed;
+
+            const resultsTitleEl = document.getElementById('results-title');
+            
+            if (isAllProjects) {
+                resultsTitleEl.textContent = `All Projects (Combined) - Bonus Results ${isMultiplierUsed ? `(Multiplier: ${bonusMultiplier})` : '(No Multiplier Applied)'}`;
+                let combinedTechStats = {};
+                
+                for (const projectId in savedProjects) {
+                    const project = savedProjects[projectId];
+                    const parsedData = parseRawData(project.rawData, project.isIR || false); 
+                    if (parsedData) {
+                        for (const techId in parsedData.techStats) {
+                            const singleProjectTechStats = parsedData.techStats[techId];
+                            if (!combinedTechStats[techId]) {
+                                combinedTechStats[techId] = createNewTechStat();
+                                combinedTechStats[techId].id = techId;
+                            }
+                            combinedTechStats[techId].points += singleProjectTechStats.points;
+                            combinedTechStats[techId].fixTasks += singleProjectTechStats.fixTasks;
+                            combinedTechStats[techId].refixTasks += singleProjectTechStats.refixTasks;
+                            combinedTechStats[techId].warnings += singleProjectTechStats.warnings;
+                            for (let i = 1; i <= 9; i++) {
+                                combinedTechStats[techId].categoryCounts[i] += singleProjectTechStats.categoryCounts[i];
+                            }
+                            combinedTechStats[techId].pointsBreakdown.fix += singleProjectTechStats.pointsBreakdown.fix;
+                            combinedTechStats[techId].pointsBreakdown.qc += singleProjectTechStats.pointsBreakdown.qc;
+                            combinedTechStats[techId].pointsBreakdown.i3qa += singleProjectTechStats.pointsBreakdown.i3qa;
+                            combinedTechStats[techId].pointsBreakdown.rv += singleProjectTechStats.pointsBreakdown.rv;
+                        }
+                    }
+                }
+                currentTechStats = combinedTechStats; 
+                renderSingleProjectTable(currentTechStats, bonusMultiplier);
+            } else {
+                const isProjectLevelIR = document.getElementById('is-ir-project-checkbox').checked;
+                resultsTitleEl.textContent = `Current Project - Bonus Results ${isMultiplierUsed ? `(Multiplier: ${bonusMultiplier})` : '(No Multiplier Applied)'}`;
+                const data = document.getElementById('techData').value.trim();
+                if (!data) {
+                    alert("Please paste data or load a project to calculate.");
+                    return;
+                }
+                const parsedData = parseRawData(data, isProjectLevelIR);
+                if (parsedData) {
+                    currentTechStats = parsedData.techStats;
+                    renderSingleProjectTable(currentTechStats, bonusMultiplier);
+                }
+            }
+            document.getElementById('tech-results-container').classList.add('visible');
+        }
+        
+        function renderSingleProjectTable(techStats, bonusMultiplier) {
+            const resultsThead = document.getElementById('results-thead');
+            const resultsBody = document.getElementById('tech-results-body');
+            resultsBody.innerHTML = '';
+            const infoIconSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/><path d="m8.93 6.588-2.29.287-.082.38.45.083c.294.07.352.176.288.469l-.738 3.468c-.064.293.006.399.287.47l.45.083.082.38-2.29.287-.082-.38.45-.083a.89.89 0 0 1 .352-.176c.24-.11.24-.216.06-.563l-.738-3.468c-.18-.84.48-1.133 1.17-1.133H8l.084.38zM8 5.5a1 1 0 1 0 0-2 1 1 0 0 0 0 2z"/></svg>`;
+            resultsThead.innerHTML = `
+                <tr>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tech ID</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Points <span class="info-icon" data-key="totalPoints">${infoIconSvg}</span></th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fix Quality % <span class="info-icon" data-key="fixQuality">${infoIconSvg}</span></th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">% of Bonus Earned <span class="info-icon" data-key="bonusEarned">${infoIconSvg}</span></th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Final Payout (PHP) <span class="info-icon" data-key="totalBonus">${infoIconSvg}</span></th>
+                </tr>
+            `;
+
+            for (const techId in techStats) {
+                const tech = techStats[techId];
+                const row = createTableRow(tech, bonusMultiplier);
+                row.dataset.techId = techId;
+                resultsBody.appendChild(row);
+            }
+
+            if (lastFilterValue) {
+                const searchInput = document.getElementById('search-tech-id');
+                searchInput.value = lastFilterValue;
+                filterTable();
+            }
+        }
+        
+        function calculateQualityModifier(qualityRate) {
+            // This now uses a tiered lookup to match the documentation
+            if (qualityRate >= 100) return 1.0;
+            if (qualityRate >= 82.5) return 0.55;
+            if (qualityRate >= 82) return 0.50;
+            if (qualityRate >= 81.5) return 0.45;
+            if (qualityRate >= 81) return 0.40;
+            if (qualityRate >= 80.5) return 0.35;
+            if (qualityRate >= 80) return 0.30;
+            if (qualityRate >= 79.5) return 0.25;
+            if (qualityRate >= 79) return 0.20;
+            if (qualityRate >= 78.5) return 0.15;
+            if (qualityRate >= 78) return 0.10;
+            if (qualityRate >= 77.5) return 0.05;
+            return 0;
+        }
+        
+        function createTableRow(tech, bonusMultiplier) {
+            const denominator = tech.fixTasks + tech.refixTasks + tech.warnings;
+            const fixQuality = denominator > 0 ? (tech.fixTasks / denominator) : 0;
+            const qualityModifier = calculateQualityModifier(fixQuality * 100);
+            const finalPayout = tech.points * bonusMultiplier * qualityModifier;
+            const row = document.createElement('tr');
+            
+            row.innerHTML = `
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                    ${tech.id}
+                    <span class="info-icon tech-summary-icon" data-tech-id="${tech.id}">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/><path d="m8.93 6.588-2.29.287-.082.38.45.083c.294.07.352.176.288.469l-.738 3.468c-.064.293.006.399.287.47l.45.083.082.38-2.29.287-.082-.38.45-.083a.89.89 0 0 1 .352-.176c.24-.11.24-.216.06-.563l-.738-3.468c-.18-.84.48-1.133 1.17-1.133H8l.084.38zM8 5.5a1 1 0 1 0 0-2 1 1 0 0 0 0 2z"/></svg>
+                    </span>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${tech.points.toFixed(3)}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${(fixQuality * 100).toFixed(2)}%</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${(qualityModifier * 100).toFixed(0)}%</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold text-blue-600">${finalPayout.toFixed(2)}</td>
+            `;
+            
+            return row;
+        }
+
+        function parseRawData(data, isFixTaskIR = false) {
+            const techStats = {};
+            const lines = data.split('\n').filter(line => line.trim() !== '');
+            if (lines.length < 2) {
+                alert("Data must include at least one header row and one data row.");
+                return null;
+            }
+            const headerLine = lines.shift();
+            const delimiter = '\t';
+            const headers = headerLine.split(delimiter).map(h => h.trim().toLowerCase());
+            
+            const headerMap = {};
+            headers.forEach((h, i) => { headerMap[h] = i; });
+
+            if (headerMap['category'] === undefined || headerMap['combo?'] === undefined) {
+                alert("Critical columns 'CATEGORY' or 'COMBO?' are missing from the data header. Please ensure they are included.");
+                return null;
+            }
+
+            const techIdCols = headers.filter(h => h.endsWith('_id'));
+            const warnCols = headers.filter(h => h.startsWith('r') && h.endsWith('_warn'));
+
+            lines.forEach(line => {
+                const values = line.split(delimiter);
+                const category = parseInt(values[headerMap['category']]);
+                const isComboIR = values[headerMap['combo?']] === 'Y';
+
+                techIdCols.forEach(colName => {
+                    const techId = values[headerMap[colName]]?.trim();
+                    if (techId) {
+                        if (!techStats[techId]) {
+                            techStats[techId] = createNewTechStat();
+                            techStats[techId].id = techId;
+                        }
+                        
+                        let points = 0;
+                        if (colName.startsWith('fix')) {
+                            const isRefix = colName !== 'fix1_id';
+                            if (isRefix) {
+                                techStats[techId].refixTasks += 1;
+                            } else {
+                                techStats[techId].fixTasks += 1;
+                                if (category && techStats[techId].categoryCounts[category] !== undefined) {
+                                    techStats[techId].categoryCounts[category]++;
+                                }
+                                const catInfo = categoryValues[category];
+                                if (catInfo) {
+                                    let fixPoints = catInfo.points;
+                                    if(isFixTaskIR) { // Use checkbox state for Fix Tasks
+                                        fixPoints *= irModifierValue;
+                                    }
+                                    techStats[techId].pointsBreakdown.fix += fixPoints;
+                                    points += fixPoints;
+                                }
+                            }
+                        } else if (colName.startsWith('qc')) {
+                            points = 1 / 8;
+                            techStats[techId].pointsBreakdown.qc += points;
+                        } else if (colName.startsWith('i3qa')) {
+                            points = 1 / 12;
+                            techStats[techId].pointsBreakdown.i3qa += points;
+                        } else if (colName.startsWith('rv')) {
+                            if (colName === 'rv1_id') points = isComboIR ? (1/4) : (1/5); // Use COMBO? column for RV1
+                            else if (colName === 'rv2_id') points = 1/2;
+                            techStats[techId].pointsBreakdown.rv += points;
+                        }
+                        
+                        techStats[techId].points += points;
+                    }
+                });
+
+                warnCols.forEach(colName => {
+                    const warnValue = values[headerMap[colName]]?.trim();
+                    if (warnValue) {
+                        const round = colName.match(/\d+/)[0];
+                        const fixTechId = values[headerMap[`fix${round}_id`]]?.trim();
+                        if (fixTechId && techStats[fixTechId]) {
+                            techStats[techId].warnings += 1;
+                        }
+                    }
+                });
+            });
+            return { techStats };
+        }
+
+        function filterTable() {
+            const searchTerm = document.getElementById('search-tech-id').value.toUpperCase();
+            const rows = document.getElementById('tech-results-body').getElementsByTagName('tr');
+            for (let i = 0; i < rows.length; i++) {
+                const techIdCell = rows[i].getElementsByTagName('td')[0];
+                if (techIdCell) {
+                    const techId = techIdCell.textContent || techIdCell.innerText;
+                    if (searchTerm === "" || techId.toUpperCase().indexOf(searchTerm) > -1) {
+                        rows[i].style.display = "";
+                    } else {
+                        rows[i].style.display = "none";
+                    }
+                }
+            }
+        }
+
+        // --- Modal Logic ---
+        function openModal(key) {
+            const modal = document.getElementById('info-modal');
+            const modalTitle = document.getElementById('modal-title');
+            const modalBody = document.getElementById('modal-body');
+            const info = calculationInfo[key];
+            if (info) {
+                modalTitle.innerHTML = info.title;
+                modalBody.innerHTML = info.body;
+                modal.classList.remove('hidden');
+            }
+        }
+        
+        function openTechSummaryModal(techId) {
+            const tech = currentTechStats[techId];
+            if (!tech) return;
+
+            const modal = document.getElementById('info-modal');
+            const modalTitle = document.getElementById('modal-title');
+            const modalBody = document.getElementById('modal-body');
+
+            const denominator = tech.fixTasks + tech.refixTasks + tech.warnings;
+            const fixQuality = denominator > 0 ? (tech.fixTasks / denominator) : 0;
+            const qualityModifier = calculateQualityModifier(fixQuality * 100);
+            const finalPayout = tech.points * lastUsedBonusMultiplier * qualityModifier;
+
+            modalTitle.innerHTML = `Detailed Breakdown for Tech ID: <span class="text-blue-600">${techId}</span>`;
+            
+            let categoryHtml = '';
+            for (let i = 1; i <= 9; i++) {
+                if (tech.categoryCounts[i] > 0) {
+                     categoryHtml += `<li class="flex justify-between"><span>Category ${i}:</span> <span class="font-mono">${tech.categoryCounts[i]}</span></li>`;
+                }
+            }
+            if (!categoryHtml) categoryHtml = '<li>No primary fix tasks recorded.</li>';
+
+            let multiplierDisplay = lastCalculationUsedMultiplier
+                ? `${lastUsedBonusMultiplier.toFixed(2)} (Multiplier)`
+                : '1 (No Multiplier Applied)';
+
+            let bodyHtml = `<div class="space-y-4 text-sm">
+                
+                <div class="p-3 bg-gray-50 rounded-lg border">
+                    <h4 class="font-semibold text-base text-gray-800 mb-2">Core Stats</h4>
+                    <div class="flex justify-between"><span class="text-gray-600">Primary Fix Tasks:</span><span class="font-bold">${tech.fixTasks}</span></div>
+                    <div class="flex justify-between"><span class="text-gray-600">Refix Tasks:</span><span class="font-bold">${tech.refixTasks}</span></div>
+                    <div class="flex justify-between"><span class="text-gray-600">Warnings:</span><span class="font-bold text-red-600">${tech.warnings}</span></div>
+                    <details class="mt-2 text-xs">
+                        <summary class="cursor-pointer font-medium text-gray-500">Show Category Counts</summary>
+                        <ul class="list-disc list-inside mt-1 space-y-1 pl-2">${categoryHtml}</ul>
+                    </details>
+                </div>
+                
+                <div class="p-3 bg-gray-50 rounded-lg border">
+                    <h4 class="font-semibold text-base text-gray-800 mb-2">Points Calculation</h4>
+                    <div class="flex justify-between"><span class="text-gray-600">Points from Fix Tasks:</span><span class="font-mono">${tech.pointsBreakdown.fix.toFixed(3)}</span></div>
+                    <div class="flex justify-between"><span class="text-gray-600">Points from QC Tasks:</span><span class="font-mono">${tech.pointsBreakdown.qc.toFixed(3)}</span></div>
+                    <div class="flex justify-between"><span class="text-gray-600">Points from i3QA Tasks:</span><span class="font-mono">${tech.pointsBreakdown.i3qa.toFixed(3)}</span></div>
+                    <div class="flex justify-between"><span class="text-gray-600">Points from RV Tasks:</span><span class="font-mono">${tech.pointsBreakdown.rv.toFixed(3)}</span></div>
+                    <hr class="my-2">
+                    <div class="flex justify-between font-bold"><span class="text-gray-800">Total Points:</span><span class="font-mono">${tech.points.toFixed(3)}</span></div>
+                </div>
+
+                <div class="p-3 bg-gray-50 rounded-lg border">
+                    <h4 class="font-semibold text-base text-gray-800 mb-2">Quality Calculation</h4>
+                     <p class="text-xs text-gray-500 mb-2">Formula: [Fix Tasks] / ([Fix Tasks] + [Refix Tasks] + [Warnings])</p>
+                    <div class="p-2 bg-white rounded text-center mb-2"><code>${tech.fixTasks} / (${tech.fixTasks} + ${tech.refixTasks} + ${tech.warnings}) = ${(fixQuality).toFixed(4)}</code></div>
+                    <div class="flex justify-between font-bold"><span class="text-gray-800">Fix Quality %:</span><span class="font-mono">${(fixQuality * 100).toFixed(2)}%</span></div>
+                </div>
+
+                <div class="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                    <h4 class="font-semibold text-base text-blue-800 mb-2">Final Payout</h4>
+                    <div class="flex justify-between"><span class="text-gray-600">% of Bonus Earned:</span><span class="font-bold text-green-600">${(qualityModifier * 100).toFixed(0)}%</span></div>
+                    <p class="text-xs text-gray-500 mt-2 mb-2">Formula: Total Points * Bonus Multiplier * % of Bonus Earned</p>
+                    <div class="p-2 bg-white rounded text-center text-xs md:text-sm mb-2"><code>${tech.points.toFixed(3)} (Points) * ${multiplierDisplay} * ${qualityModifier.toFixed(2)} (Earned)</code></div>
+                    <div class="flex justify-between font-bold text-lg"><span class="text-blue-900">Final Payout (PHP):</span><span class="text-blue-600 font-mono">${finalPayout.toFixed(2)}</span></div>
+                </div>
+
+            </div>`;
+
+            modalBody.innerHTML = bodyHtml;
+            modal.classList.remove('hidden');
+        }
+
+        function closeModal() {
+            const modal = document.getElementById('info-modal');
+            modal.classList.add('hidden');
+        }
+
+    </script>
+</body>
+</html>
