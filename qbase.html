@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Team123 Advanced Bonus Calculator</title>
+    <title>Phili Fixpoint Advanced Bonus Calculator</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
@@ -85,7 +85,7 @@
         <div class="bg-white rounded-2xl shadow-lg overflow-hidden">
             <div class="p-6 md:p-8 bg-gray-800 text-white flex justify-between items-center">
                 <div>
-                    <h1 class="text-2xl md:text-3xl font-bold">Team123 Advanced Bonus Calculator</h1>
+                    <h1 class="text-2xl md:text-3xl font-bold">Phili Fixpoint Advanced Bonus Calculator</h1>
                     <p class="mt-2 text-gray-300">Save, load, and calculate bonuses for multiple projects.</p>
                 </div>
                  <div class="flex gap-4">
@@ -102,7 +102,7 @@
                         <h2 class="text-xl font-semibold text-gray-800 border-b pb-3 mb-4">Project Management</h2>
                         <div class="mb-4">
                              <button id="load-public-projects-btn" class="w-full bg-cyan-600 text-white font-bold py-2 px-3 rounded-lg hover:bg-cyan-700 transition-colors">
-                                Load Project Online
+                                Load Public Projects
                             </button>
                         </div>
                          <div class="flex items-center gap-2">
@@ -114,7 +114,7 @@
                              </button>
                         </div>
                         <div class="mt-4">
-                            <button id="calculate-all-btn" class="w-full bg-green-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-700 transition-colors duration-300 shadow-md">Calculate All Projects</button>
+                            <button id="calculate-all-btn" class="w-full bg-green-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-700 transition-colors duration-300 shadow-md">Calculate All Projects (Combined)</button>
                         </div>
                     </div>
                     <div class="bg-gray-50 p-6 rounded-xl border">
@@ -267,7 +267,7 @@
         async function saveProjectToFirestore(projectData) {
             try {
                 const compressedData = pako.deflate(projectData.rawData, { to: 'string' });
-                const dataToSave = { ...projectData, rawData: btoa(compressedData) }; 
+                const dataToSave = { ...projectData, rawData: btoa(compressedData), isCompressed: true }; 
                 
                 const projectRef = doc(db, "public_projects", projectData.id);
                 await setDoc(projectRef, dataToSave);
@@ -291,11 +291,15 @@
                 snapshot.forEach((doc) => {
                     const project = doc.data();
                     let decompressedData;
-                    try {
-                        const compressed = atob(project.rawData);
-                        decompressedData = pako.inflate(compressed, { to: 'string' });
-                    } catch (e) {
-                        console.warn(`Could not decompress project "${project.name}". Assuming it's uncompressed data.`);
+                    if (project.isCompressed) {
+                        try {
+                            const compressed = atob(project.rawData);
+                            decompressedData = pako.inflate(compressed, { to: 'string' });
+                        } catch (e) {
+                            console.error(`Failed to decompress project ${project.name}:`, e);
+                            return; 
+                        }
+                    } else {
                         decompressedData = project.rawData;
                     }
                     project.rawData = decompressedData;
@@ -355,7 +359,7 @@
             document.getElementById('delete-project-btn').disabled = !isAdmin || !projectId;
             document.getElementById('save-project-btn').disabled = !isAdmin;
             document.getElementById('edit-data-btn').classList.toggle('hidden', !isAdmin || !projectId);
-            document.getElementById('techData').readOnly = !isAdmin && projectId;
+            document.getElementById('techData').readOnly = !isAdmin;
         }
         
         function handleAdminLogin() {
@@ -366,9 +370,9 @@
                 isAdmin = true;
                 document.getElementById('logout-btn').classList.remove('hidden');
                 document.getElementById('admin-login-btn').classList.add('hidden');
+                document.getElementById('load-public-projects-btn').click(); 
                 document.getElementById('load-public-projects-btn').classList.add('hidden');
                 document.getElementById('admin-dashboard').classList.add('visible');
-                listenForPublicProjectChanges();
                 manageButtonState();
                 alert("Admin Mode Activated. You are now editing the live database.");
             } else {
@@ -432,7 +436,6 @@
 
                 const success = await saveProjectToFirestore(projectData);
                 if(success) {
-                    // The snapshot listener will handle the UI update.
                     alert(`Project "${projectName}" saved successfully to Firestore.`);
                 }
             });
