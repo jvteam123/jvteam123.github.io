@@ -320,6 +320,7 @@
             document.getElementById('delete-project-btn').disabled = !isAdmin;
             document.getElementById('save-project-btn').disabled = !isAdmin;
             document.getElementById('edit-data-btn').classList.toggle('hidden', !isAdmin);
+            document.getElementById('techData').readOnly = !isAdmin;
         }
         
         function handleAdminLogin() {
@@ -331,6 +332,7 @@
                 document.getElementById('logout-btn').classList.remove('hidden');
                 document.getElementById('admin-login-btn').classList.add('hidden');
                 document.getElementById('load-public-projects-btn').classList.add('hidden');
+                document.getElementById('admin-dashboard').classList.add('visible');
                 manageButtonState();
                 alert("Admin Mode Activated. You can now save and delete projects directly from the central database.");
             } else {
@@ -343,6 +345,9 @@
             document.getElementById('logout-btn').classList.add('hidden');
             document.getElementById('admin-login-btn').classList.remove('hidden');
             document.getElementById('load-public-projects-btn').classList.remove('hidden');
+            document.getElementById('admin-dashboard').classList.remove('visible');
+            savedProjects = {};
+            updateProjectDropdown();
             manageButtonState();
             alert("You have been logged out.");
         }
@@ -379,6 +384,7 @@
                     savedProjects[projectId] = projectData;
                     updateProjectDropdown();
                     document.getElementById('project-select').value = projectId;
+                    alert(`Project "${projectName}" saved successfully to Firestore.`);
                 }
             });
             
@@ -397,6 +403,7 @@
                         document.getElementById('is-ir-project-checkbox').checked = false;
                         lastFilterValue = "";
                         updateProjectDropdown();
+                        alert(`Project "${projectName}" has been deleted.`);
                     }
                 }
             });
@@ -440,6 +447,9 @@
             
             document.getElementById('admin-login-btn').addEventListener('click', handleAdminLogin);
             document.getElementById('logout-btn').addEventListener('click', handleLogout);
+            document.getElementById('admin-publish-btn').addEventListener('click', () => {
+                alert("This feature is a placeholder. A developer would implement a cloud function to sync data securely.");
+            });
 
             document.body.addEventListener('click', (e) => {
                 if (e.target.closest('.info-icon')) {
@@ -712,7 +722,7 @@
                         const round = colName.match(/\d+/)[0];
                         const fixTechId = values[headerMap[`fix${round}_id`]]?.trim();
                         if (fixTechId && techStats[fixTechId]) {
-                            techStats[fixTechId].warnings += 1;
+                            techStats[techId].warnings += 1;
                         }
                     }
                 });
