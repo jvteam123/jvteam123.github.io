@@ -3,9 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Team123 Bonus Calculator</title>
+    <title>Phili Fixpoint Advanced Bonus Calculator</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
     <style>
         body {
             font-family: 'Inter', sans-serif;
@@ -69,15 +70,22 @@
             background-color: #f3f4f6;
             cursor: not-allowed;
         }
+        #update-notification {
+            transition: opacity 0.5s, transform 0.5s;
+        }
     </style>
 </head>
 <body class="bg-gray-100">
+
+    <div id="update-notification" class="hidden fixed top-5 right-5 bg-green-500 text-white py-2 px-4 rounded-lg shadow-lg opacity-0 transform translate-y-2">
+        Project list updated automatically.
+    </div>
 
     <div class="w-full max-w-screen-xl mx-auto p-4 md:p-8">
         <div class="bg-white rounded-2xl shadow-lg overflow-hidden">
             <div class="p-6 md:p-8 bg-gray-800 text-white flex justify-between items-center">
                 <div>
-                    <h1 class="text-2xl md:text-3xl font-bold">Team123 Bonus Calculator</h1>
+                    <h1 class="text-2xl md:text-3xl font-bold">Phili Fixpoint Advanced Bonus Calculator</h1>
                     <p class="mt-2 text-gray-300">Save, load, and calculate bonuses for multiple projects.</p>
                 </div>
                  <div class="flex gap-4">
@@ -158,12 +166,7 @@
             <div id="admin-dashboard" class="hidden px-6 md:px-8 pb-8">
                 <div class="border-t pt-6">
                     <h2 class="text-xl font-semibold text-gray-800 border-b pb-3 mb-4">Admin Dashboard</h2>
-                    <p class="text-sm text-gray-600 mb-4">As an admin, you can save and delete projects. Use the 'Publish' button to make your local project list available to all users.</p>
-                    <div class="flex gap-4">
-                         <button id="admin-publish-btn" class="bg-purple-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-purple-700 transition-colors duration-300 shadow-md">
-                            Publish All Projects
-                        </button>
-                    </div>
+                    <p class="text-sm text-gray-600 mb-4">As an admin, you can save and delete projects directly to the central database.</p>
                 </div>
             </div>
 
@@ -197,10 +200,9 @@
     <script type="module">
         // --- Firebase SDK Imports ---
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
-        import { getFirestore, collection, doc, setDoc, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
+        import { getFirestore, collection, doc, setDoc, getDocs, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
 
         // --- Your Firebase Configuration ---
-        // REPLACE THE PLACEHOLDER VALUES BELOW WITH YOUR ACTUAL FIREBASE CONFIG
         const firebaseConfig = {
             apiKey: "AIzaSyDMG_34ybAauTtXQH1s_NaJIeYyKPHW4Po",
             authDomain: "bunos-tracker.firebaseapp.com",
@@ -222,6 +224,7 @@
         let lastCalculationUsedMultiplier = false;
         let lastFilterValue = ""; 
         let isAdmin = false; 
+        let unsubscribe; // To store the Firestore listener function
 
         // --- DATA FROM DOCUMENTATION ---
         const categoryValues = { 1: { points: 2.19 }, 2: { points: 5.86 }, 3: { points: 7.44 }, 4: { points: 2.29 }, 5: { points: 1.55 }, 6: { points: 1.84 }, 7: { points: 1.00 }, 8: { points: 3.74 }, 9: { points: 1.73 } };
@@ -233,9 +236,9 @@
                         <div>
                             <h4 class="text-lg font-bold text-gray-900 mb-2">How to Use This Site</h4>
                             <ol class="list-decimal list-inside space-y-2">
-                                <li><strong>Client View (Default):</strong> Click 'Load Public Projects' to fetch the project list from the central database.</li>
+                                <li><strong>Client View (Default):</strong> Click 'Load Public Projects' to fetch the project list from the central database. The list will update automatically if an admin makes changes.</li>
                                 <li><strong>Admin Login:</strong> Click 'Admin Login' and use credentials ('admin'/'admin123') to enter Admin Mode.</li>
-                                <li><strong>Admin Mode:</strong> In this mode, you can create, save, and delete projects. These actions modify the central database directly.</li>
+                                <li><strong>Admin Mode:</strong> In this mode, you can create, save, and delete projects. These actions modify the central database directly and will be seen by all users in real-time.</li>
                             </ol>
                         </div>
                         <hr>
@@ -263,8 +266,12 @@
         // --- Firestore Functions ---
         async function saveProjectToFirestore(projectData) {
             try {
+                // Compress rawData before saving
+                const compressedData = pako.deflate(projectData.rawData, { to: 'string' });
+                const dataToSave = { ...projectData, rawData: btoa(compressedData) }; // Store as base64
+                
                 const projectRef = doc(db, "public_projects", projectData.id);
-                await setDoc(projectRef, projectData);
+                await setDoc(projectRef, dataToSave);
                 return true;
             } catch (error) {
                 console.error("Error saving project to Firestore: ", error);
@@ -273,20 +280,31 @@
             }
         }
 
-        async function loadProjectsFromFirestore() {
-            try {
-                const projectsCol = collection(db, "public_projects");
-                const projectSnapshot = await getDocs(projectsCol);
+        function listenForPublicProjectChanges() {
+            if (unsubscribe) unsubscribe(); // Stop any previous listener
+
+            const projectsCol = collection(db, "public_projects");
+            unsubscribe = onSnapshot(projectsCol, (snapshot) => {
                 const loadedProjects = {};
-                projectSnapshot.forEach((doc) => {
-                    loadedProjects[doc.id] = doc.data();
+                snapshot.forEach((doc) => {
+                    const project = doc.data();
+                    try {
+                        // Decompress rawData after loading
+                        const compressed = atob(project.rawData);
+                        project.rawData = pako.inflate(compressed, { to: 'string' });
+                        loadedProjects[doc.id] = project;
+                    } catch(e) {
+                        console.error(`Failed to decompress project ${project.name}:`, e);
+                    }
                 });
-                return loadedProjects;
-            } catch (error) {
-                console.error("Error loading projects from Firestore: ", error);
-                alert("Failed to load public projects.");
-                return {};
-            }
+                savedProjects = loadedProjects;
+                updateProjectDropdown();
+                showUpdateNotification();
+            }, (error) => {
+                console.error("Error with real-time listener:", error);
+                alert("Lost connection to the project database.");
+            });
+            alert("Live connection to public projects established. The list will now update automatically.");
         }
 
         async function deleteProjectFromFirestore(projectId) {
@@ -331,10 +349,11 @@
                 isAdmin = true;
                 document.getElementById('logout-btn').classList.remove('hidden');
                 document.getElementById('admin-login-btn').classList.add('hidden');
+                document.getElementById('load-public-projects-btn').click(); // Automatically load projects for admin
                 document.getElementById('load-public-projects-btn').classList.add('hidden');
                 document.getElementById('admin-dashboard').classList.add('visible');
                 manageButtonState();
-                alert("Admin Mode Activated. You can now save and delete projects directly from the central database.");
+                alert("Admin Mode Activated. You are now editing the live database.");
             } else {
                 alert("Incorrect username or password.");
             }
@@ -349,7 +368,22 @@
             savedProjects = {};
             updateProjectDropdown();
             manageButtonState();
+            if (unsubscribe) unsubscribe(); // Stop listener on logout
             alert("You have been logged out.");
+        }
+
+        function showUpdateNotification() {
+            const notification = document.getElementById('update-notification');
+            if (notification.classList.contains('hidden')) {
+                notification.classList.remove('hidden');
+                setTimeout(() => {
+                    notification.classList.remove('opacity-0', 'translate-y-2');
+                }, 10);
+                setTimeout(() => {
+                    notification.classList.add('opacity-0', 'translate-y-2');
+                    setTimeout(() => notification.classList.add('hidden'), 500);
+                }, 3000);
+            }
         }
 
         document.addEventListener('DOMContentLoaded', () => {
@@ -381,9 +415,6 @@
 
                 const success = await saveProjectToFirestore(projectData);
                 if(success) {
-                    savedProjects[projectId] = projectData;
-                    updateProjectDropdown();
-                    document.getElementById('project-select').value = projectId;
                     alert(`Project "${projectName}" saved successfully to Firestore.`);
                 }
             });
@@ -397,12 +428,7 @@
                 if (confirm(`Are you sure you want to delete the project "${projectName}"? This action cannot be undone.`)) {
                     const success = await deleteProjectFromFirestore(projectId);
                     if (success) {
-                        delete savedProjects[projectId];
-                        document.getElementById('techData').value = '';
-                        document.getElementById('project-name').value = '';
-                        document.getElementById('is-ir-project-checkbox').checked = false;
-                        lastFilterValue = "";
-                        updateProjectDropdown();
+                        // The onSnapshot listener will handle the UI update automatically.
                         alert(`Project "${projectName}" has been deleted.`);
                     }
                 }
@@ -432,11 +458,7 @@
                 techDataTextarea.focus();
             });
             
-            document.getElementById('load-public-projects-btn').addEventListener('click', async () => {
-                savedProjects = await loadProjectsFromFirestore();
-                updateProjectDropdown();
-                alert(`${Object.keys(savedProjects).length} public projects loaded.`);
-            });
+            document.getElementById('load-public-projects-btn').addEventListener('click', listenForPublicProjectChanges);
             
             document.getElementById('calculateCurrentBtn').addEventListener('click', () => calculateAndRender(false));
             document.getElementById('calculate-all-btn').addEventListener('click', () => calculateAndRender(true));
@@ -447,9 +469,6 @@
             
             document.getElementById('admin-login-btn').addEventListener('click', handleAdminLogin);
             document.getElementById('logout-btn').addEventListener('click', handleLogout);
-            document.getElementById('admin-publish-btn').addEventListener('click', () => {
-                alert("This feature is a placeholder. A developer would implement a cloud function to sync data securely.");
-            });
 
             document.body.addEventListener('click', (e) => {
                 if (e.target.closest('.info-icon')) {
@@ -722,7 +741,7 @@
                         const round = colName.match(/\d+/)[0];
                         const fixTechId = values[headerMap[`fix${round}_id`]]?.trim();
                         if (fixTechId && techStats[fixTechId]) {
-                            techStats[techId].warnings += 1;
+                            techStats[fixTechId].warnings += 1;
                         }
                     }
                 });
