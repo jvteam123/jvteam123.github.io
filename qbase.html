@@ -264,22 +264,36 @@
         }
         
         // --- Firestore Functions ---
+        // --- MODIFICATION START: Robust data saving ---
         async function saveProjectToFirestore(projectData) {
             try {
-                // Compress the raw data before saving to save space and ensure consistency.
-                const compressedData = pako.deflate(projectData.rawData, { to: 'string' });
-                // Encode the compressed data to base64 to ensure it's stored correctly in Firestore.
-                const dataToSave = { ...projectData, rawData: btoa(compressedData) }; 
+                // Step 1: Compress the raw text data. pako.deflate returns a Uint8Array by default.
+                const compressedUint8Array = pako.deflate(projectData.rawData);
+
+                // Step 2: Convert the Uint8Array into a binary string. This is a crucial step
+                // to prepare the data for base64 encoding, as btoa() can corrupt multi-byte characters
+                // if the data is not handled as a pure binary sequence.
+                let binaryString = '';
+                const len = compressedUint8Array.byteLength;
+                for (let i = 0; i < len; i++) {
+                    binaryString += String.fromCharCode(compressedUint8Array[i]);
+                }
+
+                // Step 3: Encode the binary string to a base64 string. This is now safe.
+                const base64String = btoa(binaryString);
+                
+                const dataToSave = { ...projectData, rawData: base64String }; 
                 
                 const projectRef = doc(db, "public_projects", projectData.id);
                 await setDoc(projectRef, dataToSave);
                 return true;
             } catch (error) {
                 console.error("Error saving project to Firestore: ", error);
-                alert("Failed to save project.");
+                alert("Failed to save project. The data might be too large or invalid.");
                 return false;
             }
         }
+        // --- MODIFICATION END ---
 
         function listenForPublicProjectChanges() {
             if (unsubscribe) unsubscribe(); 
@@ -293,15 +307,14 @@
                 snapshot.forEach((doc) => {
                     const project = doc.data();
                     
-                    // --- MODIFICATION START: Robust decompression and error handling ---
                     let decompressedData;
-                    project.isCorrupted = false; // Add a flag to track data integrity.
+                    project.isCorrupted = false; 
 
                     try {
                         // Data from Firestore is expected to be a base64 encoded string of compressed data.
                         // Step 1: Decode from base64.
                         const compressed = atob(project.rawData);
-                        // Step 2: Decompress the data.
+                        // Step 2: Decompress the data. pako.inflate can correctly handle the binary string from atob.
                         decompressedData = pako.inflate(compressed, { to: 'string' });
                     } catch (e) {
                         // This block runs if atob() or pako.inflate() fails.
@@ -312,7 +325,6 @@
                         project.isCorrupted = true;
                     }
                     project.rawData = decompressedData;
-                    // --- MODIFICATION END ---
 
                     loadedProjects[doc.id] = project;
                 });
@@ -550,16 +562,14 @@
 
             const resultsTitleEl = document.getElementById('results-title');
             
-            // --- MODIFICATION START: Handle corrupted data before calculation ---
             if (isAllProjects) {
                 resultsTitleEl.textContent = `All Projects (Combined) - Bonus Results ${isMultiplierUsed ? `(Multiplier: ${bonusMultiplier})` : '(No Multiplier Applied)'}`;
                 let combinedTechStats = {};
-                const corruptedProjects = []; // Keep track of corrupted projects to notify user.
+                const corruptedProjects = []; 
                 
                 for (const projectId in savedProjects) {
                     const project = savedProjects[projectId];
                     
-                    // If a project is flagged as corrupted, skip it and add to our list.
                     if (project.isCorrupted) {
                         corruptedProjects.push(project.name);
                         continue;
@@ -588,7 +598,6 @@
                     }
                 }
 
-                // After the loop, notify the user if any projects were skipped.
                 if (corruptedProjects.length > 0) {
                     alert(`The following projects have corrupted data and were skipped:\n- ${corruptedProjects.join('\n- ')}\n\nAn admin must re-save these projects to include them in calculations.`);
                 }
@@ -596,11 +605,10 @@
                 currentTechStats = combinedTechStats; 
                 renderSingleProjectTable(currentTechStats, bonusMultiplier);
             } else {
-                // Check the currently selected project for the corruption flag.
                 const projectId = document.getElementById('project-select').value;
                 if (projectId && savedProjects[projectId] && savedProjects[projectId].isCorrupted) {
                     alert(`Cannot calculate. The selected project "${savedProjects[projectId].name}" has corrupted data.\n\nAn admin must re-save this project to fix it.`);
-                    return; // Stop the calculation.
+                    return; 
                 }
 
                 resultsTitleEl.textContent = `Current Project - Bonus Results ${isMultiplierUsed ? `(Multiplier: ${bonusMultiplier})` : '(No Multiplier Applied)'}`;
@@ -616,7 +624,6 @@
                     renderSingleProjectTable(currentTechStats, bonusMultiplier);
                 }
             }
-            // --- MODIFICATION END ---
             document.getElementById('tech-results-container').classList.add('visible');
         }
         
@@ -692,12 +699,10 @@
             const techStats = {};
             const lines = data.split('\n').filter(line => line.trim() !== '');
             
-            // --- MODIFICATION: Improved error message ---
             if (lines.length < 2) {
                 alert("Calculation failed: The project data is incomplete or empty. It must include at least one header row and one data row.");
                 return null;
             }
-            // --- END MODIFICATION ---
 
             const headerLine = lines.shift();
             const delimiter = '\t';
