@@ -266,7 +266,9 @@
         // --- Firestore Functions ---
         async function saveProjectToFirestore(projectData) {
             try {
+                // Compress the raw data before saving to save space and ensure consistency.
                 const compressedData = pako.deflate(projectData.rawData, { to: 'string' });
+                // Encode the compressed data to base64 to ensure it's stored correctly in Firestore.
                 const dataToSave = { ...projectData, rawData: btoa(compressedData) }; 
                 
                 const projectRef = doc(db, "public_projects", projectData.id);
@@ -290,15 +292,28 @@
                 const loadedProjects = {};
                 snapshot.forEach((doc) => {
                     const project = doc.data();
+                    
+                    // --- MODIFICATION START: Robust decompression and error handling ---
                     let decompressedData;
+                    project.isCorrupted = false; // Add a flag to track data integrity.
+
                     try {
+                        // Data from Firestore is expected to be a base64 encoded string of compressed data.
+                        // Step 1: Decode from base64.
                         const compressed = atob(project.rawData);
+                        // Step 2: Decompress the data.
                         decompressedData = pako.inflate(compressed, { to: 'string' });
                     } catch (e) {
-                        console.warn(`Could not decompress project "${project.name}". Assuming it's uncompressed data.`);
-                        decompressedData = project.rawData;
+                        // This block runs if atob() or pako.inflate() fails.
+                        // This indicates the data in the database is not in the correct format.
+                        console.error(`Decompression failed for project "${project.name}". The data is likely corrupted.`, e);
+                        // We keep the original rawData to allow an admin to see it, but mark it as corrupted.
+                        decompressedData = project.rawData; 
+                        project.isCorrupted = true;
                     }
                     project.rawData = decompressedData;
+                    // --- MODIFICATION END ---
+
                     loadedProjects[doc.id] = project;
                 });
                 savedProjects = loadedProjects;
@@ -337,8 +352,12 @@
             sortedProjects.forEach(project => {
                 const option = document.createElement('option');
                 option.value = project.id;
-                const displayName = project.isIR ? `${project.name} (IR)` : project.name;
+                // Display if a project is corrupted in the dropdown
+                const displayName = project.isCorrupted ? `${project.name} (Data Corrupted)` : (project.isIR ? `${project.name} (IR)` : project.name);
                 option.textContent = displayName;
+                if (project.isCorrupted) {
+                    option.classList.add('text-red-500');
+                }
                 projectSelect.appendChild(option);
             });
 
@@ -531,12 +550,21 @@
 
             const resultsTitleEl = document.getElementById('results-title');
             
+            // --- MODIFICATION START: Handle corrupted data before calculation ---
             if (isAllProjects) {
                 resultsTitleEl.textContent = `All Projects (Combined) - Bonus Results ${isMultiplierUsed ? `(Multiplier: ${bonusMultiplier})` : '(No Multiplier Applied)'}`;
                 let combinedTechStats = {};
+                const corruptedProjects = []; // Keep track of corrupted projects to notify user.
                 
                 for (const projectId in savedProjects) {
                     const project = savedProjects[projectId];
+                    
+                    // If a project is flagged as corrupted, skip it and add to our list.
+                    if (project.isCorrupted) {
+                        corruptedProjects.push(project.name);
+                        continue;
+                    }
+
                     const parsedData = parseRawData(project.rawData, project.isIR || false); 
                     if (parsedData) {
                         for (const techId in parsedData.techStats) {
@@ -559,22 +587,36 @@
                         }
                     }
                 }
+
+                // After the loop, notify the user if any projects were skipped.
+                if (corruptedProjects.length > 0) {
+                    alert(`The following projects have corrupted data and were skipped:\n- ${corruptedProjects.join('\n- ')}\n\nAn admin must re-save these projects to include them in calculations.`);
+                }
+
                 currentTechStats = combinedTechStats; 
                 renderSingleProjectTable(currentTechStats, bonusMultiplier);
             } else {
-                const isProjectLevelIR = document.getElementById('is-ir-project-checkbox').checked;
+                // Check the currently selected project for the corruption flag.
+                const projectId = document.getElementById('project-select').value;
+                if (projectId && savedProjects[projectId] && savedProjects[projectId].isCorrupted) {
+                    alert(`Cannot calculate. The selected project "${savedProjects[projectId].name}" has corrupted data.\n\nAn admin must re-save this project to fix it.`);
+                    return; // Stop the calculation.
+                }
+
                 resultsTitleEl.textContent = `Current Project - Bonus Results ${isMultiplierUsed ? `(Multiplier: ${bonusMultiplier})` : '(No Multiplier Applied)'}`;
                 const data = document.getElementById('techData').value.trim();
                 if (!data) {
                     alert("Please paste data or load a project to calculate.");
                     return;
                 }
+                const isProjectLevelIR = document.getElementById('is-ir-project-checkbox').checked;
                 const parsedData = parseRawData(data, isProjectLevelIR);
                 if (parsedData) {
                     currentTechStats = parsedData.techStats;
                     renderSingleProjectTable(currentTechStats, bonusMultiplier);
                 }
             }
+            // --- MODIFICATION END ---
             document.getElementById('tech-results-container').classList.add('visible');
         }
         
@@ -649,10 +691,14 @@
         function parseRawData(data, isFixTaskIR = false) {
             const techStats = {};
             const lines = data.split('\n').filter(line => line.trim() !== '');
+            
+            // --- MODIFICATION: Improved error message ---
             if (lines.length < 2) {
-                alert("Data must include at least one header row and one data row.");
+                alert("Calculation failed: The project data is incomplete or empty. It must include at least one header row and one data row.");
                 return null;
             }
+            // --- END MODIFICATION ---
+
             const headerLine = lines.shift();
             const delimiter = '\t';
             const headers = headerLine.split(delimiter).map(h => h.trim().toLowerCase());
@@ -848,7 +894,7 @@
                 <div class="p-3 bg-gray-50 rounded-lg border">
                     <h4 class="font-semibold text-base text-gray-800 mb-2">Quality Calculation</h4>
                      <p class="text-xs text-gray-500 mb-2">Formula: [Fix Tasks] / ([Fix Tasks] + [Refix Tasks] + [Warnings])</p>
-                    <div class="p-2 bg-white rounded text-center mb-2"><code>${tech.fixTasks} / (${tech.fixTasks} + ${tech.refixTasks} + ${tech.warnings}) = ${(fixQuality).toFixed(4)}</code></div>
+                    <div class="p-2 bg-white rounded text-center"><code>${tech.fixTasks} / (${tech.fixTasks} + ${tech.refixTasks} + ${tech.warnings}) = ${(fixQuality).toFixed(4)}</code></div>
                     <div class="flex justify-between font-bold"><span class="text-gray-800">Fix Quality %:</span><span class="font-mono">${(fixQuality * 100).toFixed(2)}%</span></div>
                 </div>
 
