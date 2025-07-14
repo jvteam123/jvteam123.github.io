@@ -288,14 +288,18 @@
                 const loadedProjects = {};
                 snapshot.forEach((doc) => {
                     const project = doc.data();
+                    let decompressedData;
                     try {
-                        // Decompress rawData after loading
+                        // Try to decode and decompress
                         const compressed = atob(project.rawData);
-                        project.rawData = pako.inflate(compressed, { to: 'string' });
-                        loadedProjects[doc.id] = project;
-                    } catch(e) {
-                        console.error(`Failed to decompress project ${project.name}:`, e);
+                        decompressedData = pako.inflate(compressed, { to: 'string' });
+                    } catch (e) {
+                        // If it fails, assume it's old, uncompressed data
+                        console.warn(`Could not decompress project "${project.name}". Assuming it's uncompressed data.`);
+                        decompressedData = project.rawData;
                     }
+                    project.rawData = decompressedData;
+                    loadedProjects[doc.id] = project;
                 });
                 savedProjects = loadedProjects;
                 updateProjectDropdown();
@@ -428,7 +432,6 @@
                 if (confirm(`Are you sure you want to delete the project "${projectName}"? This action cannot be undone.`)) {
                     const success = await deleteProjectFromFirestore(projectId);
                     if (success) {
-                        // The onSnapshot listener will handle the UI update automatically.
                         alert(`Project "${projectName}" has been deleted.`);
                     }
                 }
