@@ -78,7 +78,7 @@
         <div class="bg-white rounded-2xl shadow-lg overflow-hidden">
             <div class="p-6 md:p-8 bg-gray-800 text-white flex justify-between items-center">
                 <div>
-                    <h1 class="text-2xl md:text-3xl font-bold">Phili Fixpoint Advanced Bonus Calculator 1.0</h1>
+                    <h1 class="text-2xl md:text-3xl font-bold">Phili Fixpoint Advanced Bonus Calculator</h1>
                     <p class="mt-2 text-gray-300">Save, load, and calculate bonuses for multiple projects.</p>
                 </div>
                 <button id="how-it-works-btn" class="bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors duration-300 shadow-md flex items-center">
@@ -132,7 +132,7 @@
                                 <input id="is-ir-project-checkbox" type="checkbox" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded">
                                 <label for="is-ir-project-checkbox" class="ml-3 block text-sm font-medium text-yellow-800">
                                     Mark Project as IR (for Fix Tasks)
-                                    <span class="block text-xs text-yellow-700">Applies 1.5x points multiplier to Fix Tasks only. This setting is saved.</span>
+                                    <span class="block text-xs text-yellow-700">Applies 1.5x points multiplier to the sum of all categories in a Fix Task row.</span>
                                 </label>
                             </div>
                         </div>
@@ -214,7 +214,7 @@
                                 </div>
                                 <div>
                                     <strong class="text-gray-900">Step 2: Point Calculation (per Task)</strong>
-                                    <p>For each task, points are assigned based on the rules. The "Mark Project as IR" checkbox applies a 1.5x multiplier to Fix Tasks only. The 'COMBO?' column in your data applies the IR bonus to RV1 tasks.</p>
+                                    <p>For each task, points are assigned based on the rules. Fix Tasks now sum points from all available category columns in a row. The "Mark Project as IR" checkbox applies a 1.5x multiplier to this sum. The 'COMBO?' column in your data applies the IR bonus to RV1 tasks.</p>
                                 </div>
                                 <div>
                                     <strong class="text-gray-900">Step 3: Aggregation</strong>
@@ -237,7 +237,7 @@
                 title: 'Total Points Calculation',
                 body: `<p>Points are calculated for each individual task and then summed for each technician.</p>
                        <ul class="list-disc list-inside mt-2 space-y-1">
-                        <li><strong>Fix Task:</strong> Points based on Category. Multiplied by 1.5 if IR checkbox is checked.</li>
+                        <li><strong>Fix Task:</strong> Sums points from all category columns (CATEGORY, I3QA_CAT, etc.) in the row. This total is then multiplied by 1.5 if the IR checkbox is checked.</li>
                         <li><strong>Refix Task:</strong> 0 points.</li>
                         <li><strong>QC / Initial Tagging:</strong> 1/8 (0.125) points.</li>
                         <li><strong>i3QA Task:</strong> 1/12 (~0.083) points.</li>
@@ -602,9 +602,10 @@
             const headerMap = {};
             headers.forEach((h, i) => { headerMap[h] = i; });
 
-            if (headerMap['category'] === undefined || headerMap['combo?'] === undefined) {
-                alert("Critical columns 'CATEGORY' or 'COMBO?' are missing from the data header. Please ensure they are included.");
-                return null;
+            const allCategoryHeaders = ['category', 'i3qa_cat', 'rv1_cat', 'afp1_cat', 'afp2_cat', 'rv2_cat'];
+            if (headerMap['combo?'] === undefined) {
+                 alert("Critical column 'COMBO?' is missing from the data header. Please ensure it is included.");
+                 return null;
             }
 
             const techIdCols = headers.filter(h => h.endsWith('_id'));
@@ -612,7 +613,6 @@
 
             lines.forEach(line => {
                 const values = line.split(delimiter);
-                const category = parseInt(values[headerMap['category']]);
                 const isComboIR = values[headerMap['combo?']] === 'Y';
 
                 techIdCols.forEach(colName => {
@@ -630,18 +630,29 @@
                                 techStats[techId].refixTasks += 1;
                             } else {
                                 techStats[techId].fixTasks += 1;
-                                if (category && techStats[techId].categoryCounts[category] !== undefined) {
-                                    techStats[techId].categoryCounts[category]++;
-                                }
-                                const catInfo = categoryValues[category];
-                                if (catInfo) {
-                                    let fixPoints = catInfo.points;
-                                    if(isFixTaskIR) { // Use checkbox state for Fix Tasks
-                                        fixPoints *= irModifierValue;
+                                let totalRowFixPoints = 0;
+                                
+                                allCategoryHeaders.forEach(catHeader => {
+                                    if (headerMap[catHeader] !== undefined) {
+                                        const categoryValue = parseInt(values[headerMap[catHeader]]);
+                                        if (!isNaN(categoryValue) && categoryValue >= 1 && categoryValue <= 9) {
+                                            if (techStats[techId].categoryCounts[categoryValue] !== undefined) {
+                                                techStats[techId].categoryCounts[categoryValue]++;
+                                            }
+                                            const catInfo = categoryValues[categoryValue];
+                                            if (catInfo) {
+                                                totalRowFixPoints += catInfo.points;
+                                            }
+                                        }
                                     }
-                                    techStats[techId].pointsBreakdown.fix += fixPoints;
-                                    points += fixPoints;
+                                });
+
+                                if (isFixTaskIR && totalRowFixPoints > 0) {
+                                    totalRowFixPoints *= irModifierValue;
                                 }
+
+                                techStats[techId].pointsBreakdown.fix += totalRowFixPoints;
+                                points += totalRowFixPoints;
                             }
                         } else if (colName.startsWith('qc')) {
                             points = 1 / 8;
@@ -650,7 +661,7 @@
                             points = 1 / 12;
                             techStats[techId].pointsBreakdown.i3qa += points;
                         } else if (colName.startsWith('rv')) {
-                            if (colName === 'rv1_id') points = isComboIR ? (1/4) : (1/5); // Use COMBO? column for RV1
+                            if (colName === 'rv1_id') points = isComboIR ? (1/4) : (1/5);
                             else if (colName === 'rv2_id') points = 1/2;
                             techStats[techId].pointsBreakdown.rv += points;
                         }
@@ -665,7 +676,7 @@
                         const round = colName.match(/\d+/)[0];
                         const fixTechId = values[headerMap[`fix${round}_id`]]?.trim();
                         if (fixTechId && techStats[fixTechId]) {
-                            techStats[techId].warnings += 1;
+                            techStats[fixTechId].warnings += 1;
                         }
                     }
                 });
