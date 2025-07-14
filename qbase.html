@@ -93,9 +93,14 @@
                 <div class="lg:col-span-2 space-y-6">
                      <div class="bg-gray-50 p-6 rounded-xl border">
                         <h2 class="text-xl font-semibold text-gray-800 border-b pb-3 mb-4">Project Management</h2>
+                        <div class="mb-4">
+                             <button id="load-public-projects-btn" class="w-full bg-cyan-600 text-white font-bold py-2 px-3 rounded-lg hover:bg-cyan-700 transition-colors">
+                                Load Public Projects
+                            </button>
+                        </div>
                          <div class="flex items-center gap-2">
                             <select id="project-select" class="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
-                                <option value="">New Project</option>
+                                <option value="">Select a Project</option>
                             </select>
                              <button id="delete-project-btn" title="Delete Selected Project" class="p-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:bg-red-300 transition-colors">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>
@@ -154,10 +159,10 @@
             <div id="admin-dashboard" class="hidden px-6 md:px-8 pb-8">
                 <div class="border-t pt-6">
                     <h2 class="text-xl font-semibold text-gray-800 border-b pb-3 mb-4">Admin Dashboard</h2>
-                    <p class="text-sm text-gray-600 mb-4">Admin functions are now available.</p>
+                    <p class="text-sm text-gray-600 mb-4">As an admin, you can save and delete projects locally. Use the 'Publish' button to simulate updating the central database for all users.</p>
                     <div class="flex gap-4">
-                         <button id="admin-update-all-btn" class="bg-purple-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-purple-700 transition-colors duration-300 shadow-md">
-                            Admin Placeholder Button
+                         <button id="admin-publish-btn" class="bg-purple-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-purple-700 transition-colors duration-300 shadow-md">
+                            Publish All Projects
                         </button>
                     </div>
                 </div>
@@ -192,7 +197,8 @@
 
     <script>
         // --- GLOBAL VARIABLES ---
-        const STORAGE_KEY = 'philiFixpointProjects';
+        const LOCAL_STORAGE_KEY = 'philiFixpointProjects_Admin';
+        const PUBLIC_PROJECTS_KEY = 'philiFixpointProjects_Public';
         let savedProjects = {}; // In-memory cache
         let currentTechStats = {}; // Cache for the latest calculation to power modals
         let lastUsedBonusMultiplier = 1; 
@@ -210,35 +216,16 @@
                         <div>
                             <h4 class="text-lg font-bold text-gray-900 mb-2">How to Use This Site</h4>
                             <ol class="list-decimal list-inside space-y-2">
-                                <li><strong>New Calculation:</strong> Paste your tab-separated data, including the 'COMBO?' column, into the main text area.</li>
-                                <li><strong>Set IR for Fix Tasks:</strong> Check the "Mark Project as IR" box if Fix Tasks should get the 1.5x points bonus. This setting is saved with the project.</li>
-                                <li><strong>Save Your Work:</strong> Type a name in the "Enter Project Name" field and click "Save Project".</li>
-                                <li><strong>Load a Project:</strong> Select a previously saved project from the dropdown menu at the top-left.</li>
-                                <li><strong>Admin Access:</strong> Click 'Admin Login' and enter credentials ('admin'/'admin123') to show the Admin Dashboard.</li>
-                                <li><strong>Calculate:</strong> Click "Calculate Current Project" for the loaded data or "Calculate All Projects" to get a combined total.</li>
+                                <li><strong>Client View (Default):</strong> Click 'Load Public Projects' to view the project list. You cannot save or delete projects.</li>
+                                <li><strong>Admin Login:</strong> Click 'Admin Login' and use credentials ('admin'/'admin123') to enter Admin Mode.</li>
+                                <li><strong>Admin Mode:</strong> In this mode, you can create, save, and delete projects. These are saved to your local browser storage.</li>
+                                <li><strong>Publishing Projects:</strong> In the Admin Dashboard, click 'Publish All Projects' to make your locally saved list available to all other users.</li>
                             </ol>
                         </div>
                         <hr>
                         <div>
                             <h4 class="text-lg font-bold text-gray-900 mb-2">How The Calculation Works</h4>
-                            <div class="space-y-4">
-                                <div>
-                                    <strong class="text-gray-900">Step 1: Data Parsing</strong>
-                                    <p>The calculator reads the raw, tab-separated data you paste. It identifies all tasks and the technician assigned to each one.</p>
-                                </div>
-                                <div>
-                                    <strong class="text-gray-900">Step 2: Point Calculation (per Task)</strong>
-                                    <p>For each task, points are assigned based on the rules. Fix Tasks now sum points from all available category columns in a row (including AFP columns if their status is 'AA'). The "Mark Project as IR" checkbox applies a 1.5x multiplier to this sum. The 'COMBO?' column in your data applies the IR bonus to RV1 tasks.</p>
-                                </div>
-                                <div>
-                                    <strong class="text-gray-900">Step 3: Aggregation</strong>
-                                    <p>It sums up all stats for each unique technician to get their totals.</p>
-                                </div>
-                                <div>
-                                    <strong class="text-gray-900">Step 4: Quality & Bonus Calculation</strong>
-                                    <p>Using the aggregated stats and the Bonus Multiplier, it calculates the final values for each technician and displays them in the results table.</p>
-                                </div>
-                            </div>
+                            <p>The calculation logic remains the same, based on the data from the selected project.</p>
                         </div>
                        </div>`
             },
@@ -269,7 +256,7 @@
             },
             totalBonus: {
                 title: 'Final Payout (PHP) Calculation',
-                body: `<p>The final payout is calculated with the formula: <code>Total Points * Bonus Multiplier * % of Bonus Earned</code></p>`
+                body: `<p>The final payout is calculated with the formula: code>Total Points * Bonus Multiplier * % of Bonus Earned</code></p>`
             }
         };
 
@@ -285,39 +272,36 @@
             };
         }
         
-        function saveProjectsToLocalStorage() {
+        function saveProjectsToLocalStorage(key, data) {
             try {
-                const jsonString = JSON.stringify(savedProjects);
+                const jsonString = JSON.stringify(data);
                 const compressed = pako.deflate(jsonString, { to: 'string' });
-                localStorage.setItem(STORAGE_KEY, btoa(compressed));
+                localStorage.setItem(key, btoa(compressed));
             } catch (e) {
                 console.error("Error saving to localStorage:", e);
                 alert("Could not save projects. Your browser's storage might be full.");
             }
         }
 
-        function loadProjectsFromLocalStorage() {
+        function loadProjectsFromLocalStorage(key) {
             try {
-                const compressedB64 = localStorage.getItem(STORAGE_KEY);
+                const compressedB64 = localStorage.getItem(key);
                 if (compressedB64) {
                     const compressed = atob(compressedB64);
                     const restoredJson = pako.inflate(compressed, { to: 'string' });
-                    savedProjects = JSON.parse(restoredJson);
-                } else {
-                    savedProjects = {};
+                    return JSON.parse(restoredJson);
                 }
+                return {};
             } catch (e) {
                 console.error("Error loading from localStorage:", e);
-                alert("Could not load saved projects. Data might be corrupted.");
-                savedProjects = {};
+                return {};
             }
-            updateProjectDropdown();
         }
 
         function updateProjectDropdown() {
             const projectSelect = document.getElementById('project-select');
             const currentVal = projectSelect.value;
-            projectSelect.innerHTML = '<option value="">New Project</option>';
+            projectSelect.innerHTML = '<option value="">Select a Project</option>';
             for (const id in savedProjects) {
                 const project = savedProjects[id];
                 const option = document.createElement('option');
@@ -332,17 +316,15 @@
         
         function manageButtonState() {
             const projectId = document.getElementById('project-select').value;
-            document.getElementById('delete-project-btn').disabled = !projectId;
-            
-            const techDataTextarea = document.getElementById('techData');
-            const editDataBtn = document.getElementById('edit-data-btn');
+            document.getElementById('delete-project-btn').disabled = !projectId || !isAdmin;
+            document.getElementById('save-project-btn').disabled = !isAdmin;
+            document.getElementById('edit-data-btn').classList.toggle('hidden', !isAdmin);
 
-            if (projectId) {
+            const techDataTextarea = document.getElementById('techData');
+            if (projectId && !isAdmin) {
                 techDataTextarea.readOnly = true;
-                editDataBtn.classList.remove('hidden');
             } else {
-                techDataTextarea.readOnly = false;
-                editDataBtn.classList.add('hidden');
+                 techDataTextarea.readOnly = false;
             }
         }
         
@@ -355,7 +337,13 @@
                 document.getElementById('admin-dashboard').classList.add('visible');
                 document.getElementById('logout-btn').classList.remove('hidden');
                 document.getElementById('admin-login-btn').classList.add('hidden');
-                alert("Admin Mode Activated.");
+                document.getElementById('load-public-projects-btn').classList.add('hidden');
+                
+                // Load admin's local projects
+                savedProjects = loadProjectsFromLocalStorage(LOCAL_STORAGE_KEY);
+                updateProjectDropdown();
+                manageButtonState();
+                alert("Admin Mode Activated. You can now save and delete projects.");
             } else {
                 alert("Incorrect username or password.");
             }
@@ -366,13 +354,43 @@
             document.getElementById('admin-dashboard').classList.remove('visible');
             document.getElementById('logout-btn').classList.add('hidden');
             document.getElementById('admin-login-btn').classList.remove('hidden');
+            document.getElementById('load-public-projects-btn').classList.remove('hidden');
+
+            savedProjects = {};
+            updateProjectDropdown();
+            manageButtonState();
             alert("You have been logged out.");
         }
 
+        function publishAdminProjects() {
+            if (!isAdmin) {
+                alert("Only admins can publish projects.");
+                return;
+            }
+            // In a real app, this would send savedProjects to a server.
+            // Here, we simulate it by saving to a "public" key in local storage.
+            saveProjectsToLocalStorage(PUBLIC_PROJECTS_KEY, savedProjects);
+            alert("Projects published successfully. Other users can now see them by clicking 'Load Public Projects'.");
+        }
+
+        function loadPublicProjects() {
+             if (isAdmin) {
+                alert("Admins manage their own local list. Logout to view the public list.");
+                return;
+            }
+            savedProjects = loadProjectsFromLocalStorage(PUBLIC_PROJECTS_KEY);
+            updateProjectDropdown();
+            alert(`${Object.keys(savedProjects).length} public projects loaded.`);
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
-            loadProjectsFromLocalStorage();
+            manageButtonState(); // Initial state for non-admins
 
             document.getElementById('save-project-btn').addEventListener('click', () => {
+                if (!isAdmin) {
+                    alert("Only admins can save projects.");
+                    return;
+                }
                 const projectName = document.getElementById('project-name').value.trim();
                 const rawData = document.getElementById('techData').value.trim();
                 const isIR = document.getElementById('is-ir-project-checkbox').checked;
@@ -392,28 +410,27 @@
                     createdAt: savedProjects[projectId]?.createdAt || new Date().toISOString()
                 };
                 
-                saveProjectsToLocalStorage();
-                alert(`Project "${projectName}" saved successfully!`);
+                saveProjectsToLocalStorage(LOCAL_STORAGE_KEY, savedProjects);
+                alert(`Project "${projectName}" saved to your local admin storage.`);
                 updateProjectDropdown();
                 document.getElementById('project-select').value = projectId;
-                manageButtonState();
             });
             
             document.getElementById('delete-project-btn').addEventListener('click', () => {
+                 if (!isAdmin) return;
                 const projectId = document.getElementById('project-select').value;
                 if (!projectId) { return; }
                 
                 const projectName = savedProjects[projectId].name;
                 if (confirm(`Are you sure you want to delete the project "${projectName}"? This action cannot be undone.`)) {
                     delete savedProjects[projectId];
-                    saveProjectsToLocalStorage();
+                    saveProjectsToLocalStorage(LOCAL_STORAGE_KEY, savedProjects);
                     
                     document.getElementById('techData').value = '';
                     document.getElementById('project-name').value = '';
                     document.getElementById('is-ir-project-checkbox').checked = false;
                     lastFilterValue = "";
                     updateProjectDropdown();
-                    alert(`Project "${projectName}" has been deleted.`);
                 }
             });
 
@@ -432,10 +449,10 @@
                     irCheckbox.checked = false;
                     lastFilterValue = "";
                 }
-                manageButtonState();
             });
             
             document.getElementById('edit-data-btn').addEventListener('click', () => {
+                 if (!isAdmin) return;
                 const techDataTextarea = document.getElementById('techData');
                 techDataTextarea.readOnly = false;
                 techDataTextarea.focus();
@@ -450,9 +467,8 @@
             
             document.getElementById('admin-login-btn').addEventListener('click', handleAdminLogin);
             document.getElementById('logout-btn').addEventListener('click', handleLogout);
-            document.getElementById('admin-update-all-btn').addEventListener('click', () => {
-                 alert("Admin function placeholder: In a real app, this would trigger a cloud function or backend process.");
-            });
+            document.getElementById('admin-publish-btn').addEventListener('click', publishAdminProjects);
+            document.getElementById('load-public-projects-btn').addEventListener('click', loadPublicProjects);
 
             document.body.addEventListener('click', (e) => {
                 if (e.target.closest('.info-icon')) {
