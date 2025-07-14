@@ -11,13 +11,13 @@
         body {
             font-family: 'Inter', sans-serif;
         }
-        #tech-results-container {
+        #tech-results-container, #admin-dashboard {
              max-height: 0;
              overflow: hidden;
              opacity: 0;
              transition: all 0.5s ease-in-out;
         }
-        #tech-results-container.visible {
+        #tech-results-container.visible, #admin-dashboard.visible {
             max-height: 1500px; /* Adjust as needed */
             opacity: 1;
         }
@@ -81,10 +81,11 @@
                     <h1 class="text-2xl md:text-3xl font-bold">Phili Fixpoint Advanced Bonus Calculator</h1>
                     <p class="mt-2 text-gray-300">Save, load, and calculate bonuses for multiple projects.</p>
                 </div>
-                <button id="how-it-works-btn" class="bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors duration-300 shadow-md flex items-center">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="mr-2" viewBox="0 0 16 16"><path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/><path d="m8.93 6.588-2.29.287-.082.38.45.083c.294.07.352.176.288.469l-.738 3.468c-.064.293.006.399.287.47l.45.083.082.38-2.29.287-.082-.38.45-.083a.89.89 0 0 1 .352-.176c.24-.11.24-.216.06-.563l-.738-3.468c-.18-.84.48-1.133 1.17-1.133H8l.084.38zM8 5.5a1 1 0 1 0 0-2 1 1 0 0 0 0 2z"/></svg>
-                    How It Works
-                </button>
+                 <div class="flex gap-4">
+                    <button id="how-it-works-btn" class="bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors duration-300 shadow-md">How It Works</button>
+                    <button id="admin-login-btn" class="bg-gray-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-gray-700 transition-colors duration-300 shadow-md">Admin Login</button>
+                    <button id="logout-btn" class="hidden bg-red-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-red-700 transition-colors duration-300 shadow-md">Logout</button>
+                </div>
             </div>
 
             <div class="p-6 md:p-8 grid grid-cols-1 lg:grid-cols-5 gap-8">
@@ -150,6 +151,18 @@
                 </div>
             </div>
 
+            <div id="admin-dashboard" class="hidden px-6 md:px-8 pb-8">
+                <div class="border-t pt-6">
+                    <h2 class="text-xl font-semibold text-gray-800 border-b pb-3 mb-4">Admin Dashboard</h2>
+                    <p class="text-sm text-gray-600 mb-4">Admin functions are now available.</p>
+                    <div class="flex gap-4">
+                         <button id="admin-update-all-btn" class="bg-purple-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-purple-700 transition-colors duration-300 shadow-md">
+                            Admin Placeholder Button
+                        </button>
+                    </div>
+                </div>
+            </div>
+
             <div id="tech-results-container" class="px-6 md:px-8 pb-8">
                  <h2 id="results-title" class="text-xl font-semibold text-gray-800 border-b pb-3 mb-4">Technician Bonus Results</h2>
                  <div class="mb-4">
@@ -185,6 +198,7 @@
         let lastUsedBonusMultiplier = 1; 
         let lastCalculationUsedMultiplier = false;
         let lastFilterValue = ""; // Stores the last used search term
+        let isAdmin = false; // Flag for admin status
 
         // --- DATA FROM DOCUMENTATION ---
         const categoryValues = { 1: { points: 2.19 }, 2: { points: 5.86 }, 3: { points: 7.44 }, 4: { points: 2.29 }, 5: { points: 1.55 }, 6: { points: 1.84 }, 7: { points: 1.00 }, 8: { points: 3.74 }, 9: { points: 1.73 } };
@@ -200,8 +214,8 @@
                                 <li><strong>Set IR for Fix Tasks:</strong> Check the "Mark Project as IR" box if Fix Tasks should get the 1.5x points bonus. This setting is saved with the project.</li>
                                 <li><strong>Save Your Work:</strong> Type a name in the "Enter Project Name" field and click "Save Project".</li>
                                 <li><strong>Load a Project:</strong> Select a previously saved project from the dropdown menu at the top-left.</li>
+                                <li><strong>Admin Access:</strong> Click 'Admin Login' and enter credentials ('admin'/'admin123') to show the Admin Dashboard.</li>
                                 <li><strong>Calculate:</strong> Click "Calculate Current Project" for the loaded data or "Calculate All Projects" to get a combined total.</li>
-                                <li><strong>Filter Results:</strong> After calculating, use the "Search by Tech ID" bar above the results table to find specific technicians.</li>
                             </ol>
                         </div>
                         <hr>
@@ -230,8 +244,7 @@
             },
             bonusMultiplier: {
                 title: 'Bonus Multiplier (PHP)',
-                body: `<p>An optional multiplier for the final payout. If left blank, it defaults to 1 (no change). This value is multiplied by the Total Points and the % of Bonus Earned.</p>
-                       <p class="text-xs mt-2 text-gray-500">Reference: PDF Pages 15 & 19</p>`
+                body: `<p>An optional multiplier for the final payout. If left blank, it defaults to 1 (no change).</p>`
             },
             totalPoints: {
                 title: 'Total Points Calculation',
@@ -244,25 +257,19 @@
                         <li><strong>i3QA Task:</strong> 1/12 (~0.083) points.</li>
                         <li><strong>RV1 Task:</strong> 1/5 (0.2) points, or 1/4 (0.25) if 'COMBO?' column is 'Y'.</li>
                         <li><strong>RV2 Task:</strong> 1/2 (0.5) points.</li>
-                       </ul>
-                       <p class="text-xs mt-2 text-gray-500">Reference: PDF Pages 13 & 14</p>`
+                       </ul>`
             },
             fixQuality: {
                 title: 'Fix Quality % Calculation',
-                body: `<p>This is calculated for each technician per month using the formula:</p>
-                       <p class="mt-2 p-2 bg-gray-100 rounded"><code>[# of Fix Tasks] / ([# of Fix Tasks] + [# of Refix Tasks] + [# of Warnings])</code></p>
-                       <p class="text-xs mt-2 text-gray-500">Reference: PDF Page 20</p>`
+                body: `<p>This is calculated using the formula: <code>[# of Fix Tasks] / ([# of Fix Tasks] + [# of Refix Tasks] + [# of Warnings])</code></p>`
             },
             bonusEarned: {
                 title: '% of Bonus Earned Calculation',
-                body: `<p>This percentage is determined by looking up the <strong>Fix Quality %</strong> in the Quality Percentage Modifier table.</p>
-                       <p class="mt-2">For example, a quality rate of 80% earns 30% of the bonus, while a rate of 99% would earn a much higher percentage.</p>
-                       <p class="text-xs mt-2 text-gray-500">Reference: PDF Page 20</p>`
+                body: `<p>This percentage is determined by looking up the <strong>Fix Quality %</strong> in a tiered table.</p>`
             },
             totalBonus: {
                 title: 'Final Payout (PHP) Calculation',
-                body: `<p>The final payout for a technician is calculated with the formula:</p>
-                       <p class="mt-2 p-2 bg-gray-100 rounded"><code>Total Points * Bonus Multiplier * % of Bonus Earned</code></p>`
+                body: `<p>The final payout is calculated with the formula: <code>Total Points * Bonus Multiplier * % of Bonus Earned</code></p>`
             }
         };
 
@@ -338,6 +345,29 @@
                 editDataBtn.classList.add('hidden');
             }
         }
+        
+        function handleAdminLogin() {
+            const user = prompt("Enter Admin Username:");
+            const pass = prompt("Enter Admin Password:");
+            
+            if (user === "admin" && pass === "admin123") {
+                isAdmin = true;
+                document.getElementById('admin-dashboard').classList.add('visible');
+                document.getElementById('logout-btn').classList.remove('hidden');
+                document.getElementById('admin-login-btn').classList.add('hidden');
+                alert("Admin Mode Activated.");
+            } else {
+                alert("Incorrect username or password.");
+            }
+        }
+
+        function handleLogout() {
+            isAdmin = false;
+            document.getElementById('admin-dashboard').classList.remove('visible');
+            document.getElementById('logout-btn').classList.add('hidden');
+            document.getElementById('admin-login-btn').classList.remove('hidden');
+            alert("You have been logged out.");
+        }
 
         document.addEventListener('DOMContentLoaded', () => {
             loadProjectsFromLocalStorage();
@@ -352,15 +382,8 @@
                     return;
                 }
                 
-                let projectId = document.getElementById('project-select').value;
-                let isUpdate = false;
+                let projectId = document.getElementById('project-select').value || Date.now().toString();
                 
-                if (projectId) {
-                    isUpdate = true;
-                } else {
-                    projectId = Date.now().toString();
-                }
-
                 savedProjects[projectId] = {
                     id: projectId,
                     name: projectName,
@@ -370,7 +393,7 @@
                 };
                 
                 saveProjectsToLocalStorage();
-                alert(`Project "${projectName}" ${isUpdate ? 'updated' : 'saved'} successfully!`);
+                alert(`Project "${projectName}" saved successfully!`);
                 updateProjectDropdown();
                 document.getElementById('project-select').value = projectId;
                 manageButtonState();
@@ -378,10 +401,7 @@
             
             document.getElementById('delete-project-btn').addEventListener('click', () => {
                 const projectId = document.getElementById('project-select').value;
-                if (!projectId) {
-                    alert("Please select a project to delete.");
-                    return;
-                }
+                if (!projectId) { return; }
                 
                 const projectName = savedProjects[projectId].name;
                 if (confirm(`Are you sure you want to delete the project "${projectName}"? This action cannot be undone.`)) {
@@ -423,15 +443,19 @@
             
             document.getElementById('calculateCurrentBtn').addEventListener('click', () => calculateAndRender(false));
             document.getElementById('calculate-all-btn').addEventListener('click', () => calculateAndRender(true));
-
             document.getElementById('search-tech-id').addEventListener('input', (e) => {
                 lastFilterValue = e.target.value;
                 filterTable();
             });
             
+            document.getElementById('admin-login-btn').addEventListener('click', handleAdminLogin);
+            document.getElementById('logout-btn').addEventListener('click', handleLogout);
+            document.getElementById('admin-update-all-btn').addEventListener('click', () => {
+                 alert("Admin function placeholder: In a real app, this would trigger a cloud function or backend process.");
+            });
+
             document.body.addEventListener('click', (e) => {
                 if (e.target.closest('.info-icon')) {
-                    e.stopPropagation();
                     const icon = e.target.closest('.info-icon');
                     const key = icon.dataset.key;
                     const techId = icon.dataset.techId;
@@ -650,7 +674,6 @@
                                     }
                                 });
 
-                                // Conditional check for AFP1
                                 if (afp1StatIndex !== undefined && afp1CatIndex !== undefined && values[afp1StatIndex]?.trim().toUpperCase() === 'AA') {
                                     const afp1CatValue = parseInt(values[afp1CatIndex]);
                                     if (!isNaN(afp1CatValue) && afp1CatValue >= 1 && afp1CatValue <= 9) {
@@ -662,7 +685,6 @@
                                     }
                                 }
                                 
-                                // Conditional check for AFP2
                                 if (afp2StatIndex !== undefined && afp2CatIndex !== undefined && values[afp2StatIndex]?.trim().toUpperCase() === 'AA') {
                                     const afp2CatValue = parseInt(values[afp2CatIndex]);
                                      if (!isNaN(afp2CatValue) && afp2CatValue >= 1 && afp2CatValue <= 9) {
