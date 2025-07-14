@@ -214,7 +214,7 @@
                                 </div>
                                 <div>
                                     <strong class="text-gray-900">Step 2: Point Calculation (per Task)</strong>
-                                    <p>For each task, points are assigned based on the rules. Fix Tasks now sum points from all available category columns in a row. The "Mark Project as IR" checkbox applies a 1.5x multiplier to this sum. The 'COMBO?' column in your data applies the IR bonus to RV1 tasks.</p>
+                                    <p>For each task, points are assigned based on the rules. Fix Tasks now sum points from all available category columns in a row (including AFP columns if their status is 'AA'). The "Mark Project as IR" checkbox applies a 1.5x multiplier to this sum. The 'COMBO?' column in your data applies the IR bonus to RV1 tasks.</p>
                                 </div>
                                 <div>
                                     <strong class="text-gray-900">Step 3: Aggregation</strong>
@@ -238,6 +238,7 @@
                 body: `<p>Points are calculated for each individual task and then summed for each technician.</p>
                        <ul class="list-disc list-inside mt-2 space-y-1">
                         <li><strong>Fix Task:</strong> Sums points from all category columns (CATEGORY, I3QA_CAT, etc.) in the row. This total is then multiplied by 1.5 if the IR checkbox is checked.</li>
+                        <li><strong>AFP Tasks (AFP1_CAT/AFP2_CAT):</strong> Points are only counted if the corresponding AFP_STAT column contains 'AA'.</li>
                         <li><strong>Refix Task:</strong> 0 points.</li>
                         <li><strong>QC / Initial Tagging:</strong> 1/8 (0.125) points.</li>
                         <li><strong>i3QA Task:</strong> 1/12 (~0.083) points.</li>
@@ -549,7 +550,6 @@
         }
         
         function calculateQualityModifier(qualityRate) {
-            // This now uses a tiered lookup to match the documentation
             if (qualityRate >= 100) return 1.0;
             if (qualityRate >= 82.5) return 0.55;
             if (qualityRate >= 82) return 0.50;
@@ -602,7 +602,7 @@
             const headerMap = {};
             headers.forEach((h, i) => { headerMap[h] = i; });
 
-            const allCategoryHeaders = ['category', 'i3qa_cat', 'rv1_cat', 'afp1_cat', 'afp2_cat', 'rv2_cat'];
+            const baseCategoryHeaders = ['category', 'i3qa_cat', 'rv1_cat', 'rv2_cat'];
             if (headerMap['combo?'] === undefined) {
                  alert("Critical column 'COMBO?' is missing from the data header. Please ensure it is included.");
                  return null;
@@ -610,6 +610,11 @@
 
             const techIdCols = headers.filter(h => h.endsWith('_id'));
             const warnCols = headers.filter(h => h.startsWith('r') && h.endsWith('_warn'));
+            
+            const afp1StatIndex = headerMap['afp1_stat'];
+            const afp1CatIndex = headerMap['afp1_cat'];
+            const afp2StatIndex = headerMap['afp2_stat'];
+            const afp2CatIndex = headerMap['afp2_cat'];
 
             lines.forEach(line => {
                 const values = line.split(delimiter);
@@ -632,7 +637,7 @@
                                 techStats[techId].fixTasks += 1;
                                 let totalRowFixPoints = 0;
                                 
-                                allCategoryHeaders.forEach(catHeader => {
+                                baseCategoryHeaders.forEach(catHeader => {
                                     if (headerMap[catHeader] !== undefined) {
                                         const categoryValue = parseInt(values[headerMap[catHeader]]);
                                         if (!isNaN(categoryValue) && categoryValue >= 1 && categoryValue <= 9) {
@@ -640,12 +645,34 @@
                                                 techStats[techId].categoryCounts[categoryValue]++;
                                             }
                                             const catInfo = categoryValues[categoryValue];
-                                            if (catInfo) {
-                                                totalRowFixPoints += catInfo.points;
-                                            }
+                                            if (catInfo) { totalRowFixPoints += catInfo.points; }
                                         }
                                     }
                                 });
+
+                                // Conditional check for AFP1
+                                if (afp1StatIndex !== undefined && afp1CatIndex !== undefined && values[afp1StatIndex]?.trim().toUpperCase() === 'AA') {
+                                    const afp1CatValue = parseInt(values[afp1CatIndex]);
+                                    if (!isNaN(afp1CatValue) && afp1CatValue >= 1 && afp1CatValue <= 9) {
+                                        if (techStats[techId].categoryCounts[afp1CatValue] !== undefined) {
+                                            techStats[techId].categoryCounts[afp1CatValue]++;
+                                        }
+                                        const catInfo = categoryValues[afp1CatValue];
+                                        if (catInfo) { totalRowFixPoints += catInfo.points; }
+                                    }
+                                }
+                                
+                                // Conditional check for AFP2
+                                if (afp2StatIndex !== undefined && afp2CatIndex !== undefined && values[afp2StatIndex]?.trim().toUpperCase() === 'AA') {
+                                    const afp2CatValue = parseInt(values[afp2CatIndex]);
+                                     if (!isNaN(afp2CatValue) && afp2CatValue >= 1 && afp2CatValue <= 9) {
+                                        if (techStats[techId].categoryCounts[afp2CatValue] !== undefined) {
+                                            techStats[techId].categoryCounts[afp2CatValue]++;
+                                        }
+                                        const catInfo = categoryValues[afp2CatValue];
+                                        if (catInfo) { totalRowFixPoints += catInfo.points; }
+                                    }
+                                }
 
                                 if (isFixTaskIR && totalRowFixPoints > 0) {
                                     totalRowFixPoints *= irModifierValue;
