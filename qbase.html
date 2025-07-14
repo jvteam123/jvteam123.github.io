@@ -6,7 +6,6 @@
     <title>Phili Fixpoint Advanced Bonus Calculator</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
     <style>
         body {
             font-family: 'Inter', sans-serif;
@@ -159,7 +158,7 @@
             <div id="admin-dashboard" class="hidden px-6 md:px-8 pb-8">
                 <div class="border-t pt-6">
                     <h2 class="text-xl font-semibold text-gray-800 border-b pb-3 mb-4">Admin Dashboard</h2>
-                    <p class="text-sm text-gray-600 mb-4">As an admin, you can save and delete projects locally. Use the 'Publish' button to simulate updating the central database for all users.</p>
+                    <p class="text-sm text-gray-600 mb-4">As an admin, you can save and delete projects. Use the 'Publish' button to make your local project list available to all users.</p>
                     <div class="flex gap-4">
                          <button id="admin-publish-btn" class="bg-purple-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-purple-700 transition-colors duration-300 shadow-md">
                             Publish All Projects
@@ -195,16 +194,34 @@
         </div>
     </div>
 
-    <script>
+    <script type="module">
+        // --- Firebase SDK Imports ---
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
+        import { getFirestore, collection, doc, setDoc, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
+
+        // --- Your Firebase Configuration ---
+        // REPLACE THE PLACEHOLDER VALUES BELOW WITH YOUR ACTUAL FIREBASE CONFIG
+        const firebaseConfig = {
+            apiKey: "AIzaSyDMG_34ybAauTtXQH1s_NaJIeYyKPHW4Po",
+            authDomain: "bunos-tracker.firebaseapp.com",
+            projectId: "bunos-tracker",
+            storageBucket: "bunos-tracker.appspot.com",
+            messagingSenderId: "317849644629",
+            appId: "1:317849644629:web:46ff71930b88f7646b2edc",
+            measurementId: "G-SM4QHYHTYF"
+        };
+
+        // --- Initialize Firebase ---
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
         // --- GLOBAL VARIABLES ---
-        const LOCAL_STORAGE_KEY = 'philiFixpointProjects_Admin';
-        const PUBLIC_PROJECTS_KEY = 'philiFixpointProjects_Public';
-        let savedProjects = {}; // In-memory cache
-        let currentTechStats = {}; // Cache for the latest calculation to power modals
+        let savedProjects = {}; 
+        let currentTechStats = {}; 
         let lastUsedBonusMultiplier = 1; 
         let lastCalculationUsedMultiplier = false;
-        let lastFilterValue = ""; // Stores the last used search term
-        let isAdmin = false; // Flag for admin status
+        let lastFilterValue = ""; 
+        let isAdmin = false; 
 
         // --- DATA FROM DOCUMENTATION ---
         const categoryValues = { 1: { points: 2.19 }, 2: { points: 5.86 }, 3: { points: 7.44 }, 4: { points: 2.29 }, 5: { points: 1.55 }, 6: { points: 1.84 }, 7: { points: 1.00 }, 8: { points: 3.74 }, 9: { points: 1.73 } };
@@ -216,85 +233,70 @@
                         <div>
                             <h4 class="text-lg font-bold text-gray-900 mb-2">How to Use This Site</h4>
                             <ol class="list-decimal list-inside space-y-2">
-                                <li><strong>Client View (Default):</strong> Click 'Load Public Projects' to view the project list. You cannot save or delete projects.</li>
+                                <li><strong>Client View (Default):</strong> Click 'Load Public Projects' to fetch the project list from the central database.</li>
                                 <li><strong>Admin Login:</strong> Click 'Admin Login' and use credentials ('admin'/'admin123') to enter Admin Mode.</li>
-                                <li><strong>Admin Mode:</strong> In this mode, you can create, save, and delete projects. These are saved to your local browser storage.</li>
-                                <li><strong>Publishing Projects:</strong> In the Admin Dashboard, click 'Publish All Projects' to make your locally saved list available to all other users.</li>
+                                <li><strong>Admin Mode:</strong> In this mode, you can create, save, and delete projects. These actions modify the central database directly.</li>
                             </ol>
                         </div>
                         <hr>
                         <div>
                             <h4 class="text-lg font-bold text-gray-900 mb-2">How The Calculation Works</h4>
-                            <p>The calculation logic remains the same, based on the data from the selected project.</p>
+                            <p>The calculation logic is based on the data from the selected project.</p>
                         </div>
                        </div>`
             },
-            bonusMultiplier: {
-                title: 'Bonus Multiplier (PHP)',
-                body: `<p>An optional multiplier for the final payout. If left blank, it defaults to 1 (no change).</p>`
-            },
-            totalPoints: {
-                title: 'Total Points Calculation',
-                body: `<p>Points are calculated for each individual task and then summed for each technician.</p>
-                       <ul class="list-disc list-inside mt-2 space-y-1">
-                        <li><strong>Fix Task:</strong> Sums points from all category columns (CATEGORY, I3QA_CAT, etc.) in the row. This total is then multiplied by 1.5 if the IR checkbox is checked.</li>
-                        <li><strong>AFP Tasks (AFP1_CAT/AFP2_CAT):</strong> Points are only counted if the corresponding AFP_STAT column contains 'AA'.</li>
-                        <li><strong>Refix Task:</strong> 0 points.</li>
-                        <li><strong>QC / Initial Tagging:</strong> 1/8 (0.125) points.</li>
-                        <li><strong>i3QA Task:</strong> 1/12 (~0.083) points.</li>
-                        <li><strong>RV1 Task:</strong> 1/5 (0.2) points, or 1/4 (0.25) if 'COMBO?' column is 'Y'.</li>
-                        <li><strong>RV2 Task:</strong> 1/2 (0.5) points.</li>
-                       </ul>`
-            },
-            fixQuality: {
-                title: 'Fix Quality % Calculation',
-                body: `<p>This is calculated using the formula: <code>[# of Fix Tasks] / ([# of Fix Tasks] + [# of Refix Tasks] + [# of Warnings])</code></p>`
-            },
-            bonusEarned: {
-                title: '% of Bonus Earned Calculation',
-                body: `<p>This percentage is determined by looking up the <strong>Fix Quality %</strong> in a tiered table.</p>`
-            },
-            totalBonus: {
-                title: 'Final Payout (PHP) Calculation',
-                body: `<p>The final payout is calculated with the formula: code>Total Points * Bonus Multiplier * % of Bonus Earned</code></p>`
-            }
+            bonusMultiplier: { title: 'Bonus Multiplier (PHP)', body: `<p>An optional multiplier for the final payout.</p>` },
+            totalPoints: { title: 'Total Points Calculation', body: `<p>Points are calculated for each individual task and then summed for each technician.</p>`},
+            fixQuality: { title: 'Fix Quality % Calculation', body: `<p>Calculated using the formula: <code>[# of Fix Tasks] / ([# of Fix Tasks] + [# of Refix Tasks] + [# of Warnings])</code></p>`},
+            bonusEarned: { title: '% of Bonus Earned Calculation', body: `<p>This percentage is determined by looking up the <strong>Fix Quality %</strong> in a tiered table.</p>`},
+            totalBonus: { title: 'Final Payout (PHP) Calculation', body: `<p>Calculated with the formula: <code>Total Points * Bonus Multiplier * % of Bonus Earned</code></p>`}
         };
 
         function createNewTechStat() {
             return {
-                id: '',
-                points: 0,
-                fixTasks: 0,
-                refixTasks: 0,
-                warnings: 0,
+                id: '', points: 0, fixTasks: 0, refixTasks: 0, warnings: 0,
                 categoryCounts: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0, 8: 0, 9: 0 },
                 pointsBreakdown: { fix: 0, qc: 0, i3qa: 0, rv: 0 }
             };
         }
         
-        function saveProjectsToLocalStorage(key, data) {
+        // --- Firestore Functions ---
+        async function saveProjectToFirestore(projectData) {
             try {
-                const jsonString = JSON.stringify(data);
-                const compressed = pako.deflate(jsonString, { to: 'string' });
-                localStorage.setItem(key, btoa(compressed));
-            } catch (e) {
-                console.error("Error saving to localStorage:", e);
-                alert("Could not save projects. Your browser's storage might be full.");
+                const projectRef = doc(db, "public_projects", projectData.id);
+                await setDoc(projectRef, projectData);
+                return true;
+            } catch (error) {
+                console.error("Error saving project to Firestore: ", error);
+                alert("Failed to save project.");
+                return false;
             }
         }
 
-        function loadProjectsFromLocalStorage(key) {
+        async function loadProjectsFromFirestore() {
             try {
-                const compressedB64 = localStorage.getItem(key);
-                if (compressedB64) {
-                    const compressed = atob(compressedB64);
-                    const restoredJson = pako.inflate(compressed, { to: 'string' });
-                    return JSON.parse(restoredJson);
-                }
+                const projectsCol = collection(db, "public_projects");
+                const projectSnapshot = await getDocs(projectsCol);
+                const loadedProjects = {};
+                projectSnapshot.forEach((doc) => {
+                    loadedProjects[doc.id] = doc.data();
+                });
+                return loadedProjects;
+            } catch (error) {
+                console.error("Error loading projects from Firestore: ", error);
+                alert("Failed to load public projects.");
                 return {};
-            } catch (e) {
-                console.error("Error loading from localStorage:", e);
-                return {};
+            }
+        }
+
+        async function deleteProjectFromFirestore(projectId) {
+            try {
+                await deleteDoc(doc(db, "public_projects", projectId));
+                return true;
+            } catch (error) {
+                console.error("Error deleting project from Firestore: ", error);
+                alert("Failed to delete project.");
+                return false;
             }
         }
 
@@ -315,17 +317,9 @@
         }
         
         function manageButtonState() {
-            const projectId = document.getElementById('project-select').value;
-            document.getElementById('delete-project-btn').disabled = !projectId || !isAdmin;
+            document.getElementById('delete-project-btn').disabled = !isAdmin;
             document.getElementById('save-project-btn').disabled = !isAdmin;
             document.getElementById('edit-data-btn').classList.toggle('hidden', !isAdmin);
-
-            const techDataTextarea = document.getElementById('techData');
-            if (projectId && !isAdmin) {
-                techDataTextarea.readOnly = true;
-            } else {
-                 techDataTextarea.readOnly = false;
-            }
         }
         
         function handleAdminLogin() {
@@ -334,16 +328,11 @@
             
             if (user === "admin" && pass === "admin123") {
                 isAdmin = true;
-                document.getElementById('admin-dashboard').classList.add('visible');
                 document.getElementById('logout-btn').classList.remove('hidden');
                 document.getElementById('admin-login-btn').classList.add('hidden');
                 document.getElementById('load-public-projects-btn').classList.add('hidden');
-                
-                // Load admin's local projects
-                savedProjects = loadProjectsFromLocalStorage(LOCAL_STORAGE_KEY);
-                updateProjectDropdown();
                 manageButtonState();
-                alert("Admin Mode Activated. You can now save and delete projects.");
+                alert("Admin Mode Activated. You can now save and delete projects directly from the central database.");
             } else {
                 alert("Incorrect username or password.");
             }
@@ -351,42 +340,17 @@
 
         function handleLogout() {
             isAdmin = false;
-            document.getElementById('admin-dashboard').classList.remove('visible');
             document.getElementById('logout-btn').classList.add('hidden');
             document.getElementById('admin-login-btn').classList.remove('hidden');
             document.getElementById('load-public-projects-btn').classList.remove('hidden');
-
-            savedProjects = {};
-            updateProjectDropdown();
             manageButtonState();
             alert("You have been logged out.");
         }
 
-        function publishAdminProjects() {
-            if (!isAdmin) {
-                alert("Only admins can publish projects.");
-                return;
-            }
-            // In a real app, this would send savedProjects to a server.
-            // Here, we simulate it by saving to a "public" key in local storage.
-            saveProjectsToLocalStorage(PUBLIC_PROJECTS_KEY, savedProjects);
-            alert("Projects published successfully. Other users can now see them by clicking 'Load Public Projects'.");
-        }
-
-        function loadPublicProjects() {
-             if (isAdmin) {
-                alert("Admins manage their own local list. Logout to view the public list.");
-                return;
-            }
-            savedProjects = loadProjectsFromLocalStorage(PUBLIC_PROJECTS_KEY);
-            updateProjectDropdown();
-            alert(`${Object.keys(savedProjects).length} public projects loaded.`);
-        }
-
         document.addEventListener('DOMContentLoaded', () => {
-            manageButtonState(); // Initial state for non-admins
+            manageButtonState();
 
-            document.getElementById('save-project-btn').addEventListener('click', () => {
+            document.getElementById('save-project-btn').addEventListener('click', async () => {
                 if (!isAdmin) {
                     alert("Only admins can save projects.");
                     return;
@@ -402,35 +366,38 @@
                 
                 let projectId = document.getElementById('project-select').value || Date.now().toString();
                 
-                savedProjects[projectId] = {
+                const projectData = {
                     id: projectId,
                     name: projectName,
                     rawData: rawData,
                     isIR: isIR,
                     createdAt: savedProjects[projectId]?.createdAt || new Date().toISOString()
                 };
-                
-                saveProjectsToLocalStorage(LOCAL_STORAGE_KEY, savedProjects);
-                alert(`Project "${projectName}" saved to your local admin storage.`);
-                updateProjectDropdown();
-                document.getElementById('project-select').value = projectId;
+
+                const success = await saveProjectToFirestore(projectData);
+                if(success) {
+                    savedProjects[projectId] = projectData;
+                    updateProjectDropdown();
+                    document.getElementById('project-select').value = projectId;
+                }
             });
             
-            document.getElementById('delete-project-btn').addEventListener('click', () => {
+            document.getElementById('delete-project-btn').addEventListener('click', async () => {
                  if (!isAdmin) return;
                 const projectId = document.getElementById('project-select').value;
                 if (!projectId) { return; }
                 
                 const projectName = savedProjects[projectId].name;
                 if (confirm(`Are you sure you want to delete the project "${projectName}"? This action cannot be undone.`)) {
-                    delete savedProjects[projectId];
-                    saveProjectsToLocalStorage(LOCAL_STORAGE_KEY, savedProjects);
-                    
-                    document.getElementById('techData').value = '';
-                    document.getElementById('project-name').value = '';
-                    document.getElementById('is-ir-project-checkbox').checked = false;
-                    lastFilterValue = "";
-                    updateProjectDropdown();
+                    const success = await deleteProjectFromFirestore(projectId);
+                    if (success) {
+                        delete savedProjects[projectId];
+                        document.getElementById('techData').value = '';
+                        document.getElementById('project-name').value = '';
+                        document.getElementById('is-ir-project-checkbox').checked = false;
+                        lastFilterValue = "";
+                        updateProjectDropdown();
+                    }
                 }
             });
 
@@ -458,6 +425,12 @@
                 techDataTextarea.focus();
             });
             
+            document.getElementById('load-public-projects-btn').addEventListener('click', async () => {
+                savedProjects = await loadProjectsFromFirestore();
+                updateProjectDropdown();
+                alert(`${Object.keys(savedProjects).length} public projects loaded.`);
+            });
+            
             document.getElementById('calculateCurrentBtn').addEventListener('click', () => calculateAndRender(false));
             document.getElementById('calculate-all-btn').addEventListener('click', () => calculateAndRender(true));
             document.getElementById('search-tech-id').addEventListener('input', (e) => {
@@ -467,8 +440,6 @@
             
             document.getElementById('admin-login-btn').addEventListener('click', handleAdminLogin);
             document.getElementById('logout-btn').addEventListener('click', handleLogout);
-            document.getElementById('admin-publish-btn').addEventListener('click', publishAdminProjects);
-            document.getElementById('load-public-projects-btn').addEventListener('click', loadPublicProjects);
 
             document.body.addEventListener('click', (e) => {
                 if (e.target.closest('.info-icon')) {
@@ -765,7 +736,6 @@
             }
         }
 
-        // --- Modal Logic ---
         function openModal(key) {
             const modal = document.getElementById('info-modal');
             const modalTitle = document.getElementById('modal-title');
