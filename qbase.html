@@ -220,6 +220,7 @@
         let lastCalculationUsedMultiplier = false;
         let lastFilterValue = ""; 
         let isAdmin = false; 
+        let isEditMode = false; // New state for admin edit mode
         let unsubscribe; // To store the Firestore listener function
 
         // --- DATA FROM DOCUMENTATION ---
@@ -358,17 +359,27 @@
             manageButtonState();
         }
         
+        // --- MODIFICATION START: Centralized UI state management ---
         function manageButtonState() {
             const projectSelect = document.getElementById('project-select');
             const projectId = projectSelect.value;
+
+            // Manage admin-only buttons
             document.getElementById('delete-project-btn').disabled = !isAdmin || !projectId;
-            document.getElementById('save-project-btn').disabled = !isAdmin;
             document.getElementById('edit-data-btn').classList.toggle('hidden', !isAdmin || !projectId);
-            document.getElementById('techData').readOnly = !isAdmin && projectId;
-            // --- MODIFICATION START: Disable IR checkbox for non-admins ---
+            
+            // Manage Save button state
+            // Enabled if: Admin AND ( (No project selected) OR (A project is selected AND in edit mode) )
+            document.getElementById('save-project-btn').disabled = !isAdmin || (projectId && !isEditMode);
+
+            // Manage Text Area state
+            // Editable if: Admin AND ( (No project selected) OR (A project is selected AND in edit mode) )
+            document.getElementById('techData').readOnly = !isAdmin || (projectId && !isEditMode);
+            
+            // Manage IR Checkbox state
             document.getElementById('is-ir-project-checkbox').disabled = !isAdmin;
-            // --- MODIFICATION END ---
         }
+        // --- MODIFICATION END ---
         
         function handleAdminLogin() {
             const user = prompt("Enter Admin Username:");
@@ -376,6 +387,7 @@
             
             if (user === "admin" && pass === "admin123") {
                 isAdmin = true;
+                isEditMode = false; // Reset edit mode on login
                 document.getElementById('logout-btn').classList.remove('hidden');
                 document.getElementById('admin-login-btn').classList.add('hidden');
                 document.getElementById('admin-dashboard').classList.add('visible');
@@ -391,6 +403,7 @@
 
         function handleLogout() {
             isAdmin = false;
+            isEditMode = false; // Reset edit mode on logout
             document.getElementById('logout-btn').classList.add('hidden');
             document.getElementById('admin-login-btn').classList.remove('hidden');
             document.getElementById('admin-dashboard').classList.remove('visible');
@@ -413,9 +426,7 @@
         }
 
         document.addEventListener('DOMContentLoaded', () => {
-            // Automatically load projects for all users when the page loads.
             listenForPublicProjectChanges();
-            
             manageButtonState();
 
             document.getElementById('save-project-btn').addEventListener('click', async () => {
@@ -448,6 +459,8 @@
                 const success = await saveProjectToFirestore(projectData);
                 if(success) {
                     alert(`Project "${projectName}" saved successfully to Firestore.`);
+                    isEditMode = false; // Exit edit mode after saving
+                    manageButtonState();
                 }
             });
             
@@ -468,6 +481,8 @@
             document.getElementById('project-select').addEventListener('change', (e) => {
                 const projectId = e.target.value;
                 const irCheckbox = document.getElementById('is-ir-project-checkbox');
+                
+                isEditMode = false; // Reset edit mode when changing projects
 
                 if (projectId && savedProjects[projectId]) {
                     const project = savedProjects[projectId];
@@ -483,12 +498,14 @@
                 manageButtonState();
             });
             
+            // --- MODIFICATION START: Edit button now controls edit mode ---
             document.getElementById('edit-data-btn').addEventListener('click', () => {
                  if (!isAdmin) return;
-                const techDataTextarea = document.getElementById('techData');
-                techDataTextarea.readOnly = false;
-                techDataTextarea.focus();
+                 isEditMode = true;
+                 manageButtonState();
+                 document.getElementById('techData').focus();
             });
+            // --- MODIFICATION END ---
             
             document.getElementById('calculateCurrentBtn').addEventListener('click', () => calculateAndRender(false));
             document.getElementById('calculate-all-btn').addEventListener('click', () => calculateAndRender(true));
