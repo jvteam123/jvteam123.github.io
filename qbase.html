@@ -264,23 +264,16 @@
         }
         
         // --- Firestore Functions ---
-        // --- MODIFICATION START: Robust data saving ---
+        // --- MODIFICATION START: Final robust data saving function ---
         async function saveProjectToFirestore(projectData) {
             try {
-                // Step 1: Compress the raw text data. pako.deflate returns a Uint8Array by default.
-                const compressedUint8Array = pako.deflate(projectData.rawData);
+                // Step 1: Compress the raw text data using pako, which returns a "binary string".
+                // This is more reliable than manual conversion loops.
+                const compressedBinaryString = pako.deflate(projectData.rawData, { to: 'string' });
 
-                // Step 2: Convert the Uint8Array into a binary string. This is a crucial step
-                // to prepare the data for base64 encoding, as btoa() can corrupt multi-byte characters
-                // if the data is not handled as a pure binary sequence.
-                let binaryString = '';
-                const len = compressedUint8Array.byteLength;
-                for (let i = 0; i < len; i++) {
-                    binaryString += String.fromCharCode(compressedUint8Array[i]);
-                }
-
-                // Step 3: Encode the binary string to a base64 string. This is now safe.
-                const base64String = btoa(binaryString);
+                // Step 2: Encode the reliable binary string to Base64. This is a safe and standard way
+                // to prepare binary data for storage in text-based fields like in Firestore.
+                const base64String = btoa(compressedBinaryString);
                 
                 const dataToSave = { ...projectData, rawData: base64String }; 
                 
@@ -311,17 +304,14 @@
                     project.isCorrupted = false; 
 
                     try {
-                        // Data from Firestore is expected to be a base64 encoded string of compressed data.
-                        // Step 1: Decode from base64.
-                        const compressed = atob(project.rawData);
-                        // Step 2: Decompress the data. pako.inflate can correctly handle the binary string from atob.
-                        decompressedData = pako.inflate(compressed, { to: 'string' });
+                        // Step 1: Decode the Base64 string from Firestore back into a binary string.
+                        const compressedBinaryString = atob(project.rawData);
+                        
+                        // Step 2: Decompress the binary string back to the original text.
+                        decompressedData = pako.inflate(compressedBinaryString, { to: 'string' });
                     } catch (e) {
-                        // This block runs if atob() or pako.inflate() fails.
-                        // This indicates the data in the database is not in the correct format.
                         console.error(`Decompression failed for project "${project.name}". The data is likely corrupted.`, e);
-                        // We keep the original rawData to allow an admin to see it, but mark it as corrupted.
-                        decompressedData = project.rawData; 
+                        decompressedData = "### DATA CORRUPTED ###\n\nThis project's data could not be read from the database.\nAn administrator must re-save it with the correct data to fix this issue.";
                         project.isCorrupted = true;
                     }
                     project.rawData = decompressedData;
@@ -364,11 +354,10 @@
             sortedProjects.forEach(project => {
                 const option = document.createElement('option');
                 option.value = project.id;
-                // Display if a project is corrupted in the dropdown
                 const displayName = project.isCorrupted ? `${project.name} (Data Corrupted)` : (project.isIR ? `${project.name} (IR)` : project.name);
                 option.textContent = displayName;
                 if (project.isCorrupted) {
-                    option.classList.add('text-red-500');
+                    option.classList.add('text-red-500', 'font-bold');
                 }
                 projectSelect.appendChild(option);
             });
@@ -463,7 +452,6 @@
 
                 const success = await saveProjectToFirestore(projectData);
                 if(success) {
-                    // The snapshot listener will handle the UI update.
                     alert(`Project "${projectName}" saved successfully to Firestore.`);
                 }
             });
@@ -607,7 +595,7 @@
             } else {
                 const projectId = document.getElementById('project-select').value;
                 if (projectId && savedProjects[projectId] && savedProjects[projectId].isCorrupted) {
-                    alert(`Cannot calculate. The selected project "${savedProjects[projectId].name}" has corrupted data.\n\nAn admin must re-save this project to fix it.`);
+                    alert(`Cannot calculate. The selected project "${savedProjects[projectId].name}" has corrupted data and cannot be read.\n\nAn admin must re-save this project with the correct data to fix it.`);
                     return; 
                 }
 
@@ -700,6 +688,7 @@
             const lines = data.split('\n').filter(line => line.trim() !== '');
             
             if (lines.length < 2) {
+                // This check now primarily serves for pasted data, as corrupted data from Firebase is handled earlier.
                 alert("Calculation failed: The project data is incomplete or empty. It must include at least one header row and one data row.");
                 return null;
             }
