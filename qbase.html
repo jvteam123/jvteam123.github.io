@@ -699,7 +699,7 @@
             const headerMap = {};
             headers.forEach((h, i) => { headerMap[h] = i; });
 
-            const baseCategoryHeaders = ['category', 'i3qa_cat', 'rv1_cat', 'rv2_cat'];
+            const baseCategoryHeaders = ['category', 'rv1_cat', 'rv2_cat']; // i3qa_cat removed to be handled separately
             if (headerMap['combo?'] === undefined) {
                  alert("Critical column 'COMBO?' is missing from the data header. Please ensure it is included.");
                  return null;
@@ -745,6 +745,24 @@
                             } else { // This is the primary fix task (fix1_id)
                                 techStats[techId].fixTasks += 1;
                                 let totalRowFixPoints = 0;
+                                
+                                // --- MODIFICATION START: Handle i3qa_cat with its new rule ---
+                                const i3qaCatIndex = headerMap['i3qa_cat'];
+                                const i3qaLabelIndex = headerMap['i3qa_label'];
+                                if (i3qaCatIndex !== undefined && i3qaLabelIndex !== undefined) {
+                                    const i3qaLabelValue = values[i3qaLabelIndex]?.trim().toUpperCase();
+                                    if (i3qaLabelValue && i3qaLabelValue.includes('M')) {
+                                        const categoryValue = parseInt(values[i3qaCatIndex]);
+                                        if (!isNaN(categoryValue) && categoryValue >= 1 && categoryValue <= 9) {
+                                            if (techStats[techId].categoryCounts[categoryValue] !== undefined) {
+                                                techStats[techId].categoryCounts[categoryValue]++;
+                                            }
+                                            const catInfo = categoryValues[categoryValue];
+                                            if (catInfo) { totalRowFixPoints += catInfo.points; }
+                                        }
+                                    }
+                                }
+                                // --- MODIFICATION END ---
                                 
                                 baseCategoryHeaders.forEach(catHeader => {
                                     if (headerMap[catHeader] !== undefined) {
@@ -804,15 +822,14 @@
                     }
                 });
 
-                // --- MODIFICATION START: Correctly assign warnings ---
+                // --- MODIFICATION START: Correctly assign warnings with new rule ---
+                const validWarningLetters = ['B', 'C', 'D', 'E', 'F', 'G', 'I'];
                 warnCols.forEach(colName => {
-                    const warnValue = values[headerMap[colName]]?.trim();
-                    if (warnValue) {
+                    const warnValue = values[headerMap[colName]]?.trim().toUpperCase();
+                    if (warnValue && validWarningLetters.includes(warnValue)) {
                         const round = colName.match(/\d+/)[0];
                         const fixTechId = values[headerMap[`fix${round}_id`]]?.trim();
                         if (fixTechId && techStats[fixTechId]) {
-                            // This was the error. It was trying to use a 'techId' that didn't exist in this loop.
-                            // This now correctly assigns the warning to the technician who did the fix.
                             techStats[fixTechId].warnings += 1;
                         }
                     }
