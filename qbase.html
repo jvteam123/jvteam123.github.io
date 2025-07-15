@@ -264,22 +264,13 @@
         }
         
         // --- Firestore Functions ---
-        // --- MODIFICATION START: Final robust data saving and loading functions ---
         async function saveProjectToFirestore(projectData) {
             try {
-                // Step 1: Convert the raw text data to a Uint8Array using TextEncoder.
                 const textEncoder = new TextEncoder();
                 const dataAsUint8Array = textEncoder.encode(projectData.rawData);
-                
-                // Step 2: Compress the Uint8Array. The result is also a Uint8Array.
                 const compressed = pako.deflate(dataAsUint8Array);
-
-                // Step 3: Convert the compressed Uint8Array to a Base64 string for safe storage.
-                // This is a standard and safe way to handle binary data for storage.
                 const base64String = btoa(String.fromCharCode.apply(null, compressed));
-                
                 const dataToSave = { ...projectData, rawData: base64String }; 
-                
                 const projectRef = doc(db, "public_projects", projectData.id);
                 await setDoc(projectRef, dataToSave);
                 return true;
@@ -292,62 +283,46 @@
 
         function listenForPublicProjectChanges() {
             if (unsubscribe) unsubscribe(); 
-
             alert("Connecting to project database...");
             const projectsCol = collection(db, "public_projects");
             let isInitialLoad = true;
-
             unsubscribe = onSnapshot(projectsCol, (snapshot) => {
                 const loadedProjects = {};
                 snapshot.forEach((doc) => {
                     const project = doc.data();
-                    
                     let decompressedData;
                     project.isCorrupted = false; 
-
                     try {
-                        // Step 1: Decode the Base64 string from Firestore back into a binary string.
                         const binaryString = atob(project.rawData);
-                        
-                        // Step 2: Convert the binary string back to a Uint8Array.
                         const len = binaryString.length;
                         const bytes = new Uint8Array(len);
                         for (let i = 0; i < len; i++) {
                             bytes[i] = binaryString.charCodeAt(i);
                         }
-                        
-                        // Step 3: Decompress the Uint8Array.
                         const decompressedUint8Array = pako.inflate(bytes);
-
-                        // Step 4: Convert the decompressed Uint8Array back to a string using TextDecoder.
                         const textDecoder = new TextDecoder();
                         decompressedData = textDecoder.decode(decompressedUint8Array);
-
                     } catch (e) {
                         console.error(`Decompression failed for project "${project.name}". Error: ${e.message}`);
                         decompressedData = "### DATA CORRUPTED ###\n\nThis project's data could not be read. An admin must re-save it with the correct data to fix this issue.";
                         project.isCorrupted = true;
                     }
                     project.rawData = decompressedData;
-
                     loadedProjects[doc.id] = project;
                 });
                 savedProjects = loadedProjects;
                 updateProjectDropdown();
-
                 if (isInitialLoad) {
                     alert(`${Object.keys(savedProjects).length} public projects loaded. The list will now update automatically.`);
                     isInitialLoad = false;
                 } else {
                     showUpdateNotification();
                 }
-
             }, (error) => {
                 console.error("Error with real-time listener:", error);
                 alert("Lost connection to the project database.");
             });
         }
-        // --- MODIFICATION END ---
 
         async function deleteProjectFromFirestore(projectId) {
             try {
@@ -703,7 +678,6 @@
             const lines = data.split('\n').filter(line => line.trim() !== '');
             
             if (lines.length < 2) {
-                // This check now primarily serves for pasted data, as corrupted data from Firebase is handled earlier.
                 alert("Calculation failed: The project data is incomplete or empty. It must include at least one header row and one data row.");
                 return null;
             }
@@ -745,8 +719,22 @@
                         if (colName.startsWith('fix')) {
                             const isRefix = colName !== 'fix1_id';
                             if (isRefix) {
-                                techStats[techId].refixTasks += 1;
-                            } else {
+                                // --- MODIFICATION START: New Refix Task Logic ---
+                                const roundMatch = colName.match(/\d+/);
+                                if (roundMatch) {
+                                    const round = roundMatch[0];
+                                    const rvLabelColName = `rv${round}_label`;
+                                    const rvLabelIndex = headerMap[rvLabelColName];
+                                    
+                                    if (rvLabelIndex !== undefined) {
+                                        const rvLabelValue = values[rvLabelIndex]?.trim().toUpperCase();
+                                        if (rvLabelValue && rvLabelValue.includes('I')) {
+                                            techStats[techId].refixTasks += 1;
+                                        }
+                                    }
+                                }
+                                // --- MODIFICATION END ---
+                            } else { // This is the primary fix task (fix1_id)
                                 techStats[techId].fixTasks += 1;
                                 let totalRowFixPoints = 0;
                                 
