@@ -267,18 +267,9 @@
         // --- MODIFICATION START: Final robust data saving and loading functions ---
         async function saveProjectToFirestore(projectData) {
             try {
-                // Step 1: Compress the raw text data. pako.deflate returns a Uint8Array.
-                const compressed = pako.deflate(projectData.rawData);
-
-                // Step 2: Convert the Uint8Array to a binary string. This is a robust way
-                // to prepare binary data for the btoa function.
-                let binaryString = '';
-                for (let i = 0; i < compressed.length; i++) {
-                    binaryString += String.fromCharCode(compressed[i]);
-                }
-                
-                // Step 3: Encode the binary string to a Base64 string for safe storage.
-                const base64String = btoa(binaryString);
+                // The most reliable method: compress to a binary string, then encode.
+                const compressedBinaryString = pako.deflate(projectData.rawData, { to: 'string' });
+                const base64String = btoa(compressedBinaryString);
                 
                 const dataToSave = { ...projectData, rawData: base64String }; 
                 
@@ -308,22 +299,21 @@
                     project.isCorrupted = false; 
 
                     try {
-                        // Step 1: Decode the Base64 string from Firestore back into a binary string.
-                        const binaryString = atob(project.rawData);
-                        
-                        // Step 2: Convert the binary string back to a Uint8Array.
-                        const len = binaryString.length;
-                        const bytes = new Uint8Array(len);
-                        for (let i = 0; i < len; i++) {
-                            bytes[i] = binaryString.charCodeAt(i);
-                        }
-                        
-                        // Step 3: Decompress the Uint8Array back to the original text.
-                        decompressedData = pako.inflate(bytes, { to: 'string' });
+                        // The reverse of the save process: decode, then decompress.
+                        const compressedBinaryString = atob(project.rawData);
+                        decompressedData = pako.inflate(compressedBinaryString, { to: 'string' });
                     } catch (e) {
-                        console.error(`Decompression failed for project "${project.name}". The data is likely corrupted.`, e);
-                        decompressedData = "### DATA CORRUPTED ###\n\nThis project's data could not be read from the database.\nAn administrator must re-save it with the correct data to fix this issue.";
-                        project.isCorrupted = true;
+                        console.error(`Decompression failed for project "${project.name}". Error: ${e.message}`);
+                        // If it fails, it's either uncompressed (old format) or truly corrupted.
+                        // We will try to see if it's just plain text.
+                        if (project.rawData && !project.rawData.includes('###')) {
+                             decompressedData = "### DATA CORRUPTED / UNCOMPRESSED ###\n\nThis project's data is not in the correct format. An administrator must select it, paste the correct data, and re-save it to fix this issue.";
+                             project.isCorrupted = true;
+                        } else {
+                             // It's already marked as corrupted, keep the message.
+                             decompressedData = project.rawData;
+                             project.isCorrupted = true;
+                        }
                     }
                     project.rawData = decompressedData;
 
