@@ -264,16 +264,21 @@
         }
         
         // --- Firestore Functions ---
-        // --- MODIFICATION START: Final robust data saving function ---
+        // --- MODIFICATION START: Final robust data saving and loading functions ---
         async function saveProjectToFirestore(projectData) {
             try {
-                // Step 1: Compress the raw text data using pako, which returns a "binary string".
-                // This is more reliable than manual conversion loops.
-                const compressedBinaryString = pako.deflate(projectData.rawData, { to: 'string' });
+                // Step 1: Compress the raw text data. pako.deflate returns a Uint8Array.
+                const compressed = pako.deflate(projectData.rawData);
 
-                // Step 2: Encode the reliable binary string to Base64. This is a safe and standard way
-                // to prepare binary data for storage in text-based fields like in Firestore.
-                const base64String = btoa(compressedBinaryString);
+                // Step 2: Convert the Uint8Array to a binary string. This is a robust way
+                // to prepare binary data for the btoa function.
+                let binaryString = '';
+                for (let i = 0; i < compressed.length; i++) {
+                    binaryString += String.fromCharCode(compressed[i]);
+                }
+                
+                // Step 3: Encode the binary string to a Base64 string for safe storage.
+                const base64String = btoa(binaryString);
                 
                 const dataToSave = { ...projectData, rawData: base64String }; 
                 
@@ -286,7 +291,6 @@
                 return false;
             }
         }
-        // --- MODIFICATION END ---
 
         function listenForPublicProjectChanges() {
             if (unsubscribe) unsubscribe(); 
@@ -305,10 +309,17 @@
 
                     try {
                         // Step 1: Decode the Base64 string from Firestore back into a binary string.
-                        const compressedBinaryString = atob(project.rawData);
+                        const binaryString = atob(project.rawData);
                         
-                        // Step 2: Decompress the binary string back to the original text.
-                        decompressedData = pako.inflate(compressedBinaryString, { to: 'string' });
+                        // Step 2: Convert the binary string back to a Uint8Array.
+                        const len = binaryString.length;
+                        const bytes = new Uint8Array(len);
+                        for (let i = 0; i < len; i++) {
+                            bytes[i] = binaryString.charCodeAt(i);
+                        }
+                        
+                        // Step 3: Decompress the Uint8Array back to the original text.
+                        decompressedData = pako.inflate(bytes, { to: 'string' });
                     } catch (e) {
                         console.error(`Decompression failed for project "${project.name}". The data is likely corrupted.`, e);
                         decompressedData = "### DATA CORRUPTED ###\n\nThis project's data could not be read from the database.\nAn administrator must re-save it with the correct data to fix this issue.";
@@ -333,6 +344,7 @@
                 alert("Lost connection to the project database.");
             });
         }
+        // --- MODIFICATION END ---
 
         async function deleteProjectFromFirestore(projectId) {
             try {
