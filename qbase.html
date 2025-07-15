@@ -95,7 +95,8 @@
                 </div>
             </div>
 
-            <div class="p-6 md:p-8 grid grid-cols-1 lg:grid-cols-5 gap-8">
+            <!-- MODIFICATION: This grid container will now be dynamically adjusted -->
+            <div id="main-grid" class="p-6 md:p-8 grid grid-cols-1 lg:grid-cols-5 gap-8">
 
                 <div class="lg:col-span-2 space-y-6">
                      <div class="bg-gray-50 p-6 rounded-xl border">
@@ -108,6 +109,11 @@
                              <button id="delete-project-btn" title="Delete Selected Project" class="p-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:bg-red-300 transition-colors">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>
                              </button>
+                        </div>
+                        <div class="mt-4">
+                            <button id="calculateCurrentBtn" class="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 transition-colors duration-300 shadow-md">
+                                Calculate Selected Project
+                            </button>
                         </div>
                         <div class="mt-4">
                             <button id="calculate-all-btn" class="w-full bg-green-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-700 transition-colors duration-300 shadow-md">Calculate All Projects</button>
@@ -127,7 +133,8 @@
                     </div>
                 </div>
 
-                <div class="lg:col-span-3 space-y-6">
+                <!-- MODIFICATION: This entire column will be hidden for clients -->
+                <div id="project-data-entry" class="lg:col-span-3 space-y-6">
                     <div>
                         <div class="flex justify-between items-center border-b pb-3 mb-4">
                             <h2 class="text-xl font-semibold text-gray-800">Project Data Entry</h2>
@@ -153,9 +160,6 @@
                         <input type="text" id="project-name" class="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Enter Project Name to Save/Update">
                         <button id="save-project-btn" class="bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-indigo-700 transition-colors duration-300 shadow-md whitespace-nowrap">Save Project</button>
                     </div>
-                    <button id="calculateCurrentBtn" class="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 transition-colors duration-300 shadow-md">
-                        Calculate Current Project
-                    </button>
                 </div>
             </div>
 
@@ -252,15 +256,13 @@
             totalBonus: { title: 'Final Payout (PHP) Calculation', body: `<p>Calculated with the formula: <code>Total Points * Bonus Multiplier * % of Bonus Earned</code></p>`}
         };
 
-        // --- MODIFICATION START: Update tech data structure for detailed warnings ---
         function createNewTechStat() {
             return {
-                id: '', points: 0, fixTasks: 0, refixTasks: 0, warnings: [], // Changed to an array
+                id: '', points: 0, fixTasks: 0, refixTasks: 0, warnings: [], 
                 categoryCounts: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0, 8: 0, 9: 0 },
                 pointsBreakdown: { fix: 0, qc: 0, i3qa: 0, rv: 0 }
             };
         }
-        // --- MODIFICATION END ---
         
         // --- Firestore Functions ---
         async function saveProjectToFirestore(projectData) {
@@ -312,7 +314,6 @@
                 savedProjects = loadedProjects;
                 updateProjectDropdown();
                 if (isInitialLoad && !isAdmin) { 
-                    alert(`${Object.keys(savedProjects).length} projects loaded. The list will now update automatically.`);
                     isInitialLoad = false;
                 } else if (!isInitialLoad) {
                     showUpdateNotification();
@@ -361,19 +362,33 @@
             manageButtonState();
         }
         
+        // --- MODIFICATION START: Centralized UI state management for client/admin views ---
         function manageButtonState() {
+            const mainGrid = document.getElementById('main-grid');
+            const projectDataEntry = document.getElementById('project-data-entry');
             const projectSelect = document.getElementById('project-select');
             const projectId = projectSelect.value;
 
+            // Toggle visibility of the entire data entry column
+            projectDataEntry.classList.toggle('hidden', !isAdmin);
+            
+            // Adjust grid layout based on admin status
+            if(isAdmin) {
+                mainGrid.classList.remove('lg:grid-cols-1');
+                mainGrid.classList.add('lg:grid-cols-5');
+            } else {
+                mainGrid.classList.remove('lg:grid-cols-5');
+                mainGrid.classList.add('lg:grid-cols-1');
+            }
+
+            // Admin-specific button states
             document.getElementById('delete-project-btn').disabled = !isAdmin || !projectId;
             document.getElementById('edit-data-btn').classList.toggle('hidden', !isAdmin || !projectId);
-            
             document.getElementById('save-project-btn').disabled = !isAdmin || (projectId && !isEditMode);
-
             document.getElementById('techData').readOnly = !isAdmin || (projectId && !isEditMode);
-            
             document.getElementById('is-ir-project-checkbox').disabled = !isAdmin;
         }
+        // --- MODIFICATION END ---
         
         function handleAdminLogin() {
             const user = prompt("Enter Admin Username:");
@@ -576,9 +591,7 @@
                             combinedTechStats[techId].points += singleProjectTechStats.points;
                             combinedTechStats[techId].fixTasks += singleProjectTechStats.fixTasks;
                             combinedTechStats[techId].refixTasks += singleProjectTechStats.refixTasks;
-                            // --- MODIFICATION START: Combine warning arrays ---
                             combinedTechStats[techId].warnings.push(...singleProjectTechStats.warnings);
-                            // --- MODIFICATION END ---
                             for (let i = 1; i <= 9; i++) {
                                 combinedTechStats[techId].categoryCounts[i] += singleProjectTechStats.categoryCounts[i];
                             }
@@ -598,18 +611,22 @@
                 renderSingleProjectTable(currentTechStats, bonusMultiplier);
             } else {
                 const projectId = document.getElementById('project-select').value;
-                if (projectId && savedProjects[projectId] && savedProjects[projectId].isCorrupted) {
+                if (!projectId) {
+                    alert("Please select a project to calculate.");
+                    return;
+                }
+                if (savedProjects[projectId] && savedProjects[projectId].isCorrupted) {
                     alert(`Cannot calculate. The selected project "${savedProjects[projectId].name}" has corrupted data and cannot be read.\n\nAn admin must re-save this project with the correct data to fix it.`);
                     return; 
                 }
 
-                resultsTitleEl.textContent = `Current Project - Bonus Results ${isMultiplierUsed ? `(Multiplier: ${bonusMultiplier})` : '(No Multiplier Applied)'}`;
-                const data = document.getElementById('techData').value.trim();
+                resultsTitleEl.textContent = `Project: ${savedProjects[projectId].name} - Bonus Results ${isMultiplierUsed ? `(Multiplier: ${bonusMultiplier})` : ''}`;
+                const data = savedProjects[projectId].rawData;
                 if (!data) {
-                    alert("Please paste data or load a project to calculate.");
+                    alert("Selected project has no data.");
                     return;
                 }
-                const isProjectLevelIR = document.getElementById('is-ir-project-checkbox').checked;
+                const isProjectLevelIR = savedProjects[projectId].isIR;
                 const parsedData = parseRawData(data, isProjectLevelIR);
                 if (parsedData) {
                     currentTechStats = parsedData.techStats;
@@ -665,9 +682,7 @@
         }
         
         function createTableRow(tech, bonusMultiplier) {
-            // --- MODIFICATION START: Use .length for warnings ---
             const denominator = tech.fixTasks + tech.refixTasks + tech.warnings.length;
-            // --- MODIFICATION END ---
             const fixQuality = denominator > 0 ? (tech.fixTasks / denominator) : 0;
             const qualityModifier = calculateQualityModifier(fixQuality * 100);
             const finalPayout = tech.points * bonusMultiplier * qualityModifier;
@@ -833,9 +848,7 @@
                         const round = colName.match(/\d+/)[0];
                         const fixTechId = values[headerMap[`fix${round}_id`]]?.trim();
                         if (fixTechId && techStats[fixTechId]) {
-                            // --- MODIFICATION START: Push warning letter to array ---
                             techStats[fixTechId].warnings.push(warnValue);
-                            // --- MODIFICATION END ---
                         }
                     }
                 });
@@ -871,7 +884,6 @@
             }
         }
         
-        // --- MODIFICATION START: Update modal to show detailed warnings ---
         function openTechSummaryModal(techId) {
             const tech = currentTechStats[techId];
             if (!tech) return;
@@ -949,7 +961,6 @@
             modalBody.innerHTML = bodyHtml;
             modal.classList.remove('hidden');
         }
-        // --- MODIFICATION END ---
 
         function closeModal() {
             const modal = document.getElementById('info-modal');
