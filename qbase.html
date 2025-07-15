@@ -359,27 +359,19 @@
             manageButtonState();
         }
         
-        // --- MODIFICATION START: Centralized UI state management ---
         function manageButtonState() {
             const projectSelect = document.getElementById('project-select');
             const projectId = projectSelect.value;
 
-            // Manage admin-only buttons
             document.getElementById('delete-project-btn').disabled = !isAdmin || !projectId;
             document.getElementById('edit-data-btn').classList.toggle('hidden', !isAdmin || !projectId);
             
-            // Manage Save button state
-            // Enabled if: Admin AND ( (No project selected) OR (A project is selected AND in edit mode) )
             document.getElementById('save-project-btn').disabled = !isAdmin || (projectId && !isEditMode);
 
-            // Manage Text Area state
-            // Editable if: Admin AND ( (No project selected) OR (A project is selected AND in edit mode) )
             document.getElementById('techData').readOnly = !isAdmin || (projectId && !isEditMode);
             
-            // Manage IR Checkbox state
             document.getElementById('is-ir-project-checkbox').disabled = !isAdmin;
         }
-        // --- MODIFICATION END ---
         
         function handleAdminLogin() {
             const user = prompt("Enter Admin Username:");
@@ -387,7 +379,7 @@
             
             if (user === "admin" && pass === "admin123") {
                 isAdmin = true;
-                isEditMode = false; // Reset edit mode on login
+                isEditMode = false; 
                 document.getElementById('logout-btn').classList.remove('hidden');
                 document.getElementById('admin-login-btn').classList.add('hidden');
                 document.getElementById('admin-dashboard').classList.add('visible');
@@ -403,7 +395,7 @@
 
         function handleLogout() {
             isAdmin = false;
-            isEditMode = false; // Reset edit mode on logout
+            isEditMode = false; 
             document.getElementById('logout-btn').classList.add('hidden');
             document.getElementById('admin-login-btn').classList.remove('hidden');
             document.getElementById('admin-dashboard').classList.remove('visible');
@@ -459,7 +451,7 @@
                 const success = await saveProjectToFirestore(projectData);
                 if(success) {
                     alert(`Project "${projectName}" saved successfully to Firestore.`);
-                    isEditMode = false; // Exit edit mode after saving
+                    isEditMode = false; 
                     manageButtonState();
                 }
             });
@@ -482,7 +474,7 @@
                 const projectId = e.target.value;
                 const irCheckbox = document.getElementById('is-ir-project-checkbox');
                 
-                isEditMode = false; // Reset edit mode when changing projects
+                isEditMode = false; 
 
                 if (projectId && savedProjects[projectId]) {
                     const project = savedProjects[projectId];
@@ -498,14 +490,12 @@
                 manageButtonState();
             });
             
-            // --- MODIFICATION START: Edit button now controls edit mode ---
             document.getElementById('edit-data-btn').addEventListener('click', () => {
                  if (!isAdmin) return;
                  isEditMode = true;
                  manageButtonState();
                  document.getElementById('techData').focus();
             });
-            // --- MODIFICATION END ---
             
             document.getElementById('calculateCurrentBtn').addEventListener('click', () => calculateAndRender(false));
             document.getElementById('calculate-all-btn').addEventListener('click', () => calculateAndRender(true));
@@ -814,16 +804,20 @@
                     }
                 });
 
+                // --- MODIFICATION START: Correctly assign warnings ---
                 warnCols.forEach(colName => {
                     const warnValue = values[headerMap[colName]]?.trim();
                     if (warnValue) {
                         const round = colName.match(/\d+/)[0];
                         const fixTechId = values[headerMap[`fix${round}_id`]]?.trim();
                         if (fixTechId && techStats[fixTechId]) {
-                            techStats[techId].warnings += 1;
+                            // This was the error. It was trying to use a 'techId' that didn't exist in this loop.
+                            // This now correctly assigns the warning to the technician who did the fix.
+                            techStats[fixTechId].warnings += 1;
                         }
                     }
                 });
+                // --- MODIFICATION END ---
             });
             return { techStats };
         }
