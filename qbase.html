@@ -308,13 +308,12 @@
                 });
                 savedProjects = loadedProjects;
                 updateProjectDropdown();
-                if (isInitialLoad && !isAdmin) { // Only show alert on initial load for non-admins
+                if (isInitialLoad && !isAdmin) { 
                     alert(`${Object.keys(savedProjects).length} projects loaded. The list will now update automatically.`);
                     isInitialLoad = false;
                 } else if (!isInitialLoad) {
                     showUpdateNotification();
                 }
-                 // Set isInitialLoad to false for admins after their first load too
                 if (isAdmin) {
                     isInitialLoad = false;
                 }
@@ -366,6 +365,9 @@
             document.getElementById('save-project-btn').disabled = !isAdmin;
             document.getElementById('edit-data-btn').classList.toggle('hidden', !isAdmin || !projectId);
             document.getElementById('techData').readOnly = !isAdmin && projectId;
+            // --- MODIFICATION START: Disable IR checkbox for non-admins ---
+            document.getElementById('is-ir-project-checkbox').disabled = !isAdmin;
+            // --- MODIFICATION END ---
         }
         
         function handleAdminLogin() {
@@ -377,7 +379,7 @@
                 document.getElementById('logout-btn').classList.remove('hidden');
                 document.getElementById('admin-login-btn').classList.add('hidden');
                 document.getElementById('admin-dashboard').classList.add('visible');
-                if (!unsubscribe) { // Only start a new listener if one isn't already running
+                if (!unsubscribe) { 
                     listenForPublicProjectChanges();
                 }
                 manageButtonState();
@@ -410,7 +412,6 @@
             }
         }
 
-        // --- MODIFICATION START: Automatic project loading on page start ---
         document.addEventListener('DOMContentLoaded', () => {
             // Automatically load projects for all users when the page loads.
             listenForPublicProjectChanges();
@@ -520,7 +521,6 @@
                 }
             });
         });
-        // --- MODIFICATION END ---
 
         function calculateAndRender(isAllProjects) {
             let bonusMultiplier = 1;
