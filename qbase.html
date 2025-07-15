@@ -220,8 +220,8 @@
         let lastCalculationUsedMultiplier = false;
         let lastFilterValue = ""; 
         let isAdmin = false; 
-        let isEditMode = false; // New state for admin edit mode
-        let unsubscribe; // To store the Firestore listener function
+        let isEditMode = false; 
+        let unsubscribe; 
 
         // --- DATA FROM DOCUMENTATION ---
         const categoryValues = { 1: { points: 2.19 }, 2: { points: 5.86 }, 3: { points: 7.44 }, 4: { points: 2.29 }, 5: { points: 1.55 }, 6: { points: 1.84 }, 7: { points: 1.00 }, 8: { points: 3.74 }, 9: { points: 1.73 } };
@@ -252,13 +252,15 @@
             totalBonus: { title: 'Final Payout (PHP) Calculation', body: `<p>Calculated with the formula: <code>Total Points * Bonus Multiplier * % of Bonus Earned</code></p>`}
         };
 
+        // --- MODIFICATION START: Update tech data structure for detailed warnings ---
         function createNewTechStat() {
             return {
-                id: '', points: 0, fixTasks: 0, refixTasks: 0, warnings: 0,
+                id: '', points: 0, fixTasks: 0, refixTasks: 0, warnings: [], // Changed to an array
                 categoryCounts: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0, 8: 0, 9: 0 },
                 pointsBreakdown: { fix: 0, qc: 0, i3qa: 0, rv: 0 }
             };
         }
+        // --- MODIFICATION END ---
         
         // --- Firestore Functions ---
         async function saveProjectToFirestore(projectData) {
@@ -574,7 +576,9 @@
                             combinedTechStats[techId].points += singleProjectTechStats.points;
                             combinedTechStats[techId].fixTasks += singleProjectTechStats.fixTasks;
                             combinedTechStats[techId].refixTasks += singleProjectTechStats.refixTasks;
-                            combinedTechStats[techId].warnings += singleProjectTechStats.warnings;
+                            // --- MODIFICATION START: Combine warning arrays ---
+                            combinedTechStats[techId].warnings.push(...singleProjectTechStats.warnings);
+                            // --- MODIFICATION END ---
                             for (let i = 1; i <= 9; i++) {
                                 combinedTechStats[techId].categoryCounts[i] += singleProjectTechStats.categoryCounts[i];
                             }
@@ -661,7 +665,9 @@
         }
         
         function createTableRow(tech, bonusMultiplier) {
-            const denominator = tech.fixTasks + tech.refixTasks + tech.warnings;
+            // --- MODIFICATION START: Use .length for warnings ---
+            const denominator = tech.fixTasks + tech.refixTasks + tech.warnings.length;
+            // --- MODIFICATION END ---
             const fixQuality = denominator > 0 ? (tech.fixTasks / denominator) : 0;
             const qualityModifier = calculateQualityModifier(fixQuality * 100);
             const finalPayout = tech.points * bonusMultiplier * qualityModifier;
@@ -699,7 +705,7 @@
             const headerMap = {};
             headers.forEach((h, i) => { headerMap[h] = i; });
 
-            const baseCategoryHeaders = ['category', 'rv1_cat', 'rv2_cat']; // i3qa_cat removed to be handled separately
+            const baseCategoryHeaders = ['category', 'rv1_cat', 'rv2_cat'];
             if (headerMap['combo?'] === undefined) {
                  alert("Critical column 'COMBO?' is missing from the data header. Please ensure it is included.");
                  return null;
@@ -742,11 +748,10 @@
                                         }
                                     }
                                 }
-                            } else { // This is the primary fix task (fix1_id)
+                            } else { 
                                 techStats[techId].fixTasks += 1;
                                 let totalRowFixPoints = 0;
                                 
-                                // --- MODIFICATION START: Handle i3qa_cat with its new rule ---
                                 const i3qaCatIndex = headerMap['i3qa_cat'];
                                 const i3qaLabelIndex = headerMap['i3qa_label'];
                                 if (i3qaCatIndex !== undefined && i3qaLabelIndex !== undefined) {
@@ -762,7 +767,6 @@
                                         }
                                     }
                                 }
-                                // --- MODIFICATION END ---
                                 
                                 baseCategoryHeaders.forEach(catHeader => {
                                     if (headerMap[catHeader] !== undefined) {
@@ -822,7 +826,6 @@
                     }
                 });
 
-                // --- MODIFICATION START: Correctly assign warnings with new rule ---
                 const validWarningLetters = ['B', 'C', 'D', 'E', 'F', 'G', 'I'];
                 warnCols.forEach(colName => {
                     const warnValue = values[headerMap[colName]]?.trim().toUpperCase();
@@ -830,11 +833,12 @@
                         const round = colName.match(/\d+/)[0];
                         const fixTechId = values[headerMap[`fix${round}_id`]]?.trim();
                         if (fixTechId && techStats[fixTechId]) {
-                            techStats[fixTechId].warnings += 1;
+                            // --- MODIFICATION START: Push warning letter to array ---
+                            techStats[fixTechId].warnings.push(warnValue);
+                            // --- MODIFICATION END ---
                         }
                     }
                 });
-                // --- MODIFICATION END ---
             });
             return { techStats };
         }
@@ -867,6 +871,7 @@
             }
         }
         
+        // --- MODIFICATION START: Update modal to show detailed warnings ---
         function openTechSummaryModal(techId) {
             const tech = currentTechStats[techId];
             if (!tech) return;
@@ -875,7 +880,8 @@
             const modalTitle = document.getElementById('modal-title');
             const modalBody = document.getElementById('modal-body');
 
-            const denominator = tech.fixTasks + tech.refixTasks + tech.warnings;
+            const warningsCount = tech.warnings.length;
+            const denominator = tech.fixTasks + tech.refixTasks + warningsCount;
             const fixQuality = denominator > 0 ? (tech.fixTasks / denominator) : 0;
             const qualityModifier = calculateQualityModifier(fixQuality * 100);
             const finalPayout = tech.points * lastUsedBonusMultiplier * qualityModifier;
@@ -894,13 +900,19 @@
                 ? `${lastUsedBonusMultiplier.toFixed(2)} (Multiplier)`
                 : '1 (No Multiplier Applied)';
 
+            const warningsText = warningsCount > 0 ? tech.warnings.join(', ') : 'None';
+            const warningsDisplayHtml = warningsCount > 0 
+                ? `<div class="flex justify-between"><span class="text-gray-600">Warnings:</span><span class="font-bold text-red-600">${warningsCount}</span></div>
+                   <div class="text-xs text-gray-500 text-right">(${warningsText})</div>`
+                : `<div class="flex justify-between"><span class="text-gray-600">Warnings:</span><span class="font-bold text-red-600">${warningsCount}</span></div>`;
+
             let bodyHtml = `<div class="space-y-4 text-sm">
                 
                 <div class="p-3 bg-gray-50 rounded-lg border">
                     <h4 class="font-semibold text-base text-gray-800 mb-2">Core Stats</h4>
                     <div class="flex justify-between"><span class="text-gray-600">Primary Fix Tasks:</span><span class="font-bold">${tech.fixTasks}</span></div>
                     <div class="flex justify-between"><span class="text-gray-600">Refix Tasks:</span><span class="font-bold">${tech.refixTasks}</span></div>
-                    <div class="flex justify-between"><span class="text-gray-600">Warnings:</span><span class="font-bold text-red-600">${tech.warnings}</span></div>
+                    ${warningsDisplayHtml}
                     <details class="mt-2 text-xs">
                         <summary class="cursor-pointer font-medium text-gray-500">Show Category Counts</summary>
                         <ul class="list-disc list-inside mt-1 space-y-1 pl-2">${categoryHtml}</ul>
@@ -920,7 +932,7 @@
                 <div class="p-3 bg-gray-50 rounded-lg border">
                     <h4 class="font-semibold text-base text-gray-800 mb-2">Quality Calculation</h4>
                      <p class="text-xs text-gray-500 mb-2">Formula: [Fix Tasks] / ([Fix Tasks] + [Refix Tasks] + [Warnings])</p>
-                    <div class="p-2 bg-white rounded text-center"><code>${tech.fixTasks} / (${tech.fixTasks} + ${tech.refixTasks} + ${tech.warnings}) = ${(fixQuality).toFixed(4)}</code></div>
+                    <div class="p-2 bg-white rounded text-center"><code>${tech.fixTasks} / (${tech.fixTasks} + ${tech.refixTasks} + ${warningsCount}) = ${(fixQuality).toFixed(4)}</code></div>
                     <div class="flex justify-between font-bold"><span class="text-gray-800">Fix Quality %:</span><span class="font-mono">${(fixQuality * 100).toFixed(2)}%</span></div>
                 </div>
 
@@ -937,6 +949,7 @@
             modalBody.innerHTML = bodyHtml;
             modal.classList.remove('hidden');
         }
+        // --- MODIFICATION END ---
 
         function closeModal() {
             const modal = document.getElementById('info-modal');
