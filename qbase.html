@@ -100,14 +100,10 @@
                 <div class="lg:col-span-2 space-y-6">
                      <div class="bg-gray-50 p-6 rounded-xl border">
                         <h2 class="text-xl font-semibold text-gray-800 border-b pb-3 mb-4">Project Management</h2>
-                        <div class="mb-4">
-                             <button id="load-public-projects-btn" class="w-full bg-cyan-600 text-white font-bold py-2 px-3 rounded-lg hover:bg-cyan-700 transition-colors">
-                                Load Project Online
-                            </button>
-                        </div>
+                        
                          <div class="flex items-center gap-2">
                             <select id="project-select" class="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
-                                <option value="">Select a Project</option>
+                                <option value="">Loading Projects...</option>
                             </select>
                              <button id="delete-project-btn" title="Delete Selected Project" class="p-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:bg-red-300 transition-colors">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>
@@ -236,7 +232,7 @@
                         <div>
                             <h4 class="text-lg font-bold text-gray-900 mb-2">How to Use This Site</h4>
                             <ol class="list-decimal list-inside space-y-2">
-                                <li><strong>Client View (Default):</strong> Click 'Load Public Projects' to fetch the project list from the central database. The list will update automatically if an admin makes changes.</li>
+                                <li><strong>Automatic Loading:</strong> The project list loads automatically from the central database when the page opens.</li>
                                 <li><strong>Admin Login:</strong> Click 'Admin Login' and use credentials ('admin'/'admin123') to enter Admin Mode.</li>
                                 <li><strong>Admin Mode:</strong> In this mode, you can create, save, and delete projects. These actions modify the central database directly and will be seen by all users in real-time.</li>
                             </ol>
@@ -283,7 +279,7 @@
 
         function listenForPublicProjectChanges() {
             if (unsubscribe) unsubscribe(); 
-            alert("Connecting to project database...");
+            
             const projectsCol = collection(db, "public_projects");
             let isInitialLoad = true;
             unsubscribe = onSnapshot(projectsCol, (snapshot) => {
@@ -312,11 +308,15 @@
                 });
                 savedProjects = loadedProjects;
                 updateProjectDropdown();
-                if (isInitialLoad) {
-                    alert(`${Object.keys(savedProjects).length} public projects loaded. The list will now update automatically.`);
+                if (isInitialLoad && !isAdmin) { // Only show alert on initial load for non-admins
+                    alert(`${Object.keys(savedProjects).length} projects loaded. The list will now update automatically.`);
                     isInitialLoad = false;
-                } else {
+                } else if (!isInitialLoad) {
                     showUpdateNotification();
+                }
+                 // Set isInitialLoad to false for admins after their first load too
+                if (isAdmin) {
+                    isInitialLoad = false;
                 }
             }, (error) => {
                 console.error("Error with real-time listener:", error);
@@ -376,9 +376,10 @@
                 isAdmin = true;
                 document.getElementById('logout-btn').classList.remove('hidden');
                 document.getElementById('admin-login-btn').classList.add('hidden');
-                document.getElementById('load-public-projects-btn').classList.add('hidden');
                 document.getElementById('admin-dashboard').classList.add('visible');
-                listenForPublicProjectChanges();
+                if (!unsubscribe) { // Only start a new listener if one isn't already running
+                    listenForPublicProjectChanges();
+                }
                 manageButtonState();
                 alert("Admin Mode Activated. You are now editing the live database.");
             } else {
@@ -390,12 +391,8 @@
             isAdmin = false;
             document.getElementById('logout-btn').classList.add('hidden');
             document.getElementById('admin-login-btn').classList.remove('hidden');
-            document.getElementById('load-public-projects-btn').classList.remove('hidden');
             document.getElementById('admin-dashboard').classList.remove('visible');
-            savedProjects = {};
-            updateProjectDropdown();
             manageButtonState();
-            if (unsubscribe) unsubscribe(); 
             alert("You have been logged out.");
         }
 
@@ -413,7 +410,11 @@
             }
         }
 
+        // --- MODIFICATION START: Automatic project loading on page start ---
         document.addEventListener('DOMContentLoaded', () => {
+            // Automatically load projects for all users when the page loads.
+            listenForPublicProjectChanges();
+            
             manageButtonState();
 
             document.getElementById('save-project-btn').addEventListener('click', async () => {
@@ -430,7 +431,10 @@
                     return;
                 }
                 
-                let projectId = document.getElementById('project-select').value || Date.now().toString();
+                let projectId = document.getElementById('project-select').value;
+                if (!projectId || savedProjects[projectId]?.isCorrupted) {
+                    projectId = Date.now().toString();
+                }
                 
                 const projectData = {
                     id: projectId,
@@ -485,8 +489,6 @@
                 techDataTextarea.focus();
             });
             
-            document.getElementById('load-public-projects-btn').addEventListener('click', listenForPublicProjectChanges);
-            
             document.getElementById('calculateCurrentBtn').addEventListener('click', () => calculateAndRender(false));
             document.getElementById('calculate-all-btn').addEventListener('click', () => calculateAndRender(true));
             document.getElementById('search-tech-id').addEventListener('input', (e) => {
@@ -518,6 +520,7 @@
                 }
             });
         });
+        // --- MODIFICATION END ---
 
         function calculateAndRender(isAllProjects) {
             let bonusMultiplier = 1;
@@ -719,7 +722,6 @@
                         if (colName.startsWith('fix')) {
                             const isRefix = colName !== 'fix1_id';
                             if (isRefix) {
-                                // --- MODIFICATION START: New Refix Task Logic ---
                                 const roundMatch = colName.match(/\d+/);
                                 if (roundMatch) {
                                     const round = roundMatch[0];
@@ -733,7 +735,6 @@
                                         }
                                     }
                                 }
-                                // --- MODIFICATION END ---
                             } else { // This is the primary fix task (fix1_id)
                                 techStats[techId].fixTasks += 1;
                                 let totalRowFixPoints = 0;
