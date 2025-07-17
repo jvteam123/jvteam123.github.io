@@ -190,7 +190,7 @@
                 </div>
             </div>
 
-            <div id="admin-dashboard" class="hidden px-6 md:px-8 pb-8">
+            <div id="admin-dashboard" class="px-6 md:px-8 pb-8">
                 <div class="border-t pt-6">
                     <h2 class="text-xl font-semibold text-gray-800 border-b pb-3 mb-4">Admin Dashboard</h2>
                     <p class="text-sm text-gray-600 mb-4">As an admin, you can save and delete projects directly to the central database.</p>
@@ -476,15 +476,12 @@
                 isEditMode = false; 
                 document.getElementById('logout-btn').classList.remove('hidden');
                 document.getElementById('admin-login-btn').classList.add('hidden');
-                document.getElementById('admin-dashboard').classList.add('visible');
-                if (!unsubscribe) { 
-                    listenForPublicProjectChanges();
-                }
+                document.getElementById('admin-dashboard').classList.add('visible'); // This will now work
                 await loadTeamSettings(); // Load settings for admin
                 manageButtonState();
                 alert("Admin Mode Activated. You are now editing the live database.");
             } else {
-                alert("Incorrect username or password.");
+                if(user || pass) alert("Incorrect username or password.");
             }
         }
 
@@ -522,12 +519,13 @@
                 if (!isAdmin) return;
                 const newTeamNameInput = document.getElementById('new-team-name');
                 const newTeamName = newTeamNameInput.value.trim();
-                if (newTeamName && !teamSettings[newTeamName]) {
-                    teamSettings[newTeamName] = [];
-                    populateAdminTeamManagement();
+                if (newTeamName && !document.querySelector(`.team-definition[data-team-name="${newTeamName}"]`)) {
+                    addTeamToAdminUI(newTeamName);
                     newTeamNameInput.value = '';
-                } else if (teamSettings[newTeamName]) {
-                    alert('A team with this name already exists.');
+                } else if (!newTeamName) {
+                    alert('Please enter a team name.');
+                } else {
+                    alert('A team with this name already exists in the editor.');
                 }
             });
 
@@ -535,7 +533,6 @@
                 if (!isAdmin) return;
                 const newTeamSettings = {};
                 const teamDivs = document.querySelectorAll('#team-list-container .team-definition');
-                let hasError = false;
                 
                 teamDivs.forEach(div => {
                     const teamName = div.dataset.teamName;
@@ -543,16 +540,10 @@
                     const techIds = textArea.value.split(',')
                                             .map(id => id.trim())
                                             .filter(id => id); // Remove empty strings
-                    if (newTeamSettings[teamName]) {
-                        alert(`Duplicate team name found: ${teamName}. Please resolve before saving.`);
-                        hasError = true;
-                    }
                     newTeamSettings[teamName] = techIds;
                 });
                 
-                if (!hasError) {
-                    saveTeamSettings(newTeamSettings);
-                }
+                saveTeamSettings(newTeamSettings);
             });
 
             document.getElementById('save-project-btn').addEventListener('click', async () => {
@@ -1183,6 +1174,26 @@
             });
         }
         
+        function addTeamToAdminUI(teamName, teamIds = []) {
+            const container = document.getElementById('team-list-container');
+            const teamDiv = document.createElement('div');
+            teamDiv.className = 'p-4 border rounded-lg bg-white team-definition';
+            teamDiv.dataset.teamName = teamName;
+            teamDiv.innerHTML = `
+                <div class="flex justify-between items-center mb-2">
+                    <label class="font-semibold text-gray-700">${teamName}</label>
+                    <button data-team-name="${teamName}" class="delete-team-btn font-bold text-red-500 hover:text-red-700 text-xl leading-none">&times;</button>
+                </div>
+                <textarea class="w-full p-2 border rounded-md font-mono text-sm" rows="3" placeholder="tech1, tech2, tech3">${teamIds.join(', ')}</textarea>
+            `;
+            container.appendChild(teamDiv);
+            teamDiv.querySelector('.delete-team-btn').addEventListener('click', (e) => {
+                if (confirm(`Are you sure you want to remove team "${teamName}" from the editor? This will be finalized when you save.`)) {
+                    e.target.closest('.team-definition').remove();
+                }
+            });
+        }
+
         function populateAdminTeamManagement() {
             const container = document.getElementById('team-list-container');
             container.innerHTML = '';
@@ -1190,27 +1201,7 @@
             const sortedTeams = Object.keys(teamSettings).sort((a, b) => a.localeCompare(b));
 
             sortedTeams.forEach(teamName => {
-                const teamIds = teamSettings[teamName] ? teamSettings[teamName].join(', ') : '';
-                const teamDiv = document.createElement('div');
-                teamDiv.className = 'p-4 border rounded-lg bg-white team-definition';
-                teamDiv.dataset.teamName = teamName;
-                teamDiv.innerHTML = `
-                    <div class="flex justify-between items-center mb-2">
-                        <label class="font-semibold text-gray-700">${teamName}</label>
-                        <button data-team-name="${teamName}" class="delete-team-btn font-bold text-red-500 hover:text-red-700 text-xl leading-none">&times;</button>
-                    </div>
-                    <textarea class="w-full p-2 border rounded-md font-mono text-sm" rows="3" placeholder="tech1, tech2, tech3">${teamIds}</textarea>
-                `;
-                container.appendChild(teamDiv);
-            });
-            
-            document.querySelectorAll('.delete-team-btn').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    const teamNameToDelete = e.target.dataset.teamName;
-                    if (confirm(`Are you sure you want to delete team "${teamNameToDelete}"? This cannot be undone.`)) {
-                       e.target.closest('.team-definition').remove();
-                    }
-                });
+                addTeamToAdminUI(teamName, teamSettings[teamName]);
             });
         }
 
