@@ -1091,27 +1091,28 @@
             }
 
             const createSimpleCategoryHtml = (title, counts) => {
-                let html = `<h4 class="font-medium text-gray-700 mt-3">${title}</h4>`;
+                let html = `<details class="text-sm"><summary class="cursor-pointer font-medium text-gray-700 mt-3">${title}</summary>`;
                 const sortedCats = Object.keys(counts).sort((a,b) => a - b);
                 
                 if (sortedCats.length > 0) {
-                    html += '<ul class="list-disc list-inside space-y-1 pl-2 text-gray-600">';
+                    html += '<ul class="list-disc list-inside space-y-1 pl-2 text-gray-600 mt-1 pl-4 border-l-2 border-gray-200">';
                     sortedCats.forEach(cat => {
                         html += `<li class="flex justify-between"><span>Category ${cat}:</span> <span class="font-mono font-medium text-gray-800">${counts[cat]}</span></li>`;
                     });
                     html += '</ul>';
                 } else {
-                    html += '<p class="text-gray-500 text-xs italic">No entries found.</p>';
+                    html += '<p class="text-gray-500 text-xs italic mt-1 pl-4">No entries found.</p>';
                 }
+                html += '</details>';
                 return html;
             };
             
             const createRv3CategoryHtml = (title, counts) => {
-                let html = `<h4 class="font-medium text-gray-700 mt-3">${title}</h4>`;
+                let html = `<details class="text-sm"><summary class="cursor-pointer font-medium text-gray-700 mt-3">${title}</summary>`;
                 const sortedCats = Object.keys(counts).sort((a,b) => a - b);
                 
                 if (sortedCats.length > 0) {
-                    html += '<div class="space-y-2">';
+                    html += '<div class="space-y-2 mt-1 pl-4 border-l-2 border-gray-200">';
                     sortedCats.forEach(cat => {
                         const catData = counts[cat];
                         const techEntries = Object.entries(catData.techs).sort((a,b) => a[0].localeCompare(b[0])).map(([techId, count]) => 
@@ -1130,8 +1131,9 @@
                     });
                     html += '</div>';
                 } else {
-                    html += '<p class="text-gray-500 text-xs italic">No entries found.</p>';
+                    html += '<p class="text-gray-500 text-xs italic mt-1 pl-4">No entries found.</p>';
                 }
+                html += '</details>';
                 return html;
             };
 
