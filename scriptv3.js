@@ -23,13 +23,13 @@ document.addEventListener('DOMContentLoaded', () => {
         // --- 1. CONFIGURATION AND CONSTANTS ---
         config: {
             firebase: {
-                apiKey: "AIzaSyDQ1M23VXN0_s_e9TfEbOx8N8ZS5nt3zDs",
-                authDomain: "project-tracker-pro-728b1.firebaseapp.com",
-                projectId: "project-tracker-pro-728b1",
-                storageBucket: "project-tracker-pro-728b1.firebasestorage.app",
-                messagingSenderId: "646972784592",
-                appId: "1:646972784592:web:7257567b03bccd6f41c3d5",
-                measurementId: "G-KDSX6JRSP8"
+                apiKey: "AIzaSyB_eeYSYZPeYRr3m3xiX7OLoRzsd37yNwI",
+                authDomain: "e-loan-9457a.firebaseapp.com",
+                projectId: "e-loan-9457a",
+                storageBucket: "e-loan-9457a.firebasestorage.app",
+                messagingSenderId: "905622570857",
+                appId: "1:905622570857:web:5dfb76c60f9e5d9fdedff8",
+                measurementId: "G-SQF73TTGMX"
 
             },
             pins: {
