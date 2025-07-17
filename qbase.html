@@ -11,13 +11,13 @@
         body {
             font-family: 'Inter', sans-serif;
         }
-        #tech-results-container, #admin-dashboard {
+        #tech-results-container, #admin-dashboard, #tl-summary-card {
              max-height: 0;
              overflow: hidden;
              opacity: 0;
              transition: all 0.5s ease-in-out;
         }
-        #tech-results-container.visible, #admin-dashboard.visible {
+        #tech-results-container.visible, #admin-dashboard.visible, #tl-summary-card.visible {
             max-height: 1500px; /* Adjust as needed */
             opacity: 1;
         }
@@ -73,6 +73,12 @@
         #update-notification {
             transition: opacity 0.5s, transform 0.5s;
         }
+        /* Style for multi-select */
+        select[multiple] {
+            height: 10rem; /* Or any other suitable height */
+            background-color: white;
+            padding: 0.5rem;
+        }
     </style>
 </head>
 <body class="bg-gray-100">
@@ -95,7 +101,6 @@
                 </div>
             </div>
 
-            <!-- MODIFICATION: This grid container will now be dynamically adjusted -->
             <div id="main-grid" class="p-6 md:p-8 grid grid-cols-1 lg:grid-cols-5 gap-8">
 
                 <div class="lg:col-span-2 space-y-6">
@@ -103,7 +108,7 @@
                         <h2 class="text-xl font-semibold text-gray-800 border-b pb-3 mb-4">Project Management</h2>
                         
                          <div class="flex items-center gap-2">
-                            <select id="project-select" class="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                            <select id="project-select" class="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all duration-300">
                                 <option value="">Loading Projects...</option>
                             </select>
                              <button id="delete-project-btn" title="Delete Selected Project" class="p-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:bg-red-300 transition-colors">
@@ -115,8 +120,12 @@
                                 Calculate Selected Project
                             </button>
                         </div>
-                        <div class="mt-4">
-                            <button id="calculate-all-btn" class="w-full bg-green-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-700 transition-colors duration-300 shadow-md">Calculate All Projects</button>
+                         <div class="mt-4 border-t pt-4">
+                             <div class="flex items-center">
+                                <input id="customize-calc-all-cb" type="checkbox" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded">
+                                <label for="customize-calc-all-cb" class="ml-3 block text-sm font-medium text-gray-700">Select specific projects to calculate</label>
+                            </div>
+                            <button id="calculate-all-btn" class="mt-2 w-full bg-green-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-700 transition-colors duration-300 shadow-md">Calculate All Projects</button>
                         </div>
                     </div>
                     <div class="bg-gray-50 p-6 rounded-xl border">
@@ -131,9 +140,12 @@
                             <input type="number" id="bonusMultiplierDirect" class="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Default: 1 (No multiplier)">
                         </div>
                     </div>
+                     <div id="tl-summary-card" class="bg-gray-50 p-6 rounded-xl border">
+                        <h2 class="text-xl font-semibold text-gray-800 border-b pb-3 mb-4">TL Summary</h2>
+                        <div id="tl-summary-content" class="space-y-2 text-sm"></div>
+                    </div>
                 </div>
 
-                <!-- MODIFICATION: This entire column will be hidden for clients -->
                 <div id="project-data-entry" class="lg:col-span-3 space-y-6">
                     <div>
                         <div class="flex justify-between items-center border-b pb-3 mb-4">
@@ -240,6 +252,7 @@
                                 <li><strong>Automatic Loading:</strong> The project list loads automatically from the central database when the page opens.</li>
                                 <li><strong>Admin Login:</strong> Click 'Admin Login' and use credentials ('admin'/'admin123') to enter Admin Mode.</li>
                                 <li><strong>Admin Mode:</strong> In this mode, you can create, save, and delete projects. These actions modify the central database directly and will be seen by all users in real-time.</li>
+                                <li><strong>Calculating Subsets:</strong> Use the "Select specific projects..." checkbox to turn the dropdown into a multi-select list. The 'Calculate All' button will then only compute the projects you have highlighted.</li>
                             </ol>
                         </div>
                         <hr>
@@ -362,17 +375,14 @@
             manageButtonState();
         }
         
-        // --- MODIFICATION START: Centralized UI state management for client/admin views ---
         function manageButtonState() {
             const mainGrid = document.getElementById('main-grid');
             const projectDataEntry = document.getElementById('project-data-entry');
             const projectSelect = document.getElementById('project-select');
             const projectId = projectSelect.value;
 
-            // Toggle visibility of the entire data entry column
             projectDataEntry.classList.toggle('hidden', !isAdmin);
             
-            // Adjust grid layout based on admin status
             if(isAdmin) {
                 mainGrid.classList.remove('lg:grid-cols-1');
                 mainGrid.classList.add('lg:grid-cols-5');
@@ -381,14 +391,12 @@
                 mainGrid.classList.add('lg:grid-cols-1');
             }
 
-            // Admin-specific button states
             document.getElementById('delete-project-btn').disabled = !isAdmin || !projectId;
             document.getElementById('edit-data-btn').classList.toggle('hidden', !isAdmin || !projectId);
             document.getElementById('save-project-btn').disabled = !isAdmin || (projectId && !isEditMode);
             document.getElementById('techData').readOnly = !isAdmin || (projectId && !isEditMode);
             document.getElementById('is-ir-project-checkbox').disabled = !isAdmin;
         }
-        // --- MODIFICATION END ---
         
         function handleAdminLogin() {
             const user = prompt("Enter Admin Username:");
@@ -447,6 +455,11 @@
                 const rawData = document.getElementById('techData').value.trim();
                 const isIR = document.getElementById('is-ir-project-checkbox').checked;
 
+                if (projectName.length > 50) {
+                    alert("Project name cannot exceed 50 characters.");
+                    return;
+                }
+
                 if (!projectName || !rawData) {
                     alert("Please enter a project name and paste project data before saving/updating.");
                     return;
@@ -488,7 +501,12 @@
             });
 
             document.getElementById('project-select').addEventListener('change', (e) => {
-                const projectId = e.target.value;
+                const projectSelect = e.target;
+                if (projectSelect.multiple) {
+                    // In multi-select mode, don't load the project data on click
+                    return;
+                }
+                const projectId = projectSelect.value;
                 const irCheckbox = document.getElementById('is-ir-project-checkbox');
                 
                 isEditMode = false; 
@@ -515,7 +533,39 @@
             });
             
             document.getElementById('calculateCurrentBtn').addEventListener('click', () => calculateAndRender(false));
-            document.getElementById('calculate-all-btn').addEventListener('click', () => calculateAndRender(true));
+            
+            document.getElementById('calculate-all-btn').addEventListener('click', () => {
+                const isCustomized = document.getElementById('customize-calc-all-cb').checked;
+                if (isCustomized) {
+                    const selectedProjectIds = [...document.getElementById('project-select').selectedOptions].map(opt => opt.value).filter(Boolean);
+                    if (selectedProjectIds.length === 0) {
+                        alert('Please select one or more projects from the list to calculate.');
+                        return;
+                    }
+                    calculateAndRender(true, selectedProjectIds);
+                } else {
+                    calculateAndRender(true, null);
+                }
+            });
+
+            document.getElementById('customize-calc-all-cb').addEventListener('change', (e) => {
+                const projectSelect = document.getElementById('project-select');
+                const calcCurrentBtn = document.getElementById('calculateCurrentBtn');
+                const calcAllBtn = document.getElementById('calculate-all-btn');
+
+                if (e.target.checked) {
+                    projectSelect.multiple = true;
+                    projectSelect.size = 8; // Show 8 items
+                    calcCurrentBtn.disabled = true;
+                    calcAllBtn.textContent = 'Calculate Checked Projects';
+                } else {
+                    projectSelect.multiple = false;
+                    projectSelect.size = 1;
+                    calcCurrentBtn.disabled = false;
+                    calcAllBtn.textContent = 'Calculate All Projects';
+                }
+            });
+
             document.getElementById('search-tech-id').addEventListener('input', (e) => {
                 lastFilterValue = e.target.value;
                 filterTable();
@@ -546,7 +596,7 @@
             });
         });
 
-        function calculateAndRender(isAllProjects) {
+        function calculateAndRender(isAllProjects, projectIds = null) {
             let bonusMultiplier = 1;
             let isMultiplierUsed = false;
             const directMultiplierInput = document.getElementById('bonusMultiplierDirect').value;
@@ -568,12 +618,17 @@
             const resultsTitleEl = document.getElementById('results-title');
             
             if (isAllProjects) {
-                resultsTitleEl.textContent = `All Projects (Combined) - Bonus Results ${isMultiplierUsed ? `(Multiplier: ${bonusMultiplier})` : '(No Multiplier Applied)'}`;
+                const projectsToCalculate = projectIds ? projectIds : Object.keys(savedProjects);
+                const titleText = projectIds ? 'Checked Projects (Combined)' : 'All Projects (Combined)';
+                resultsTitleEl.textContent = `${titleText} - Bonus Results ${isMultiplierUsed ? `(Multiplier: ${bonusMultiplier})` : '(No Multiplier)'}`;
+                
                 let combinedTechStats = {};
+                let combinedSummaryStats = { rv1CatCounts: {}, totalRows: 0, comboTasks: 0 };
                 const corruptedProjects = []; 
                 
-                for (const projectId in savedProjects) {
+                for (const projectId of projectsToCalculate) {
                     const project = savedProjects[projectId];
+                    if (!project) continue;
                     
                     if (project.isCorrupted) {
                         corruptedProjects.push(project.name);
@@ -600,6 +655,11 @@
                             combinedTechStats[techId].pointsBreakdown.i3qa += singleProjectTechStats.pointsBreakdown.i3qa;
                             combinedTechStats[techId].pointsBreakdown.rv += singleProjectTechStats.pointsBreakdown.rv;
                         }
+                        combinedSummaryStats.totalRows += parsedData.summaryStats.totalRows;
+                        combinedSummaryStats.comboTasks += parsedData.summaryStats.comboTasks;
+                        for (const cat in parsedData.summaryStats.rv1CatCounts) {
+                            combinedSummaryStats.rv1CatCounts[cat] = (combinedSummaryStats.rv1CatCounts[cat] || 0) + parsedData.summaryStats.rv1CatCounts[cat];
+                        }
                     }
                 }
 
@@ -609,6 +669,7 @@
 
                 currentTechStats = combinedTechStats; 
                 renderSingleProjectTable(currentTechStats, bonusMultiplier);
+                renderTlSummary(combinedSummaryStats);
             } else {
                 const projectId = document.getElementById('project-select').value;
                 if (!projectId) {
@@ -631,9 +692,11 @@
                 if (parsedData) {
                     currentTechStats = parsedData.techStats;
                     renderSingleProjectTable(currentTechStats, bonusMultiplier);
+                    renderTlSummary(parsedData.summaryStats);
                 }
             }
             document.getElementById('tech-results-container').classList.add('visible');
+            document.getElementById('tl-summary-card').classList.add('visible');
         }
         
         function renderSingleProjectTable(techStats, bonusMultiplier) {
@@ -708,9 +771,8 @@
             const techStats = {};
             const lines = data.split('\n').filter(line => line.trim() !== '');
             
-            if (lines.length < 2) {
-                alert("Calculation failed: The project data is incomplete or empty. It must include at least one header row and one data row.");
-                return null;
+            if (lines.length < 1) { // Can be just a header
+                 return null;
             }
 
             const headerLine = lines.shift();
@@ -720,12 +782,20 @@
             const headerMap = {};
             headers.forEach((h, i) => { headerMap[h] = i; });
 
-            const baseCategoryHeaders = ['category', 'rv1_cat', 'rv2_cat'];
             if (headerMap['combo?'] === undefined) {
                  alert("Critical column 'COMBO?' is missing from the data header. Please ensure it is included.");
                  return null;
             }
+            
+            const summaryStats = {
+                rv1CatCounts: {},
+                totalRows: lines.length,
+                comboTasks: 0
+            };
+            const rv1CatIndex = headerMap['rv1_cat'];
+            const comboIndex = headerMap['combo?'];
 
+            const baseCategoryHeaders = ['category', 'rv1_cat', 'rv2_cat'];
             const techIdCols = headers.filter(h => h.endsWith('_id'));
             const warnCols = headers.filter(h => h.startsWith('r') && h.endsWith('_warn'));
             
@@ -737,6 +807,16 @@
             lines.forEach(line => {
                 const values = line.split(delimiter);
                 const isComboIR = values[headerMap['combo?']] === 'Y';
+                
+                if (comboIndex !== undefined && values[comboIndex]?.trim().toUpperCase() === 'Y') {
+                    summaryStats.comboTasks++;
+                }
+                if (rv1CatIndex !== undefined) {
+                    const catValue = values[rv1CatIndex]?.trim();
+                    if (catValue && !isNaN(catValue) && catValue >= 1 && catValue <= 9) {
+                        summaryStats.rv1CatCounts[catValue] = (summaryStats.rv1CatCounts[catValue] || 0) + 1;
+                    }
+                }
 
                 techIdCols.forEach(colName => {
                     const techId = values[headerMap[colName]]?.trim();
@@ -853,8 +933,39 @@
                     }
                 });
             });
-            return { techStats };
+            return { techStats, summaryStats };
         }
+        
+        function renderTlSummary(stats) {
+            const card = document.getElementById('tl-summary-card');
+            const content = document.getElementById('tl-summary-content');
+
+            if (!stats) {
+                card.classList.remove('visible');
+                return;
+            }
+
+            let rv1Html = '<h4 class="font-medium text-gray-700 mt-3">RV1_CAT Counts</h4>';
+            const sortedRv1Cats = Object.keys(stats.rv1CatCounts).sort((a,b) => a - b);
+            
+            if (sortedRv1Cats.length > 0) {
+                rv1Html += '<ul class="list-disc list-inside space-y-1 pl-2 text-gray-600">';
+                sortedRv1Cats.forEach(cat => {
+                    rv1Html += `<li class="flex justify-between"><span>Category ${cat}:</span> <span class="font-mono font-medium text-gray-800">${stats.rv1CatCounts[cat]}</span></li>`;
+                });
+                rv1Html += '</ul>';
+            } else {
+                rv1Html += '<p class="text-gray-500">No RV1_CAT entries found.</p>';
+            }
+
+            content.innerHTML = `
+                <div class="flex justify-between"><span class="text-gray-600">Total Data Rows Parsed:</span><span class="font-bold">${stats.totalRows}</span></div>
+                <div class="flex justify-between"><span class="text-gray-600">"Combo?" (Y) Tasks:</span><span class="font-bold">${stats.comboTasks}</span></div>
+                ${rv1Html}
+            `;
+            card.classList.add('visible');
+        }
+
 
         function filterTable() {
             const searchTerm = document.getElementById('search-tech-id').value.toUpperCase();
