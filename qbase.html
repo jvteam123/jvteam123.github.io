@@ -79,6 +79,21 @@
             background-color: white;
             padding: 0.5rem;
         }
+        details > summary {
+            list-style: none;
+        }
+        details > summary::-webkit-details-marker {
+            display: none;
+        }
+        details > summary::before {
+            content: '►';
+            margin-right: 0.5rem;
+            font-size: 0.8em;
+            transition: transform 0.2s;
+        }
+        details[open] > summary::before {
+            transform: rotate(90deg);
+        }
     </style>
 </head>
 <body class="bg-gray-100">
@@ -264,7 +279,7 @@
             },
             bonusMultiplier: { title: 'Bonus Multiplier (PHP)', body: `<p>An optional multiplier for the final payout.</p>` },
             totalPoints: { title: 'Total Points Calculation', body: `<p>Points are calculated for each individual task and then summed for each technician.</p>`},
-            fixQuality: { title: 'Fix Quality % Calculation', body: `<p>Calculated using the formula: <code>[# of Fix Tasks] / ([# of Fix Tasks] + [# of Refix Tasks] + [# of Warnings])</code></p>`},
+            fixQuality: { title: 'Fix Quality % Calculation', body: `<p>Calculated using the formula: code>[# of Fix Tasks] / ([# of Fix Tasks] + [# of Refix Tasks] + [# of Warnings])</code></p>`},
             bonusEarned: { title: '% of Bonus Earned Calculation', body: `<p>This percentage is determined by looking up the <strong>Fix Quality %</strong> in a tiered table.</p>`},
             totalBonus: { title: 'Final Payout (PHP) Calculation', body: `<p>Calculated with the formula: <code>Total Points * Bonus Multiplier * % of Bonus Earned</code></p>`}
         };
@@ -640,6 +655,7 @@
 
                     const parsedData = parseRawData(project.rawData, project.isIR || false); 
                     if (parsedData) {
+                        // Merge Tech Stats
                         for (const techId in parsedData.techStats) {
                             const singleProjectTechStats = parsedData.techStats[techId];
                             if (!combinedTechStats[techId]) {
@@ -658,6 +674,8 @@
                             combinedTechStats[techId].pointsBreakdown.i3qa += singleProjectTechStats.pointsBreakdown.i3qa;
                             combinedTechStats[techId].pointsBreakdown.rv += singleProjectTechStats.pointsBreakdown.rv;
                         }
+                        
+                        // Merge Summary Stats
                         combinedSummaryStats.totalRows += parsedData.summaryStats.totalRows;
                         combinedSummaryStats.comboTasks += parsedData.summaryStats.comboTasks;
                         for (const cat in parsedData.summaryStats.rv1CatCounts) {
@@ -667,7 +685,15 @@
                             combinedSummaryStats.rv2CatCounts[cat] = (combinedSummaryStats.rv2CatCounts[cat] || 0) + parsedData.summaryStats.rv2CatCounts[cat];
                         }
                         for (const cat in parsedData.summaryStats.rv3CatCounts) {
-                            combinedSummaryStats.rv3CatCounts[cat] = (combinedSummaryStats.rv3CatCounts[cat] || 0) + parsedData.summaryStats.rv3CatCounts[cat];
+                            const projectCatData = parsedData.summaryStats.rv3CatCounts[cat];
+                            if (!combinedSummaryStats.rv3CatCounts[cat]) {
+                                combinedSummaryStats.rv3CatCounts[cat] = { total: 0, techs: {} };
+                            }
+                            const combinedCatData = combinedSummaryStats.rv3CatCounts[cat];
+                            combinedCatData.total += projectCatData.total;
+                            for (const techId in projectCatData.techs) {
+                                combinedCatData.techs[techId] = (combinedCatData.techs[techId] || 0) + projectCatData.techs[techId];
+                            }
                         }
                         for (const cat in parsedData.summaryStats.rv4CatCounts) {
                             combinedSummaryStats.rv4CatCounts[cat] = (combinedSummaryStats.rv4CatCounts[cat] || 0) + parsedData.summaryStats.rv4CatCounts[cat];
@@ -807,6 +833,7 @@
             const rv1CatIndex = headerMap['rv1_cat'];
             const rv2CatIndex = headerMap['rv2_cat'];
             const rv3CatIndex = headerMap['rv3_cat'];
+            const rv3IdIndex = headerMap['rv3_id'];
             const rv4CatIndex = headerMap['rv4_cat'];
             const comboIndex = headerMap['combo?'];
 
@@ -827,7 +854,7 @@
                     summaryStats.comboTasks++;
                 }
 
-                const processRvCat = (index, countsObject) => {
+                const processSimpleRvCat = (index, countsObject) => {
                     if (index !== undefined) {
                         const catValue = values[index]?.trim();
                         if (catValue && !isNaN(catValue) && catValue >= 1 && catValue <= 9) {
@@ -836,10 +863,22 @@
                     }
                 };
 
-                processRvCat(rv1CatIndex, summaryStats.rv1CatCounts);
-                processRvCat(rv2CatIndex, summaryStats.rv2CatCounts);
-                processRvCat(rv3CatIndex, summaryStats.rv3CatCounts);
-                processRvCat(rv4CatIndex, summaryStats.rv4CatCounts);
+                processSimpleRvCat(rv1CatIndex, summaryStats.rv1CatCounts);
+                processSimpleRvCat(rv2CatIndex, summaryStats.rv2CatCounts);
+                processSimpleRvCat(rv4CatIndex, summaryStats.rv4CatCounts);
+                
+                if (rv3CatIndex !== undefined && rv3IdIndex !== undefined) {
+                    const catValue = values[rv3CatIndex]?.trim();
+                    const techId = values[rv3IdIndex]?.trim();
+                    if (catValue && techId && !isNaN(catValue) && catValue >= 1 && catValue <= 9) {
+                        if (!summaryStats.rv3CatCounts[catValue]) {
+                            summaryStats.rv3CatCounts[catValue] = { total: 0, techs: {} };
+                        }
+                        summaryStats.rv3CatCounts[catValue].total++;
+                        const techCounts = summaryStats.rv3CatCounts[catValue].techs;
+                        techCounts[techId] = (techCounts[techId] || 0) + 1;
+                    }
+                }
 
 
                 techIdCols.forEach(colName => {
@@ -969,7 +1008,7 @@
                 return;
             }
 
-            const createCategoryHtml = (title, counts) => {
+            const createSimpleCategoryHtml = (title, counts) => {
                 let html = `<h4 class="font-medium text-gray-700 mt-3">${title}</h4>`;
                 const sortedCats = Object.keys(counts).sort((a,b) => a - b);
                 
@@ -980,15 +1019,44 @@
                     });
                     html += '</ul>';
                 } else {
-                    html += '<p class="text-gray-500 text-xs italic">No entries found for this category.</p>';
+                    html += '<p class="text-gray-500 text-xs italic">No entries found.</p>';
+                }
+                return html;
+            };
+            
+            const createRv3CategoryHtml = (title, counts) => {
+                let html = `<h4 class="font-medium text-gray-700 mt-3">${title}</h4>`;
+                const sortedCats = Object.keys(counts).sort((a,b) => a - b);
+                
+                if (sortedCats.length > 0) {
+                    html += '<div class="space-y-2">';
+                    sortedCats.forEach(cat => {
+                        const catData = counts[cat];
+                        const techEntries = Object.entries(catData.techs).sort((a,b) => a[0].localeCompare(b[0])).map(([techId, count]) => 
+                            `<li class="text-xs flex justify-between pr-2"><span>- ${techId}</span><span class="font-mono">${count}</span></li>`
+                        ).join('');
+
+                        html += `
+                            <details class="text-sm">
+                                <summary class="cursor-pointer flex justify-between items-center">
+                                    <span>Category ${cat}:</span>
+                                    <span class="font-mono font-medium text-gray-800">${catData.total}</span>
+                                </summary>
+                                <ul class="mt-1 pl-4 text-gray-600 border-l-2 border-gray-200">${techEntries}</ul>
+                            </details>
+                        `;
+                    });
+                    html += '</div>';
+                } else {
+                    html += '<p class="text-gray-500 text-xs italic">No entries found.</p>';
                 }
                 return html;
             };
 
-            const rv1Html = createCategoryHtml('RV1_CAT Counts', stats.rv1CatCounts);
-            const rv2Html = createCategoryHtml('RV2_CAT Counts', stats.rv2CatCounts);
-            const rv3Html = createCategoryHtml('RV3_CAT Counts', stats.rv3CatCounts);
-            const rv4Html = createCategoryHtml('RV4_CAT Counts', stats.rv4CatCounts);
+            const rv1Html = createSimpleCategoryHtml('RV1_CAT Counts', stats.rv1CatCounts);
+            const rv2Html = createSimpleCategoryHtml('RV2_CAT Counts', stats.rv2CatCounts);
+            const rv3Html = createRv3CategoryHtml('RV3_CAT Counts', stats.rv3CatCounts);
+            const rv4Html = createSimpleCategoryHtml('RV4_CAT Counts', stats.rv4CatCounts);
 
             content.innerHTML = `
                 <div class="flex justify-between"><span class="text-gray-600">Total Data Rows Parsed:</span><span class="font-bold">${stats.totalRows}</span></div>
