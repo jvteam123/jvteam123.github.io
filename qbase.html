@@ -194,13 +194,32 @@
                 <div class="border-t pt-6">
                     <h2 class="text-xl font-semibold text-gray-800 border-b pb-3 mb-4">Admin Dashboard</h2>
                     <p class="text-sm text-gray-600 mb-4">As an admin, you can save and delete projects directly to the central database.</p>
+                    
+                    <div id="team-management-section" class="mt-6 border-t pt-6">
+                        <h3 class="text-lg font-semibold text-gray-800 mb-2">Team Management</h3>
+                        <p class="text-sm text-gray-600 mb-4">Define teams and assign Tech IDs. Paste a comma-separated list of IDs for each team. Click "Save Team Settings" to apply changes for all users.</p>
+                        <div id="team-list-container" class="space-y-4">
+                            </div>
+                        <div class="mt-4 flex gap-4">
+                            <input type="text" id="new-team-name" placeholder="New Team Name" class="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                            <button id="add-team-btn" class="bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700 whitespace-nowrap">Add Team</button>
+                        </div>
+                        <div class="mt-6">
+                            <button id="save-teams-btn" class="w-full bg-green-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-700">Save Team Settings</button>
+                        </div>
+                    </div>
                 </div>
             </div>
 
             <div id="tech-results-container" class="px-6 md:px-8 pb-8">
                  <h2 id="results-title" class="text-xl font-semibold text-gray-800 border-b pb-3 mb-4">Technician Bonus Results</h2>
                  <div class="mb-4">
-                    <input type="text" id="search-tech-id" class="w-full md:w-1/3 px-4 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Search by Tech ID...">
+                    <label for="search-tech-id" class="block text-sm font-medium text-gray-700">Search by Tech ID</label>
+                    <input type="text" id="search-tech-id" class="w-full md:w-1/3 mt-1 px-4 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Search by Tech ID...">
+                    
+                    <div id="team-filter-container" class="mt-3 flex flex-wrap gap-x-6 gap-y-2 items-center border-t pt-3">
+                         <span class="text-sm font-medium text-gray-700">Filter by Team:</span>
+                         </div>
                  </div>
                  <div id="results-summary" class="text-sm text-gray-600 bg-blue-50 p-3 rounded-md mb-4"></div>
                  <div class="table-container border rounded-lg bg-white">
@@ -227,7 +246,7 @@
     <script type="module">
         // --- Firebase SDK Imports ---
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
-        import { getFirestore, collection, doc, setDoc, getDocs, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
+        import { getFirestore, collection, doc, setDoc, getDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
 
         // --- Your Firebase Configuration ---
         const firebaseConfig = {
@@ -253,6 +272,7 @@
         let isAdmin = false; 
         let isEditMode = false; 
         let unsubscribe; 
+        let teamSettings = {};
 
         // --- DATA FROM DOCUMENTATION ---
         const categoryValues = { 1: { points: 2.19 }, 2: { points: 5.86 }, 3: { points: 7.44 }, 4: { points: 2.29 }, 5: { points: 1.55 }, 6: { points: 1.84 }, 7: { points: 1.00 }, 8: { points: 3.74 }, 9: { points: 1.73 } };
@@ -266,8 +286,8 @@
                             <ol class="list-decimal list-inside space-y-2">
                                 <li><strong>Automatic Loading:</strong> The project list loads automatically from the central database when the page opens.</li>
                                 <li><strong>Admin Login:</strong> Click 'Admin Login' and use credentials ('admin'/'admin123') to enter Admin Mode.</li>
-                                <li><strong>Admin Mode:</strong> In this mode, you can create, save, and delete projects. These actions modify the central database directly and will be seen by all users in real-time.</li>
-                                <li><strong>Calculating Subsets:</strong> Use the "Select specific projects..." checkbox to turn the dropdown into a multi-select list. The 'Calculate All' button will then only compute the projects you have highlighted.</li>
+                                <li><strong>Admin Mode:</strong> In this mode, you can create, save, and delete projects. You can also manage team assignments in the Admin Dashboard.</li>
+                                <li><strong>Filtering:</strong> Use the search bar and the team checkboxes to filter the results table.</li>
                             </ol>
                         </div>
                         <hr>
@@ -279,7 +299,7 @@
             },
             bonusMultiplier: { title: 'Bonus Multiplier (PHP)', body: `<p>An optional multiplier for the final payout.</p>` },
             totalPoints: { title: 'Total Points Calculation', body: `<p>Points are calculated for each individual task and then summed for each technician.</p>`},
-            fixQuality: { title: 'Fix Quality % Calculation', body: `<p>Calculated using the formula: code>[# of Fix Tasks] / ([# of Fix Tasks] + [# of Refix Tasks] + [# of Warnings])</code></p>`},
+            fixQuality: { title: 'Fix Quality % Calculation', body: `<p>Calculated using the formula: <code>[# of Fix Tasks] / ([# of Fix Tasks] + [# of Refix Tasks] + [# of Warnings])</code></p>`},
             bonusEarned: { title: '% of Bonus Earned Calculation', body: `<p>This percentage is determined by looking up the <strong>Fix Quality %</strong> in a tiered table.</p>`},
             totalBonus: { title: 'Final Payout (PHP) Calculation', body: `<p>Calculated with the formula: <code>Total Points * Bonus Multiplier * % of Bonus Earned</code></p>`}
         };
@@ -292,6 +312,40 @@
             };
         }
         
+        // --- Team Settings Functions ---
+        async function loadTeamSettings() {
+            try {
+                const teamDocRef = doc(db, "settings", "teams");
+                const docSnap = await getDoc(teamDocRef);
+                if (docSnap.exists()) {
+                    teamSettings = docSnap.data();
+                } else {
+                    teamSettings = {};
+                }
+            } catch (error) {
+                console.error("Error loading team settings:", error);
+                teamSettings = {};
+            }
+            populateTeamFilters();
+            if (isAdmin) {
+                populateAdminTeamManagement();
+            }
+        }
+
+        async function saveTeamSettings(settings) {
+            if (!isAdmin) return;
+            try {
+                const teamDocRef = doc(db, "settings", "teams");
+                await setDoc(teamDocRef, settings);
+                alert("Team settings saved successfully.");
+                teamSettings = settings; // Update global variable
+                populateTeamFilters(); // Refresh filters for everyone
+            } catch (error) {
+                console.error("Error saving team settings: ", error);
+                alert("Failed to save team settings.");
+            }
+        }
+
         // --- Firestore Functions ---
         async function saveProjectToFirestore(projectData) {
             try {
@@ -413,7 +467,7 @@
             document.getElementById('is-ir-project-checkbox').disabled = !isAdmin;
         }
         
-        function handleAdminLogin() {
+        async function handleAdminLogin() {
             const user = prompt("Enter Admin Username:");
             const pass = prompt("Enter Admin Password:");
             
@@ -426,6 +480,7 @@
                 if (!unsubscribe) { 
                     listenForPublicProjectChanges();
                 }
+                await loadTeamSettings(); // Load settings for admin
                 manageButtonState();
                 alert("Admin Mode Activated. You are now editing the live database.");
             } else {
@@ -459,7 +514,46 @@
 
         document.addEventListener('DOMContentLoaded', () => {
             listenForPublicProjectChanges();
+            loadTeamSettings();
             manageButtonState();
+
+            // Admin Team Management Listeners
+            document.getElementById('add-team-btn').addEventListener('click', () => {
+                if (!isAdmin) return;
+                const newTeamNameInput = document.getElementById('new-team-name');
+                const newTeamName = newTeamNameInput.value.trim();
+                if (newTeamName && !teamSettings[newTeamName]) {
+                    teamSettings[newTeamName] = [];
+                    populateAdminTeamManagement();
+                    newTeamNameInput.value = '';
+                } else if (teamSettings[newTeamName]) {
+                    alert('A team with this name already exists.');
+                }
+            });
+
+            document.getElementById('save-teams-btn').addEventListener('click', () => {
+                if (!isAdmin) return;
+                const newTeamSettings = {};
+                const teamDivs = document.querySelectorAll('#team-list-container .team-definition');
+                let hasError = false;
+                
+                teamDivs.forEach(div => {
+                    const teamName = div.dataset.teamName;
+                    const textArea = div.querySelector('textarea');
+                    const techIds = textArea.value.split(',')
+                                            .map(id => id.trim())
+                                            .filter(id => id); // Remove empty strings
+                    if (newTeamSettings[teamName]) {
+                        alert(`Duplicate team name found: ${teamName}. Please resolve before saving.`);
+                        hasError = true;
+                    }
+                    newTeamSettings[teamName] = techIds;
+                });
+                
+                if (!hasError) {
+                    saveTeamSettings(newTeamSettings);
+                }
+            });
 
             document.getElementById('save-project-btn').addEventListener('click', async () => {
                 if (!isAdmin) {
@@ -759,11 +853,7 @@
                 resultsBody.appendChild(row);
             }
 
-            if (lastFilterValue) {
-                const searchInput = document.getElementById('search-tech-id');
-                searchInput.value = lastFilterValue;
-                filterTable();
-            }
+            filterTable();
         }
         
         function calculateQualityModifier(qualityRate) {
@@ -809,7 +899,7 @@
             const techStats = {};
             const lines = data.split('\n').filter(line => line.trim() !== '');
             
-            if (lines.length < 1) { // Can be just a header
+            if (lines.length < 1) { 
                  return null;
             }
 
@@ -1070,19 +1160,88 @@
             card.classList.add('visible');
         }
 
+        // --- UI and Filtering Functions ---
+
+        function populateTeamFilters() {
+            const container = document.getElementById('team-filter-container');
+            // Clear all but the first element (the label)
+            while(container.children.length > 1) {
+                container.removeChild(container.lastChild);
+            }
+
+            const sortedTeams = Object.keys(teamSettings).sort((a,b) => a.localeCompare(b));
+
+            sortedTeams.forEach(teamName => {
+                const div = document.createElement('div');
+                div.className = 'flex items-center';
+                div.innerHTML = `
+                    <input id="team-filter-${teamName}" data-team-name="${teamName}" type="checkbox" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded">
+                    <label for="team-filter-${teamName}" class="ml-2 block text-sm text-gray-900">${teamName}</label>
+                `;
+                container.appendChild(div);
+                div.querySelector('input').addEventListener('change', filterTable);
+            });
+        }
+        
+        function populateAdminTeamManagement() {
+            const container = document.getElementById('team-list-container');
+            container.innerHTML = '';
+            
+            const sortedTeams = Object.keys(teamSettings).sort((a, b) => a.localeCompare(b));
+
+            sortedTeams.forEach(teamName => {
+                const teamIds = teamSettings[teamName] ? teamSettings[teamName].join(', ') : '';
+                const teamDiv = document.createElement('div');
+                teamDiv.className = 'p-4 border rounded-lg bg-white team-definition';
+                teamDiv.dataset.teamName = teamName;
+                teamDiv.innerHTML = `
+                    <div class="flex justify-between items-center mb-2">
+                        <label class="font-semibold text-gray-700">${teamName}</label>
+                        <button data-team-name="${teamName}" class="delete-team-btn font-bold text-red-500 hover:text-red-700 text-xl leading-none">&times;</button>
+                    </div>
+                    <textarea class="w-full p-2 border rounded-md font-mono text-sm" rows="3" placeholder="tech1, tech2, tech3">${teamIds}</textarea>
+                `;
+                container.appendChild(teamDiv);
+            });
+            
+            document.querySelectorAll('.delete-team-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const teamNameToDelete = e.target.dataset.teamName;
+                    if (confirm(`Are you sure you want to delete team "${teamNameToDelete}"? This cannot be undone.`)) {
+                       e.target.closest('.team-definition').remove();
+                    }
+                });
+            });
+        }
+
 
         function filterTable() {
             const searchTerm = document.getElementById('search-tech-id').value.toUpperCase();
+            
+            const selectedTeams = [];
+            document.querySelectorAll('#team-filter-container input:checked').forEach(cb => {
+                selectedTeams.push(cb.dataset.teamName);
+            });
+
+            let allowedTechIds = new Set();
+            if (selectedTeams.length > 0) {
+                selectedTeams.forEach(teamName => {
+                    if (teamSettings[teamName]) {
+                        teamSettings[teamName].forEach(techId => allowedTechIds.add(techId.toUpperCase()));
+                    }
+                });
+            }
+
             const rows = document.getElementById('tech-results-body').getElementsByTagName('tr');
             for (let i = 0; i < rows.length; i++) {
                 const techIdCell = rows[i].getElementsByTagName('td')[0];
                 if (techIdCell) {
-                    const techId = techIdCell.textContent || techIdCell.innerText;
-                    if (searchTerm === "" || techId.toUpperCase().indexOf(searchTerm) > -1) {
-                        rows[i].style.display = "";
-                    } else {
-                        rows[i].style.display = "none";
-                    }
+                    const techId = (techIdCell.textContent || techIdCell.innerText).trim().toUpperCase();
+                    
+                    const matchesSearch = searchTerm === "" || techId.includes(searchTerm);
+                    const matchesTeam = selectedTeams.length === 0 || allowedTechIds.has(techId);
+
+                    rows[i].style.display = (matchesSearch && matchesTeam) ? "" : "none";
                 }
             }
         }
