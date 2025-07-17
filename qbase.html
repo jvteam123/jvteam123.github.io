@@ -1091,15 +1091,19 @@
             }
 
             const createSimpleCategoryHtml = (title, counts) => {
-                let html = `<details class="text-sm"><summary class="cursor-pointer font-medium text-gray-700 mt-3">${title}</summary>`;
-                const sortedCats = Object.keys(counts).sort((a,b) => a - b);
-                
+                let html = `<details class="text-sm" open><summary class="cursor-pointer font-medium text-gray-700 mt-3">${title}</summary>`;
+                const sortedCats = Object.keys(counts).sort((a, b) => a - b);
+
                 if (sortedCats.length > 0) {
-                    html += '<ul class="list-disc list-inside space-y-1 pl-2 text-gray-600 mt-1 pl-4 border-l-2 border-gray-200">';
-                    sortedCats.forEach(cat => {
-                        html += `<li class="flex justify-between"><span>Category ${cat}:</span> <span class="font-mono font-medium text-gray-800">${counts[cat]}</span></li>`;
+                    html += '<div class="mt-1 border rounded-md divide-y divide-gray-200">';
+                    sortedCats.forEach((cat, index) => {
+                        const bgColor = index % 2 === 0 ? 'bg-gray-50' : 'bg-white';
+                        html += `<div class="p-2 flex justify-between items-center ${bgColor}">
+                                    <span class="text-gray-800">Category ${cat}:</span>
+                                    <span class="font-mono font-medium text-gray-900">${counts[cat]}</span>
+                                 </div>`;
                     });
-                    html += '</ul>';
+                    html += '</div>';
                 } else {
                     html += '<p class="text-gray-500 text-xs italic mt-1 pl-4">No entries found.</p>';
                 }
@@ -1108,24 +1112,28 @@
             };
             
             const createRv3CategoryHtml = (title, counts) => {
-                let html = `<details class="text-sm"><summary class="cursor-pointer font-medium text-gray-700 mt-3">${title}</summary>`;
-                const sortedCats = Object.keys(counts).sort((a,b) => a - b);
-                
+                let html = `<details class="text-sm" open><summary class="cursor-pointer font-medium text-gray-700 mt-3">${title}</summary>`;
+                const sortedCats = Object.keys(counts).sort((a, b) => a - b);
+
                 if (sortedCats.length > 0) {
-                    html += '<div class="space-y-2 mt-1 pl-4 border-l-2 border-gray-200">';
-                    sortedCats.forEach(cat => {
+                    html += '<div class="mt-1 border rounded-md divide-y divide-gray-200">';
+                    sortedCats.forEach((cat, index) => {
                         const catData = counts[cat];
-                        const techEntries = Object.entries(catData.techs).sort((a,b) => a[0].localeCompare(b[0])).map(([techId, count]) => 
-                            `<li class="text-xs flex justify-between pr-2"><span>- ${techId}</span><span class="font-mono">${count}</span></li>`
+                        const bgColor = index % 2 === 0 ? 'bg-gray-50' : 'bg-white';
+
+                        const techEntries = Object.entries(catData.techs).sort((a,b) => a[0].localeCompare(b[0])).map(([techId, count]) =>
+                            `<li class="text-xs flex justify-between"><span>- ${techId}</span><span class="font-mono">${count}</span></li>`
                         ).join('');
 
                         html += `
-                            <details class="text-sm">
-                                <summary class="cursor-pointer flex justify-between items-center">
-                                    <span>Category ${cat}:</span>
-                                    <span class="font-mono font-medium text-gray-800">${catData.total}</span>
+                            <details class="text-sm ${bgColor}" open>
+                                <summary class="p-2 cursor-pointer flex justify-between items-center">
+                                    <span class="text-gray-800">Category ${cat}:</span>
+                                    <span class="font-mono font-medium text-gray-900">${catData.total}</span>
                                 </summary>
-                                <ul class="mt-1 pl-4 text-gray-600 border-l-2 border-gray-200">${techEntries}</ul>
+                                <div class="p-2 border-t border-gray-200">
+                                    <ul class="pl-4 text-gray-600 space-y-1">${techEntries}</ul>
+                                </div>
                             </details>
                         `;
                     });
