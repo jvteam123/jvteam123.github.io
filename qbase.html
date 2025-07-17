@@ -476,8 +476,8 @@
                 isEditMode = false; 
                 document.getElementById('logout-btn').classList.remove('hidden');
                 document.getElementById('admin-login-btn').classList.add('hidden');
-                document.getElementById('admin-dashboard').classList.add('visible'); // This will now work
-                await loadTeamSettings(); // Load settings for admin
+                document.getElementById('admin-dashboard').classList.add('visible');
+                await loadTeamSettings();
                 manageButtonState();
                 alert("Admin Mode Activated. You are now editing the live database.");
             } else {
@@ -914,7 +914,7 @@
             const rv1CatIndex = headerMap['rv1_cat'];
             const rv2CatIndex = headerMap['rv2_cat'];
             const rv3CatIndex = headerMap['rv3_cat'];
-            const rv3IdIndex = headerMap['rv3_id'];
+            const rv3TechSourceIndex = headerMap['fix4_id']; // UPDATED LOGIC: Use fix4_id as the source for the tech ID
             const rv4CatIndex = headerMap['rv4_cat'];
             const comboIndex = headerMap['combo?'];
 
@@ -948,9 +948,10 @@
                 processSimpleRvCat(rv2CatIndex, summaryStats.rv2CatCounts);
                 processSimpleRvCat(rv4CatIndex, summaryStats.rv4CatCounts);
                 
-                if (rv3CatIndex !== undefined && rv3IdIndex !== undefined) {
+                // UPDATED LOGIC
+                if (rv3CatIndex !== undefined && rv3TechSourceIndex !== undefined) {
                     const catValue = values[rv3CatIndex]?.trim();
-                    const techId = values[rv3IdIndex]?.trim();
+                    const techId = values[rv3TechSourceIndex]?.trim(); // Get tech ID from fix4_id column
                     if (catValue && techId && !isNaN(catValue) && catValue >= 1 && catValue <= 9) {
                         if (!summaryStats.rv3CatCounts[catValue]) {
                             summaryStats.rv3CatCounts[catValue] = { total: 0, techs: {} };
