@@ -623,7 +623,10 @@
                 resultsTitleEl.textContent = `${titleText} - Bonus Results ${isMultiplierUsed ? `(Multiplier: ${bonusMultiplier})` : '(No Multiplier)'}`;
                 
                 let combinedTechStats = {};
-                let combinedSummaryStats = { rv1CatCounts: {}, totalRows: 0, comboTasks: 0 };
+                let combinedSummaryStats = { 
+                    rv1CatCounts: {}, rv2CatCounts: {}, rv3CatCounts: {}, rv4CatCounts: {}, 
+                    totalRows: 0, comboTasks: 0 
+                };
                 const corruptedProjects = []; 
                 
                 for (const projectId of projectsToCalculate) {
@@ -659,6 +662,15 @@
                         combinedSummaryStats.comboTasks += parsedData.summaryStats.comboTasks;
                         for (const cat in parsedData.summaryStats.rv1CatCounts) {
                             combinedSummaryStats.rv1CatCounts[cat] = (combinedSummaryStats.rv1CatCounts[cat] || 0) + parsedData.summaryStats.rv1CatCounts[cat];
+                        }
+                        for (const cat in parsedData.summaryStats.rv2CatCounts) {
+                            combinedSummaryStats.rv2CatCounts[cat] = (combinedSummaryStats.rv2CatCounts[cat] || 0) + parsedData.summaryStats.rv2CatCounts[cat];
+                        }
+                        for (const cat in parsedData.summaryStats.rv3CatCounts) {
+                            combinedSummaryStats.rv3CatCounts[cat] = (combinedSummaryStats.rv3CatCounts[cat] || 0) + parsedData.summaryStats.rv3CatCounts[cat];
+                        }
+                        for (const cat in parsedData.summaryStats.rv4CatCounts) {
+                            combinedSummaryStats.rv4CatCounts[cat] = (combinedSummaryStats.rv4CatCounts[cat] || 0) + parsedData.summaryStats.rv4CatCounts[cat];
                         }
                     }
                 }
@@ -788,11 +800,14 @@
             }
             
             const summaryStats = {
-                rv1CatCounts: {},
+                rv1CatCounts: {}, rv2CatCounts: {}, rv3CatCounts: {}, rv4CatCounts: {},
                 totalRows: lines.length,
                 comboTasks: 0
             };
             const rv1CatIndex = headerMap['rv1_cat'];
+            const rv2CatIndex = headerMap['rv2_cat'];
+            const rv3CatIndex = headerMap['rv3_cat'];
+            const rv4CatIndex = headerMap['rv4_cat'];
             const comboIndex = headerMap['combo?'];
 
             const baseCategoryHeaders = ['category', 'rv1_cat', 'rv2_cat'];
@@ -811,12 +826,21 @@
                 if (comboIndex !== undefined && values[comboIndex]?.trim().toUpperCase() === 'Y') {
                     summaryStats.comboTasks++;
                 }
-                if (rv1CatIndex !== undefined) {
-                    const catValue = values[rv1CatIndex]?.trim();
-                    if (catValue && !isNaN(catValue) && catValue >= 1 && catValue <= 9) {
-                        summaryStats.rv1CatCounts[catValue] = (summaryStats.rv1CatCounts[catValue] || 0) + 1;
+
+                const processRvCat = (index, countsObject) => {
+                    if (index !== undefined) {
+                        const catValue = values[index]?.trim();
+                        if (catValue && !isNaN(catValue) && catValue >= 1 && catValue <= 9) {
+                            countsObject[catValue] = (countsObject[catValue] || 0) + 1;
+                        }
                     }
-                }
+                };
+
+                processRvCat(rv1CatIndex, summaryStats.rv1CatCounts);
+                processRvCat(rv2CatIndex, summaryStats.rv2CatCounts);
+                processRvCat(rv3CatIndex, summaryStats.rv3CatCounts);
+                processRvCat(rv4CatIndex, summaryStats.rv4CatCounts);
+
 
                 techIdCols.forEach(colName => {
                     const techId = values[headerMap[colName]]?.trim();
@@ -945,23 +969,35 @@
                 return;
             }
 
-            let rv1Html = '<h4 class="font-medium text-gray-700 mt-3">RV1_CAT Counts</h4>';
-            const sortedRv1Cats = Object.keys(stats.rv1CatCounts).sort((a,b) => a - b);
-            
-            if (sortedRv1Cats.length > 0) {
-                rv1Html += '<ul class="list-disc list-inside space-y-1 pl-2 text-gray-600">';
-                sortedRv1Cats.forEach(cat => {
-                    rv1Html += `<li class="flex justify-between"><span>Category ${cat}:</span> <span class="font-mono font-medium text-gray-800">${stats.rv1CatCounts[cat]}</span></li>`;
-                });
-                rv1Html += '</ul>';
-            } else {
-                rv1Html += '<p class="text-gray-500">No RV1_CAT entries found.</p>';
-            }
+            const createCategoryHtml = (title, counts) => {
+                let html = `<h4 class="font-medium text-gray-700 mt-3">${title}</h4>`;
+                const sortedCats = Object.keys(counts).sort((a,b) => a - b);
+                
+                if (sortedCats.length > 0) {
+                    html += '<ul class="list-disc list-inside space-y-1 pl-2 text-gray-600">';
+                    sortedCats.forEach(cat => {
+                        html += `<li class="flex justify-between"><span>Category ${cat}:</span> <span class="font-mono font-medium text-gray-800">${counts[cat]}</span></li>`;
+                    });
+                    html += '</ul>';
+                } else {
+                    html += '<p class="text-gray-500 text-xs italic">No entries found for this category.</p>';
+                }
+                return html;
+            };
+
+            const rv1Html = createCategoryHtml('RV1_CAT Counts', stats.rv1CatCounts);
+            const rv2Html = createCategoryHtml('RV2_CAT Counts', stats.rv2CatCounts);
+            const rv3Html = createCategoryHtml('RV3_CAT Counts', stats.rv3CatCounts);
+            const rv4Html = createCategoryHtml('RV4_CAT Counts', stats.rv4CatCounts);
 
             content.innerHTML = `
                 <div class="flex justify-between"><span class="text-gray-600">Total Data Rows Parsed:</span><span class="font-bold">${stats.totalRows}</span></div>
                 <div class="flex justify-between"><span class="text-gray-600">"Combo?" (Y) Tasks:</span><span class="font-bold">${stats.comboTasks}</span></div>
+                <hr class="my-2">
                 ${rv1Html}
+                ${rv2Html}
+                ${rv3Html}
+                ${rv4Html}
             `;
             card.classList.add('visible');
         }
