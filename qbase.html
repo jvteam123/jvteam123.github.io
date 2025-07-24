@@ -1405,7 +1405,7 @@
             if (tech.refixDetails.length > 0) {
                 refixDetailHtml = `<ul class="list-disc list-inside text-xs text-gray-700 mt-1 space-y-0.5">`;
                 tech.refixDetails.forEach(r => {
-                    refixDetailHtml += `<li>Round: <span class="font-mono font-semibold">${r.round}</span> (Project: ${r.project})</li>`;
+                    refixDetailHtml += `<li>Task: <span class="font-mono font-semibold">${r.round}</span> (Project: ${r.project})</li>`;
                 });
                 refixDetailHtml += `</ul>`;
             } else {
