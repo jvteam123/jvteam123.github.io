@@ -7,6 +7,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
     <style>
         body {
             font-family: 'Inter', sans-serif;
@@ -73,12 +74,38 @@
         #update-notification {
             transition: opacity 0.5s, transform 0.5s;
         }
-        /* Style for multi-select */
-        select[multiple] {
-            height: 10rem; /* Or any other suitable height */
+        /* MODIFIED: Styles for the new draggable project list */
+        #project-list {
+            height: 10rem;
             background-color: white;
+            border: 1px solid #d1d5db;
+            border-radius: 0.5rem;
+            overflow-y: auto;
             padding: 0.5rem;
         }
+        .project-list-item {
+            padding: 0.5rem 0.75rem;
+            border-radius: 0.375rem;
+            cursor: grab;
+            margin-bottom: 0.25rem;
+            transition: background-color 0.2s;
+        }
+        .project-list-item:last-child {
+            margin-bottom: 0;
+        }
+        .project-list-item:hover {
+            background-color: #f3f4f6;
+        }
+        .project-list-item.selected {
+            background-color: #3b82f6;
+            color: white;
+            font-weight: 600;
+        }
+        .sortable-ghost {
+            opacity: 0.4;
+            background: #c7d2fe;
+        }
+
         details > summary {
             list-style: none;
         }
@@ -123,9 +150,9 @@
                         <h2 class="text-xl font-semibold text-gray-800 border-b pb-3 mb-4">Project Management</h2>
                         
                          <div class="flex items-center gap-2">
-                            <select id="project-select" class="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all duration-300">
-                                <option value="">Loading Projects...</option>
-                            </select>
+                            <div id="project-list" class="w-full">
+                                <p class="text-gray-500 text-sm p-2">Loading Projects...</p>
+                            </div>
                              <button id="delete-project-btn" title="Delete Selected Project" class="p-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:bg-red-300 transition-colors">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>
                              </button>
@@ -138,7 +165,7 @@
                          <div class="mt-4 border-t pt-4">
                              <div class="flex items-center">
                                 <input id="customize-calc-all-cb" type="checkbox" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded">
-                                <label for="customize-calc-all-cb" class="ml-3 block text-sm font-medium text-gray-700">Select specific projects to calculate</label>
+                                <label for="customize-calc-all-cb" class="ml-3 block text-sm font-medium text-gray-700">Select multiple projects to calculate</label>
                             </div>
                             <button id="calculate-all-btn" class="mt-2 w-full bg-green-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-700 transition-colors duration-300 shadow-md">Calculate All Projects</button>
                         </div>
@@ -260,7 +287,7 @@
     <script type="module">
         // --- Firebase SDK Imports ---
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
-        import { getFirestore, collection, doc, setDoc, getDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
+        import { getFirestore, collection, doc, setDoc, getDoc, deleteDoc, onSnapshot, writeBatch } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
 
         // --- Your Firebase Configuration ---
         const firebaseConfig = {
@@ -278,18 +305,18 @@
         const db = getFirestore(app);
 
         // --- GLOBAL VARIABLES ---
-        let savedProjects = {}; 
-        let currentTechStats = {}; 
-        let lastUsedBonusMultiplier = 1; 
+        let savedProjects = {};
+        let currentTechStats = {};
+        let lastUsedBonusMultiplier = 1;
         let lastCalculationUsedMultiplier = false;
-        let lastFilterValue = ""; 
-        let isAdmin = false; 
-        let isEditMode = false; 
-        let unsubscribe; 
+        let lastFilterValue = "";
+        let isAdmin = false;
+        let isEditMode = false;
+        let unsubscribe;
         let teamSettings = {};
+        let selectedProjectId = null;
 
         // --- DATA FROM DOCUMENTATION ---
-        // UPDATED: Category values to include GSD-specific points
         const categoryValues = {
             1: { "3in": 2.19, "4in": 2.19, "6in": 2.19, "9in": 0.99, "IR": 1.5 },
             2: { "3in": 5.86, "4in": 5.86, "6in": 5.86, "9in": 2.07, "IR": 1.5 },
@@ -302,7 +329,7 @@
             9: { "3in": 1.73, "4in": 1.73, "6in": 1.73, "9in": 1.73, "IR": 1.5 }
         };
 
-        const irModifierValue = 1.5; // This is now a general fallback/project-level IR modifier
+        const irModifierValue = 1.5;
         const calculationInfo = {
             howItWorks: {
                 title: 'How It Works & How to Use',
@@ -310,77 +337,70 @@
                         <div>
                             <h4 class="text-lg font-bold text-gray-900 mb-2">How to Use This Site</h4>
                             <ol class="list-decimal list-inside space-y-2">
-                                <li><strong>Automatic Loading:</strong> The project list loads automatically from the central database when the page opens.</li>
+                                <li><strong>Automatic Loading & Sorting:</strong> The project list loads from the central database when the page opens. It is sorted with the newest projects on top. Admins can drag-and-drop projects to create a custom order.</li>
                                 <li><strong>Admin Login:</strong> Click 'Admin Login' and use credentials ('admin'/'admin123') to enter Admin Mode.</li>
-                                <li><strong>Admin Mode:</strong> In this mode, you can create, save, and delete projects. You can also manage team assignments in the Admin Dashboard.</li>
+                                <li><strong>Admin Mode:</strong> In this mode, you can create, save, delete, and reorder projects. You can also manage team assignments in the Admin Dashboard.</li>
                                 <li><strong>Filtering:</strong> Use the search bar and the team checkboxes to filter the results table.</li>
+                                <li><strong>Multi-Select:</strong> Check the "Select multiple projects" box to choose several projects at once for a combined calculation.</li>
                             </ol>
                         </div>
                         <hr>
                         <div>
                             <h4 class="text-lg font-bold text-gray-900 mb-2">How The Calculation Works</h4>
-                            <p>The calculation logic is based on the data from the selected project.</p>
+                            <p>The calculation logic is based on the data from the selected project(s) and follows the "Phili IC Fixpoints App Documentation v1.0".</p>
                         </div>
                        </div>`
             },
-            bonusMultiplier: { title: 'Bonus Multiplier (PHP)', body: `<p>An optional multiplier for the final payout.</p>` },
-            totalPoints: { title: 'Total Points Calculation', body: `<p>Points are calculated for each individual task and then summed for each technician.</p>`},
-            fixQuality: { title: 'Fix Quality % Calculation', body: `<p>Calculated using the formula: <code>[# of Fix Tasks] / ([# of Fix Tasks] + [# of Refix Tasks] + [# of Warnings])</code></p>`},
-            bonusEarned: { title: '% of Bonus Earned Calculation', body: `<p>This percentage is determined by looking up the <strong>Fix Quality %</strong> in a tiered table.</p>`},
-            totalBonus: { title: 'Final Payout (PHP) Calculation', body: `<p>Calculated with the formula: <code>Total Points * Bonus Multiplier * % of Bonus Earned</code></p>`}
+            bonusMultiplier: { title: 'Bonus Multiplier (PHP)', body: `<p>An optional multiplier for the final payout. Enter a number (e.g., 1.25 for a 25% bonus) to adjust the final calculated bonus for all technicians.</p>` },
+            totalPoints: { title: 'Total Points Calculation', body: `<p>Points are calculated for each individual task based on its type (Fix, QC, i3qa, RV) and category, then summed for each technician.</p><p>For Fix tasks, points are derived from a table of category values. The GSD setting can change the points for certain categories. An "IR" project applies a 1.5x multiplier to the sum of all fix categories in a single task row.</p>`},
+            fixQuality: { title: 'Fix Quality % Calculation', body: `<p>This measures a technician's accuracy. It's calculated using the formula: <code>[# of Fix Tasks] / ([# of Fix Tasks] + [# of Refix Tasks] + [# of Warnings])</code></p><p>A higher percentage indicates fewer errors.</p>`},
+            bonusEarned: { title: '% of Bonus Earned Calculation', body: `<p>This percentage is determined by looking up the <strong>Fix Quality %</strong> in a tiered table. For example, a quality of 100% earns 100% of the bonus, while 82.5% earns 55%, and so on. Below 77.5%, no bonus is earned.</p>`},
+            totalBonus: { title: 'Final Payout (PHP) Calculation', body: `<p>The final amount a technician receives. It's calculated with the formula: <code>Total Points * Bonus Multiplier * % of Bonus Earned</code></p>`}
         };
 
         function createNewTechStat() {
             return {
-                id: '', points: 0, fixTasks: 0, refixTasks: 0, warnings: [], // warnings will store objects {type, project}
-                refixDetails: [], // New: to store objects {round, project}
+                id: '', points: 0, fixTasks: 0, refixTasks: 0, warnings: [],
+                refixDetails: [],
                 categoryCounts: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0, 8: 0, 9: 0 },
                 pointsBreakdown: { fix: 0, qc: 0, i3qa: 0, rv: 0 }
             };
         }
         
-        // --- Team Settings Functions ---
         async function loadTeamSettings() {
             try {
                 const teamDocRef = doc(db, "settings", "teams");
                 const docSnap = await getDoc(teamDocRef);
-                if (docSnap.exists()) {
-                    teamSettings = docSnap.data();
-                } else {
-                    teamSettings = {};
-                }
+                teamSettings = docSnap.exists() ? docSnap.data() : {};
             } catch (error) {
                 console.error("Error loading team settings:", error);
                 teamSettings = {};
             }
             populateTeamFilters();
-            if (isAdmin) {
-                populateAdminTeamManagement();
-            }
+            if (isAdmin) populateAdminTeamManagement();
         }
 
         async function saveTeamSettings(settings) {
             if (!isAdmin) return;
             try {
-                const teamDocRef = doc(db, "settings", "teams");
-                await setDoc(teamDocRef, settings);
+                await setDoc(doc(db, "settings", "teams"), settings);
                 alert("Team settings saved successfully.");
-                teamSettings = settings; // Update global variable
-                populateTeamFilters(); // Refresh filters for everyone
+                teamSettings = settings;
+                populateTeamFilters();
             } catch (error) {
                 console.error("Error saving team settings: ", error);
                 alert("Failed to save team settings.");
             }
         }
 
-        // --- Firestore Functions ---
         async function saveProjectToFirestore(projectData) {
             try {
                 const textEncoder = new TextEncoder();
                 const dataAsUint8Array = textEncoder.encode(projectData.rawData);
                 const compressed = pako.deflate(dataAsUint8Array);
                 const base64String = btoa(String.fromCharCode.apply(null, compressed));
-                const dataToSave = { ...projectData, rawData: base64String }; 
+                const dataToSave = { ...projectData, rawData: base64String };
+                
                 const projectRef = doc(db, "public_projects", projectData.id);
                 await setDoc(projectRef, dataToSave);
                 return true;
@@ -392,7 +412,7 @@
         }
 
         function listenForPublicProjectChanges() {
-            if (unsubscribe) unsubscribe(); 
+            if (unsubscribe) unsubscribe();
             
             const projectsCol = collection(db, "public_projects");
             let isInitialLoad = true;
@@ -401,7 +421,7 @@
                 snapshot.forEach((doc) => {
                     const project = doc.data();
                     let decompressedData;
-                    project.isCorrupted = false; 
+                    project.isCorrupted = false;
                     try {
                         const binaryString = atob(project.rawData);
                         const len = binaryString.length;
@@ -410,8 +430,7 @@
                             bytes[i] = binaryString.charCodeAt(i);
                         }
                         const decompressedUint8Array = pako.inflate(bytes);
-                        const textDecoder = new TextDecoder();
-                        decompressedData = textDecoder.decode(decompressedUint8Array);
+                        decompressedData = new TextDecoder().decode(decompressedUint8Array);
                     } catch (e) {
                         console.error(`Decompression failed for project "${project.name}". Error: ${e.message}`);
                         decompressedData = "### DATA CORRUPTED ###\n\nThis project's data could not be read. An admin must re-save it with the correct data to fix this issue.";
@@ -421,21 +440,17 @@
                     loadedProjects[doc.id] = project;
                 });
                 savedProjects = loadedProjects;
-                updateProjectDropdown();
-                if (isInitialLoad && !isAdmin) { 
-                    isInitialLoad = false;
-                } else if (!isInitialLoad) {
+                updateProjectList();
+                if (!isInitialLoad) {
                     showUpdateNotification();
                 }
-                if (isAdmin) {
-                    isInitialLoad = false;
-                }
+                isInitialLoad = false;
             }, (error) => {
                 console.error("Error with real-time listener:", error);
                 alert("Lost connection to the project database.");
             });
         }
-
+        
         async function deleteProjectFromFirestore(projectId) {
             try {
                 await deleteDoc(doc(db, "public_projects", projectId));
@@ -447,59 +462,84 @@
             }
         }
 
-        function updateProjectDropdown() {
-            const projectSelect = document.getElementById('project-select');
-            const currentVal = projectSelect.value;
-            projectSelect.innerHTML = '<option value="">Select a Project</option>';
-            const sortedProjects = Object.values(savedProjects).sort((a,b) => a.name.localeCompare(b.name));
-            
-            sortedProjects.forEach(project => {
-                const option = document.createElement('option');
-                option.value = project.id;
-                const displayName = project.isCorrupted ? `${project.name} (Data Corrupted)` : (project.isIR ? `${project.name} (IR)` : project.name);
-                option.textContent = displayName;
-                if (project.isCorrupted) {
-                    option.classList.add('text-red-500', 'font-bold');
-                }
-                projectSelect.appendChild(option);
+        function updateProjectList() {
+            const projectList = document.getElementById('project-list');
+            projectList.innerHTML = '';
+
+            const sortedProjects = Object.values(savedProjects).sort((a, b) => {
+                const orderA = a.projectOrder ?? Infinity;
+                const orderB = b.projectOrder ?? Infinity;
+                if (orderA !== orderB) return orderA - orderB;
+                return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
             });
 
-            if (savedProjects[currentVal]) {
-                projectSelect.value = currentVal;
+            if (sortedProjects.length === 0) {
+                projectList.innerHTML = '<p class="text-gray-500 text-sm p-2">No projects found.</p>';
+                return;
             }
             
+            const selectedBeforeUpdate = Array.from(document.querySelectorAll('#project-list .project-list-item.selected')).map(el => el.dataset.id);
+
+            sortedProjects.forEach(project => {
+                const item = document.createElement('div');
+                item.className = 'project-list-item';
+                item.dataset.id = project.id;
+                
+                const displayName = project.isCorrupted ? `${project.name} (Data Corrupted)` : (project.isIR ? `${project.name} (IR)` : project.name);
+                item.textContent = displayName;
+
+                if (project.isCorrupted) item.classList.add('text-red-500', 'font-bold');
+                
+                if (selectedBeforeUpdate.includes(project.id)) {
+                    item.classList.add('selected');
+                }
+
+                projectList.appendChild(item);
+            });
+
+            new Sortable(projectList, {
+                animation: 150,
+                ghostClass: 'sortable-ghost',
+                disabled: !isAdmin,
+                onEnd: async (evt) => {
+                    const items = Array.from(evt.to.children);
+                    const batch = writeBatch(db);
+                    items.forEach((item, index) => {
+                        batch.update(doc(db, "public_projects", item.dataset.id), { projectOrder: index });
+                    });
+                    try {
+                        await batch.commit();
+                    } catch (err) {
+                        console.error("Failed to save new project order:", err);
+                        alert("Error saving the new order.");
+                    }
+                },
+            });
+
             manageButtonState();
         }
         
         function manageButtonState() {
-            const mainGrid = document.getElementById('main-grid');
             const projectDataEntry = document.getElementById('project-data-entry');
-            const projectSelect = document.getElementById('project-select');
-            const projectId = projectSelect.value;
+            const mainGrid = document.getElementById('main-grid');
             const techData = document.getElementById('techData');
-            const calculatePastedDataBtn = document.getElementById('calculatePastedDataBtn');
+            const calcPastedDataBtn = document.getElementById('calculatePastedDataBtn');
             const gsdValueSelect = document.getElementById('gsd-value-select');
 
-
             projectDataEntry.classList.toggle('hidden', !isAdmin);
-            
-            if(isAdmin) {
-                mainGrid.classList.remove('lg:grid-cols-1');
-                mainGrid.classList.add('lg:grid-cols-5');
-            } else {
-                mainGrid.classList.remove('lg:grid-cols-5');
-                mainGrid.classList.add('lg:grid-cols-1');
-            }
+            mainGrid.classList.toggle('lg:grid-cols-1', !isAdmin);
+            mainGrid.classList.toggle('lg:grid-cols-5', isAdmin);
 
-            document.getElementById('delete-project-btn').disabled = !isAdmin || !projectId;
-            document.getElementById('edit-data-btn').classList.toggle('hidden', !isAdmin || !projectId);
-            document.getElementById('save-project-btn').disabled = !isAdmin || (projectId && !isEditMode);
-            document.getElementById('techData').readOnly = !isAdmin || (projectId && !isEditMode);
+            const hasSelection = document.querySelector('#project-list .selected') !== null;
+
+            document.getElementById('delete-project-btn').disabled = !isAdmin || !hasSelection;
+            document.getElementById('edit-data-btn').classList.toggle('hidden', !isAdmin || !hasSelection);
+            document.getElementById('save-project-btn').disabled = !isAdmin || (hasSelection && !isEditMode);
+            techData.readOnly = !isAdmin || (hasSelection && !isEditMode);
             document.getElementById('is-ir-project-checkbox').disabled = !isAdmin;
-            gsdValueSelect.disabled = !isAdmin; // Disable GSD select if not admin
+            gsdValueSelect.disabled = !isAdmin;
 
-            // Enable/disable calculate pasted data button based on textarea content
-            calculatePastedDataBtn.disabled = techData.value.trim() === '';
+            calcPastedDataBtn.disabled = techData.value.trim() === '';
         }
         
         async function handleAdminLogin() {
@@ -508,40 +548,56 @@
             
             if (user === "admin" && pass === "admin123") {
                 isAdmin = true;
-                isEditMode = false; 
+                isEditMode = false;
                 document.getElementById('logout-btn').classList.remove('hidden');
                 document.getElementById('admin-login-btn').classList.add('hidden');
                 document.getElementById('admin-dashboard').classList.add('visible');
                 await loadTeamSettings();
                 manageButtonState();
-                alert("Admin Mode Activated. You are now editing the live database.");
-            } else {
-                if(user || pass) alert("Incorrect username or password.");
+                updateProjectList();
+                alert("Admin Mode Activated.");
+            } else if (user || pass) {
+                alert("Incorrect username or password.");
             }
         }
 
         function handleLogout() {
             isAdmin = false;
-            isEditMode = false; 
+            isEditMode = false;
             document.getElementById('logout-btn').classList.add('hidden');
             document.getElementById('admin-login-btn').classList.remove('hidden');
             document.getElementById('admin-dashboard').classList.remove('visible');
             manageButtonState();
+            updateProjectList();
             alert("You have been logged out.");
         }
 
         function showUpdateNotification() {
             const notification = document.getElementById('update-notification');
             if (notification.classList.contains('hidden')) {
-                notification.classList.remove('hidden');
-                setTimeout(() => {
-                    notification.classList.remove('opacity-0', 'translate-y-2');
-                }, 10);
+                notification.classList.remove('hidden', 'opacity-0', 'translate-y-2');
                 setTimeout(() => {
                     notification.classList.add('opacity-0', 'translate-y-2');
                     setTimeout(() => notification.classList.add('hidden'), 500);
                 }, 3000);
             }
+        }
+        
+        function loadProjectDataIntoForm(projectId) {
+            isEditMode = false;
+            const project = savedProjects[projectId];
+            if (project) {
+                document.getElementById('techData').value = project.rawData;
+                document.getElementById('project-name').value = project.name;
+                document.getElementById('is-ir-project-checkbox').checked = project.isIR || false;
+                document.getElementById('gsd-value-select').value = project.gsdValue || '3in';
+            } else {
+                document.getElementById('techData').value = '';
+                document.getElementById('project-name').value = '';
+                document.getElementById('is-ir-project-checkbox').checked = false;
+                document.getElementById('gsd-value-select').value = '3in';
+            }
+            manageButtonState();
         }
 
         document.addEventListener('DOMContentLoaded', () => {
@@ -549,7 +605,6 @@
             loadTeamSettings();
             manageButtonState();
 
-            // Admin Team Management Listeners
             document.getElementById('add-team-btn').addEventListener('click', () => {
                 if (!isAdmin) return;
                 const newTeamNameInput = document.getElementById('new-team-name');
@@ -567,121 +622,100 @@
             document.getElementById('save-teams-btn').addEventListener('click', () => {
                 if (!isAdmin) return;
                 const newTeamSettings = {};
-                const teamDivs = document.querySelectorAll('#team-list-container .team-definition');
-                
-                teamDivs.forEach(div => {
+                document.querySelectorAll('#team-list-container .team-definition').forEach(div => {
                     const teamName = div.dataset.teamName;
-                    const textArea = div.querySelector('textarea');
-                    const techIds = textArea.value.split(',')
-                                            .map(id => id.trim())
-                                            .filter(id => id); // Remove empty strings
+                    const techIds = div.querySelector('textarea').value.split(',').map(id => id.trim()).filter(Boolean);
                     newTeamSettings[teamName] = techIds;
                 });
-                
                 saveTeamSettings(newTeamSettings);
             });
 
             document.getElementById('save-project-btn').addEventListener('click', async () => {
-                if (!isAdmin) {
-                    alert("Only admins can save projects.");
-                    return;
-                }
+                if (!isAdmin) return;
                 const projectName = document.getElementById('project-name').value.trim();
                 const rawData = document.getElementById('techData').value.trim();
                 const isIR = document.getElementById('is-ir-project-checkbox').checked;
-                const gsdValue = document.getElementById('gsd-value-select').value; // Get selected GSD value
+                const gsdValue = document.getElementById('gsd-value-select').value;
+                const projIdToSave = selectedProjectId;
 
-                if (projectName.length > 50) {
-                    alert("Project name cannot exceed 50 characters.");
-                    return;
-                }
+                if (projectName.length > 50) return alert("Project name cannot exceed 50 characters.");
+                if (!projectName || !rawData) return alert("Please enter a project name and paste project data.");
+                
+                const id = (isEditMode && projIdToSave) ? projIdToSave : Date.now().toString();
+                const existingProject = Object.values(savedProjects).find(p => p.id === id);
 
-                if (!projectName || !rawData) {
-                    alert("Please enter a project name and paste project data before saving/updating.");
-                    return;
-                }
-                
-                let projectId = document.getElementById('project-select').value;
-                if (!projectId || savedProjects[projectId]?.isCorrupted) {
-                    projectId = Date.now().toString();
-                }
-                
                 const projectData = {
-                    id: projectId,
+                    id: id,
                     name: projectName,
                     rawData: rawData,
                     isIR: isIR,
-                    gsdValue: gsdValue, // Save selected GSD value
-                    createdAt: savedProjects[projectId]?.createdAt || new Date().toISOString()
+                    gsdValue: gsdValue,
+                    createdAt: existingProject?.createdAt || new Date().toISOString(),
+                    projectOrder: existingProject?.projectOrder ?? Object.keys(savedProjects).length
                 };
 
-                const success = await saveProjectToFirestore(projectData);
-                if(success) {
-                    alert(`Project "${projectName}" saved successfully to Firestore.`);
-                    isEditMode = false; 
+                if (await saveProjectToFirestore(projectData)) {
+                    alert(`Project "${projectName}" saved successfully.`);
+                    isEditMode = false;
+                    selectedProjectId = id;
                     manageButtonState();
                 }
             });
             
             document.getElementById('delete-project-btn').addEventListener('click', async () => {
-                 if (!isAdmin) return;
-                const projectId = document.getElementById('project-select').value;
-                if (!projectId) { return; }
+                if (!isAdmin) return;
+                const selectedItems = document.querySelectorAll('#project-list .project-list-item.selected');
+                if (selectedItems.length === 0) return;
                 
-                const projectName = savedProjects[projectId].name;
-                if (confirm(`Are you sure you want to delete the project "${projectName}"? This action cannot be undone.`)) {
-                    const success = await deleteProjectFromFirestore(projectId);
-                    if (success) {
-                        alert(`Project "${projectName}" has been deleted.`);
-                    }
+                const projectsToDelete = Array.from(selectedItems).map(item => ({
+                    id: item.dataset.id,
+                    name: savedProjects[item.dataset.id].name
+                }));
+                
+                const names = projectsToDelete.map(p => p.name).join('", "');
+                if (confirm(`Are you sure you want to delete "${names}"? This action cannot be undone.`)) {
+                    const batch = writeBatch(db);
+                    projectsToDelete.forEach(p => batch.delete(doc(db, "public_projects", p.id)));
+                    await batch.commit();
+                    alert(`Deleted ${projectsToDelete.length} project(s).`);
+                    selectedProjectId = null;
+                    loadProjectDataIntoForm(null);
                 }
             });
 
-            document.getElementById('project-select').addEventListener('change', (e) => {
-                const projectSelect = e.target;
-                if (projectSelect.multiple) {
-                    // In multi-select mode, don't load the project data on click
-                    return;
-                }
-                const projectId = projectSelect.value;
-                const irCheckbox = document.getElementById('is-ir-project-checkbox');
-                const gsdValueSelect = document.getElementById('gsd-value-select');
-                
-                isEditMode = false; 
+            document.getElementById('project-list').addEventListener('click', (e) => {
+                const item = e.target.closest('.project-list-item');
+                if (!item) return;
 
-                if (projectId && savedProjects[projectId]) {
-                    const project = savedProjects[projectId];
-                    document.getElementById('techData').value = project.rawData;
-                    document.getElementById('project-name').value = project.name;
-                    irCheckbox.checked = project.isIR || false;
-                    gsdValueSelect.value = project.gsdValue || '3in'; // Load saved GSD value, default to '3in'
+                const projectId = item.dataset.id;
+                const isMultiSelect = document.getElementById('customize-calc-all-cb').checked;
+
+                if (isMultiSelect) {
+                    item.classList.toggle('selected');
                 } else {
-                    document.getElementById('techData').value = '';
-                    document.getElementById('project-name').value = '';
-                    irCheckbox.checked = false;
-                    gsdValueSelect.value = '3in'; // Reset GSD value
-                    lastFilterValue = "";
+                    document.querySelectorAll('.project-list-item.selected').forEach(el => el.classList.remove('selected'));
+                    item.classList.add('selected');
+                    selectedProjectId = projectId;
+                    loadProjectDataIntoForm(projectId);
                 }
                 manageButtonState();
             });
             
             document.getElementById('edit-data-btn').addEventListener('click', () => {
-                 if (!isAdmin) return;
-                 isEditMode = true;
-                 manageButtonState();
-                 document.getElementById('techData').focus();
+                if (!isAdmin) return;
+                isEditMode = true;
+                manageButtonState();
+                document.getElementById('techData').focus();
             });
             
             document.getElementById('calculateCurrentBtn').addEventListener('click', () => calculateAndRender(false));
             
             document.getElementById('calculate-all-btn').addEventListener('click', () => {
                 const isCustomized = document.getElementById('customize-calc-all-cb').checked;
+                const selectedProjectIds = Array.from(document.querySelectorAll('#project-list .project-list-item.selected')).map(opt => opt.dataset.id);
+
                 if (isCustomized) {
-                    const selectedProjectIds = [...document.getElementById('project-select').selectedOptions].map(opt => opt.value).filter(Boolean);
-                    if (selectedProjectIds.length === 0) {
-                        alert('Please select one or more projects from the list to calculate.');
-                        return;
-                    }
+                    if (selectedProjectIds.length === 0) return alert('Please select one or more projects to calculate.');
                     calculateAndRender(true, selectedProjectIds);
                 } else {
                     calculateAndRender(true, null);
@@ -689,58 +723,39 @@
             });
 
             document.getElementById('customize-calc-all-cb').addEventListener('change', (e) => {
-                const projectSelect = document.getElementById('project-select');
                 const calcCurrentBtn = document.getElementById('calculateCurrentBtn');
                 const calcAllBtn = document.getElementById('calculate-all-btn');
+                const selectedItems = document.querySelectorAll('.project-list-item.selected');
 
                 if (e.target.checked) {
-                    projectSelect.multiple = true;
-                    projectSelect.size = 8; // Show 8 items
                     calcCurrentBtn.disabled = true;
-                    calcAllBtn.textContent = 'Calculate Checked Projects';
+                    calcAllBtn.textContent = 'Calculate Selected Projects';
                 } else {
-                    projectSelect.multiple = false;
-                    projectSelect.size = 1;
                     calcCurrentBtn.disabled = false;
                     calcAllBtn.textContent = 'Calculate All Projects';
+                    selectedItems.forEach((item, i) => { if (i > 0) item.classList.remove('selected'); });
+                    selectedProjectId = selectedItems.length > 0 ? selectedItems[0].dataset.id : null;
                 }
+                manageButtonState();
             });
 
-            // Event listener for the new "Calculate Pasted Data" button
             document.getElementById('calculatePastedDataBtn').addEventListener('click', calculatePastedData);
-            
-            // Event listener for techData input to manage button state
             document.getElementById('techData').addEventListener('input', manageButtonState);
-
-
-            document.getElementById('search-tech-id').addEventListener('input', (e) => {
-                lastFilterValue = e.target.value;
-                filterTable();
-            });
-            
+            document.getElementById('search-tech-id').addEventListener('input', (e) => { lastFilterValue = e.target.value; filterTable(); });
             document.getElementById('admin-login-btn').addEventListener('click', handleAdminLogin);
             document.getElementById('logout-btn').addEventListener('click', handleLogout);
-
             document.body.addEventListener('click', (e) => {
-                if (e.target.closest('.info-icon')) {
-                    const icon = e.target.closest('.info-icon');
+                const icon = e.target.closest('.info-icon');
+                if (icon) {
                     const key = icon.dataset.key;
                     const techId = icon.dataset.techId;
-                    if (key) {
-                        openModal(key);
-                    } else if (techId) {
-                        openTechSummaryModal(techId);
-                    }
+                    if (key) openModal(key);
+                    else if (techId) openTechSummaryModal(techId);
                 }
             });
-
             document.getElementById('how-it-works-btn').addEventListener('click', () => openModal('howItWorks'));
             document.getElementById('modal-close').addEventListener('click', closeModal);
-            document.getElementById('info-modal').addEventListener('click', (e) => {
-                if (e.target === document.getElementById('info-modal')) {
-                    closeModal();
-                }
-            });
+            document.getElementById('info-modal').addEventListener('click', (e) => { if (e.target.id === 'info-modal') closeModal(); });
         });
 
         function calculateAndRender(isAllProjects, projectIds = null) {
@@ -754,114 +769,77 @@
                     bonusMultiplier = parsedMultiplier;
                     isMultiplierUsed = true;
                 } else {
-                    alert("Bonus Multiplier must be a valid number.");
-                    return;
+                    return alert("Bonus Multiplier must be a valid number.");
                 }
             }
             
             lastUsedBonusMultiplier = bonusMultiplier;
             lastCalculationUsedMultiplier = isMultiplierUsed;
-
             const resultsTitleEl = document.getElementById('results-title');
             
             if (isAllProjects) {
-                const projectsToCalculate = projectIds ? projectIds : Object.keys(savedProjects);
-                const titleText = projectIds ? 'Checked Projects (Combined)' : 'All Projects (Combined)';
-                resultsTitleEl.textContent = `${titleText} - Bonus Results ${isMultiplierUsed ? `(Multiplier: ${bonusMultiplier})` : '(No Multiplier)'}`;
+                const projectsToCalc = projectIds ? projectIds.map(id => savedProjects[id]).filter(Boolean) : Object.values(savedProjects);
+                const titleText = projectIds ? 'Selected Projects (Combined)' : 'All Projects (Combined)';
+                resultsTitleEl.textContent = `${titleText} - Bonus Results ${isMultiplierUsed ? `(Multiplier: ${bonusMultiplier})` : ''}`;
                 
                 let combinedTechStats = {};
-                let combinedSummaryStats = { 
-                    rv1CatCounts: {}, rv2CatCounts: {}, rv3CatCounts: {}, rv4CatCounts: {}, 
-                    totalRows: 0, comboTasks: 0 
-                };
+                let combinedSummaryStats = { rv1CatCounts: {}, rv2CatCounts: {}, rv3CatCounts: {}, rv4CatCounts: {}, totalRows: 0, comboTasks: 0 };
                 const corruptedProjects = []; 
                 
-                for (const projectId of projectsToCalculate) {
-                    const project = savedProjects[projectId];
-                    if (!project) continue;
-                    
+                projectsToCalc.forEach(project => {
                     if (project.isCorrupted) {
                         corruptedProjects.push(project.name);
-                        continue;
+                        return;
                     }
-                    // Pass the GSD value from the saved project, default to '3in' if not present
                     const gsdForCalculation = project.gsdValue || '3in'; 
                     const parsedData = parseRawData(project.rawData, project.isIR || false, project.name, gsdForCalculation); 
                     if (parsedData) {
-                        // Merge Tech Stats
                         for (const techId in parsedData.techStats) {
-                            const singleProjectTechStats = parsedData.techStats[techId];
-                            if (!combinedTechStats[techId]) {
-                                combinedTechStats[techId] = createNewTechStat();
-                                combinedTechStats[techId].id = techId;
-                            }
-                            combinedTechStats[techId].points += singleProjectTechStats.points;
-                            combinedTechStats[techId].fixTasks += singleProjectTechStats.fixTasks;
-                            combinedTechStats[techId].refixTasks += singleProjectTechStats.refixTasks;
-                            combinedTechStats[techId].warnings.push(...singleProjectTechStats.warnings);
-                            combinedTechStats[techId].refixDetails.push(...singleProjectTechStats.refixDetails); // New: merge refix details
-                            for (let i = 1; i <= 9; i++) {
-                                combinedTechStats[techId].categoryCounts[i] += singleProjectTechStats.categoryCounts[i];
-                            }
-                            combinedTechStats[techId].pointsBreakdown.fix += singleProjectTechStats.pointsBreakdown.fix;
-                            combinedTechStats[techId].pointsBreakdown.qc += singleProjectTechStats.pointsBreakdown.qc;
-                            combinedTechStats[techId].pointsBreakdown.i3qa += singleProjectTechStats.pointsBreakdown.i3qa;
-                            combinedTechStats[techId].pointsBreakdown.rv += singleProjectTechStats.pointsBreakdown.rv;
+                            if (!combinedTechStats[techId]) combinedTechStats[techId] = createNewTechStat();
+                            const combined = combinedTechStats[techId];
+                            const single = parsedData.techStats[techId];
+                            combined.id = techId;
+                            combined.points += single.points;
+                            combined.fixTasks += single.fixTasks;
+                            combined.refixTasks += single.refixTasks;
+                            combined.warnings.push(...single.warnings);
+                            combined.refixDetails.push(...single.refixDetails);
+                            for (let i = 1; i <= 9; i++) combined.categoryCounts[i] += single.categoryCounts[i];
+                            for (const type in single.pointsBreakdown) combined.pointsBreakdown[type] += single.pointsBreakdown[type];
                         }
-                        
-                        // Merge Summary Stats
                         combinedSummaryStats.totalRows += parsedData.summaryStats.totalRows;
                         combinedSummaryStats.comboTasks += parsedData.summaryStats.comboTasks;
-                        for (const cat in parsedData.summaryStats.rv1CatCounts) {
-                            combinedSummaryStats.rv1CatCounts[cat] = (combinedSummaryStats.rv1CatCounts[cat] || 0) + parsedData.summaryStats.rv1CatCounts[cat];
-                        }
-                        for (const cat in parsedData.summaryStats.rv2CatCounts) {
-                            combinedSummaryStats.rv2CatCounts[cat] = (combinedSummaryStats.rv2CatCounts[cat] || 0) + parsedData.summaryStats.rv2CatCounts[cat];
-                        }
+                        for (const cat in parsedData.summaryStats.rv1CatCounts) combinedSummaryStats.rv1CatCounts[cat] = (combinedSummaryStats.rv1CatCounts[cat] || 0) + parsedData.summaryStats.rv1CatCounts[cat];
+                        for (const cat in parsedData.summaryStats.rv2CatCounts) combinedSummaryStats.rv2CatCounts[cat] = (combinedSummaryStats.rv2CatCounts[cat] || 0) + parsedData.summaryStats.rv2CatCounts[cat];
                         for (const cat in parsedData.summaryStats.rv3CatCounts) {
-                            const projectCatData = parsedData.summaryStats.rv3CatCounts[cat];
-                            if (!combinedSummaryStats.rv3CatCounts[cat]) {
-                                combinedSummaryStats.rv3CatCounts[cat] = { total: 0, techs: {} };
-                            }
-                            const combinedCatData = combinedSummaryStats.rv3CatCounts[cat];
-                            combinedCatData.total += projectCatData.total;
-                            for (const techId in projectCatData.techs) {
-                                combinedCatData.techs[techId] = (combinedCatData.techs[techId] || 0) + projectCatData.techs[techId];
-                            }
+                             if (!combinedSummaryStats.rv3CatCounts[cat]) combinedSummaryStats.rv3CatCounts[cat] = { total: 0, techs: {} };
+                             const combinedCat = combinedSummaryStats.rv3CatCounts[cat];
+                             const singleCat = parsedData.summaryStats.rv3CatCounts[cat];
+                             combinedCat.total += singleCat.total;
+                             for(const tech in singleCat.techs) combinedCat.techs[tech] = (combinedCat.techs[tech] || 0) + singleCat.techs[tech];
                         }
-                        for (const cat in parsedData.summaryStats.rv4CatCounts) {
-                            combinedSummaryStats.rv4CatCounts[cat] = (combinedSummaryStats.rv4CatCounts[cat] || 0) + parsedData.summaryStats.rv4CatCounts[cat];
-                        }
+                        for (const cat in parsedData.summaryStats.rv4CatCounts) combinedSummaryStats.rv4CatCounts[cat] = (combinedSummaryStats.rv4CatCounts[cat] || 0) + parsedData.summaryStats.rv4CatCounts[cat];
                     }
-                }
+                });
 
                 if (corruptedProjects.length > 0) {
-                    alert(`The following projects have corrupted data and were skipped:\n- ${corruptedProjects.join('\n- ')}\n\nAn admin must re-save these projects to include them in calculations.`);
+                    alert(`Skipped corrupted projects:\n- ${corruptedProjects.join('\n- ')}`);
                 }
 
                 currentTechStats = combinedTechStats; 
                 renderSingleProjectTable(currentTechStats, bonusMultiplier);
                 renderTlSummary(combinedSummaryStats);
             } else {
-                const projectId = document.getElementById('project-select').value;
-                if (!projectId) {
-                    alert("Please select a project to calculate.");
-                    return;
-                }
-                if (savedProjects[projectId] && savedProjects[projectId].isCorrupted) {
-                    alert(`Cannot calculate. The selected project "${savedProjects[projectId].name}" has corrupted data and cannot be read.\n\nAn admin must re-save this project with the correct data to fix it.`);
-                    return; 
-                }
+                if (!selectedProjectId) return alert("Please select a project to calculate.");
+                const project = savedProjects[selectedProjectId];
+                if (project.isCorrupted) return alert(`Cannot calculate corrupted project "${project.name}".`);
 
-                resultsTitleEl.textContent = `Project: ${savedProjects[projectId].name} - Bonus Results ${isMultiplierUsed ? `(Multiplier: ${bonusMultiplier})` : ''}`;
-                const data = savedProjects[projectId].rawData;
-                if (!data) {
-                    alert("Selected project has no data.");
-                    return;
-                }
-                const isProjectLevelIR = savedProjects[projectId].isIR;
-                const gsdForCalculation = savedProjects[projectId].gsdValue || '3in'; // Get GSD from saved project or default
-                const parsedData = parseRawData(data, isProjectLevelIR, savedProjects[projectId].name, gsdForCalculation);
+                resultsTitleEl.textContent = `Project: ${project.name} - Bonus Results ${isMultiplierUsed ? `(Multiplier: ${bonusMultiplier})` : ''}`;
+                const data = project.rawData;
+                if (!data) return alert("Selected project has no data.");
+                
+                const gsdForCalculation = project.gsdValue || '3in';
+                const parsedData = parseRawData(data, project.isIR, project.name, gsdForCalculation);
                 if (parsedData) {
                     currentTechStats = parsedData.techStats;
                     renderSingleProjectTable(currentTechStats, bonusMultiplier);
@@ -883,8 +861,7 @@
                     bonusMultiplier = parsedMultiplier;
                     isMultiplierUsed = true;
                 } else {
-                    alert("Bonus Multiplier must be a valid number.");
-                    return;
+                    return alert("Bonus Multiplier must be a valid number.");
                 }
             }
             
@@ -894,12 +871,9 @@
             const resultsTitleEl = document.getElementById('results-title');
             const data = document.getElementById('techData').value.trim();
             const isProjectLevelIR = document.getElementById('is-ir-project-checkbox').checked;
-            const gsdForCalculation = document.getElementById('gsd-value-select').value; // Get selected GSD for pasted data
+            const gsdForCalculation = document.getElementById('gsd-value-select').value;
 
-            if (!data) {
-                alert("Please paste data into the 'Project Data Entry' text area before calculating.");
-                return;
-            }
+            if (!data) return alert("Please paste data into the text area before calculating.");
 
             resultsTitleEl.textContent = `Pasted Data - Bonus Results ${isMultiplierUsed ? `(Multiplier: ${bonusMultiplier})` : ''}`;
             
@@ -912,7 +886,6 @@
             document.getElementById('tech-results-container').classList.add('visible');
             document.getElementById('tl-summary-card').classList.add('visible');
         }
-
 
         function renderSingleProjectTable(techStats, bonusMultiplier) {
             const resultsThead = document.getElementById('results-thead');
@@ -982,9 +955,7 @@
             const techStats = {};
             const lines = data.split('\n').filter(line => line.trim() !== '');
             
-            if (lines.length < 1) { 
-                 return null;
-            }
+            if (lines.length < 1) return null;
 
             const headerLine = lines.shift();
             const delimiter = '\t';
@@ -1006,7 +977,7 @@
             const rv1CatIndex = headerMap['rv1_cat'];
             const rv2CatIndex = headerMap['rv2_cat'];
             const rv3CatIndex = headerMap['rv3_cat'];
-            const rv3TechSourceIndex = headerMap['fix4_id']; // UPDATED LOGIC: Use fix4_id as the source for the tech ID
+            const rv3TechSourceIndex = headerMap['fix4_id'];
             const rv4CatIndex = headerMap['rv4_cat'];
             const comboIndex = headerMap['combo?'];
 
@@ -1040,10 +1011,9 @@
                 processSimpleRvCat(rv2CatIndex, summaryStats.rv2CatCounts);
                 processSimpleRvCat(rv4CatIndex, summaryStats.rv4CatCounts);
                 
-                // UPDATED LOGIC
                 if (rv3CatIndex !== undefined && rv3TechSourceIndex !== undefined) {
                     const catValue = values[rv3CatIndex]?.trim();
-                    const techId = values[rv3TechSourceIndex]?.trim(); // Get tech ID from fix4_id column
+                    const techId = values[rv3TechSourceIndex]?.trim();
                     if (catValue && techId && !isNaN(catValue) && catValue >= 1 && catValue <= 9) {
                         if (!summaryStats.rv3CatCounts[catValue]) {
                             summaryStats.rv3CatCounts[catValue] = { total: 0, techs: {} };
@@ -1076,15 +1046,15 @@
                                     if (rvLabelIndex !== undefined) {
                                         const rvLabelValue = values[rvLabelIndex]?.trim().toUpperCase();
                                         if (rvLabelValue && rvLabelValue.includes('I')) {
-                                            techStats[techId].refixTasks += 1; // Keep count for original summary
-                                            techStats[techId].refixDetails.push({ // Store detailed info
+                                            techStats[techId].refixTasks += 1;
+                                            techStats[techId].refixDetails.push({
                                                 round: `RV${round}`,
                                                 project: currentProjectName
                                             });
                                         }
                                     }
                                 }
-                            } else { // This is the 'fix1_id' section
+                            } else {
                                 techStats[techId].fixTasks += 1;
                                 let totalRowFixPoints = 0;
                                 
@@ -1095,12 +1065,9 @@
                                     if (i3qaLabelValue && i3qaLabelValue.includes('M')) {
                                         const categoryValue = parseInt(values[i3qaCatIndex]);
                                         if (!isNaN(categoryValue) && categoryValue >= 1 && categoryValue <= 9) {
-                                            // Use the GSD-specific point value if available, fallback to "3in" if the selected GSD value is not found for the category
-                                            const catPoints = categoryValues[categoryValue] ? (categoryValues[categoryValue][gsdForCalculation] || categoryValues[categoryValue]["3in"]) : 0;
-                                            if (techStats[techId].categoryCounts[categoryValue] !== undefined) {
-                                                techStats[techId].categoryCounts[categoryValue]++;
-                                            }
-                                            if (catPoints) { totalRowFixPoints += catPoints; }
+                                            const catPoints = categoryValues[categoryValue]?.[gsdForCalculation] || categoryValues[categoryValue]?.["3in"] || 0;
+                                            if (techStats[techId].categoryCounts[categoryValue] !== undefined) techStats[techId].categoryCounts[categoryValue]++;
+                                            if (catPoints) totalRowFixPoints += catPoints;
                                         }
                                     }
                                 }
@@ -1109,12 +1076,9 @@
                                     if (headerMap[catHeader] !== undefined) {
                                         const categoryValue = parseInt(values[headerMap[catHeader]]);
                                         if (!isNaN(categoryValue) && categoryValue >= 1 && categoryValue <= 9) {
-                                            // Use the GSD-specific point value if available
-                                            const catPoints = categoryValues[categoryValue] ? (categoryValues[categoryValue][gsdForCalculation] || categoryValues[categoryValue]["3in"]) : 0;
-                                            if (techStats[techId].categoryCounts[categoryValue] !== undefined) {
-                                                techStats[techId].categoryCounts[categoryValue]++;
-                                            }
-                                            if (catPoints) { totalRowFixPoints += catPoints; }
+                                            const catPoints = categoryValues[categoryValue]?.[gsdForCalculation] || categoryValues[categoryValue]?.["3in"] || 0;
+                                            if (techStats[techId].categoryCounts[categoryValue] !== undefined) techStats[techId].categoryCounts[categoryValue]++;
+                                            if (catPoints) totalRowFixPoints += catPoints;
                                         }
                                     }
                                 });
@@ -1122,27 +1086,23 @@
                                 if (afp1StatIndex !== undefined && afp1CatIndex !== undefined && values[afp1StatIndex]?.trim().toUpperCase() === 'AA') {
                                     const afp1CatValue = parseInt(values[afp1CatIndex]);
                                     if (!isNaN(afp1CatValue) && afp1CatValue >= 1 && afp1CatValue <= 9) {
-                                        const catPoints = categoryValues[afp1CatValue] ? (categoryValues[afp1CatValue][gsdForCalculation] || categoryValues[afp1CatValue]["3in"]) : 0;
-                                        if (techStats[techId].categoryCounts[afp1CatValue] !== undefined) {
-                                            techStats[techId].categoryCounts[afp1CatValue]++;
-                                        }
-                                        if (catPoints) { totalRowFixPoints += catPoints; }
+                                        const catPoints = categoryValues[afp1CatValue]?.[gsdForCalculation] || categoryValues[afp1CatValue]?.["3in"] || 0;
+                                        if (techStats[techId].categoryCounts[afp1CatValue] !== undefined) techStats[techId].categoryCounts[afp1CatValue]++;
+                                        if (catPoints) totalRowFixPoints += catPoints;
                                     }
                                 }
                                 
                                 if (afp2StatIndex !== undefined && afp2CatIndex !== undefined && values[afp2StatIndex]?.trim().toUpperCase() === 'AA') {
                                     const afp2CatValue = parseInt(values[afp2CatIndex]);
                                      if (!isNaN(afp2CatValue) && afp2CatValue >= 1 && afp2CatValue <= 9) {
-                                        const catPoints = categoryValues[afp2CatValue] ? (categoryValues[afp2CatValue][gsdForCalculation] || categoryValues[afp2CatValue]["3in"]) : 0;
-                                        if (techStats[techId].categoryCounts[afp2CatValue] !== undefined) {
-                                            techStats[techId].categoryCounts[afp2CatValue]++;
-                                        }
-                                        if (catPoints) { totalRowFixPoints += catPoints; }
+                                        const catPoints = categoryValues[afp2CatValue]?.[gsdForCalculation] || categoryValues[afp2CatValue]?.["3in"] || 0;
+                                        if (techStats[techId].categoryCounts[afp2CatValue] !== undefined) techStats[techId].categoryCounts[afp2CatValue]++;
+                                        if (catPoints) totalRowFixPoints += catPoints;
                                     }
                                 }
 
                                 if (isFixTaskIR && totalRowFixPoints > 0) {
-                                    totalRowFixPoints *= irModifierValue; // This is the project-level IR multiplier
+                                    totalRowFixPoints *= irModifierValue;
                                 }
 
                                 techStats[techId].pointsBreakdown.fix += totalRowFixPoints;
@@ -1171,7 +1131,6 @@
                         const round = colName.match(/\d+/)[0];
                         const fixTechId = values[headerMap[`fix${round}_id`]]?.trim();
                         if (fixTechId && techStats[fixTechId]) {
-                            // Store warning as an object with type and project name
                             techStats[fixTechId].warnings.push({
                                 type: warnValue,
                                 project: currentProjectName
@@ -1264,18 +1223,11 @@
             card.classList.add('visible');
         }
 
-        // --- UI and Filtering Functions ---
-
         function populateTeamFilters() {
             const container = document.getElementById('team-filter-container');
-            // Clear all but the first element (the label)
-            while(container.children.length > 1) {
-                container.removeChild(container.lastChild);
-            }
+            while(container.children.length > 1) container.removeChild(container.lastChild);
 
-            const sortedTeams = Object.keys(teamSettings).sort((a,b) => a.localeCompare(b));
-
-            sortedTeams.forEach(teamName => {
+            Object.keys(teamSettings).sort().forEach(teamName => {
                 const div = document.createElement('div');
                 div.className = 'flex items-center';
                 div.innerHTML = `
@@ -1310,10 +1262,7 @@
         function populateAdminTeamManagement() {
             const container = document.getElementById('team-list-container');
             container.innerHTML = '';
-            
-            const sortedTeams = Object.keys(teamSettings).sort((a, b) => a.localeCompare(b));
-
-            sortedTeams.forEach(teamName => {
+            Object.keys(teamSettings).sort().forEach(teamName => {
                 addTeamToAdminUI(teamName, teamSettings[teamName]);
             });
         }
@@ -1321,13 +1270,9 @@
 
         function filterTable() {
             const searchTerm = document.getElementById('search-tech-id').value.toUpperCase();
-            
-            const selectedTeams = [];
-            document.querySelectorAll('#team-filter-container input:checked').forEach(cb => {
-                selectedTeams.push(cb.dataset.teamName);
-            });
-
+            const selectedTeams = Array.from(document.querySelectorAll('#team-filter-container input:checked')).map(cb => cb.dataset.teamName);
             let allowedTechIds = new Set();
+
             if (selectedTeams.length > 0) {
                 selectedTeams.forEach(teamName => {
                     if (teamSettings[teamName]) {
@@ -1341,10 +1286,8 @@
                 const techIdCell = rows[i].getElementsByTagName('td')[0];
                 if (techIdCell) {
                     const techId = (techIdCell.textContent || techIdCell.innerText).trim().toUpperCase();
-                    
                     const matchesSearch = searchTerm === "" || techId.includes(searchTerm);
                     const matchesTeam = selectedTeams.length === 0 || allowedTechIds.has(techId);
-
                     rows[i].style.display = (matchesSearch && matchesTeam) ? "" : "none";
                 }
             }
@@ -1386,34 +1329,17 @@
             }
             if (!categoryHtml) categoryHtml = '<li>No primary fix tasks recorded.</li>';
 
-            let multiplierDisplay = lastCalculationUsedMultiplier
-                ? `${lastUsedBonusMultiplier.toFixed(2)} (Multiplier)`
-                : '1 (No Multiplier Applied)';
+            let multiplierDisplay = lastCalculationUsedMultiplier ? `${lastUsedBonusMultiplier.toFixed(2)} (Multiplier)` : '1 (No Multiplier Applied)';
 
-            let warningsDetailHtml = '';
-            if (tech.warnings.length > 0) {
-                warningsDetailHtml = `<ul class="list-disc list-inside text-xs text-gray-700 mt-1 space-y-0.5">`;
-                tech.warnings.forEach(w => {
-                    warningsDetailHtml += `<li>Type: <span class="font-mono font-semibold">${w.type}</span> (Project: ${w.project})</li>`;
-                });
-                warningsDetailHtml += `</ul>`;
-            } else {
-                warningsDetailHtml = `<p class="text-xs text-gray-500 italic mt-1 pl-4">No warnings recorded.</p>`;
-            }
+            let warningsDetailHtml = tech.warnings.length > 0
+                ? `<ul class="list-disc list-inside text-xs text-gray-700 mt-1 space-y-0.5">${tech.warnings.map(w => `<li>Type: <span class="font-mono font-semibold">${w.type}</span> (Project: ${w.project})</li>`).join('')}</ul>`
+                : `<p class="text-xs text-gray-500 italic mt-1 pl-4">No warnings recorded.</p>`;
 
-            let refixDetailHtml = '';
-            if (tech.refixDetails.length > 0) {
-                refixDetailHtml = `<ul class="list-disc list-inside text-xs text-gray-700 mt-1 space-y-0.5">`;
-                tech.refixDetails.forEach(r => {
-                    refixDetailHtml += `<li>Task: <span class="font-mono font-semibold">${r.round}</span> (Project: ${r.project})</li>`;
-                });
-                refixDetailHtml += `</ul>`;
-            } else {
-                refixDetailHtml = `<p class="text-xs text-gray-500 italic mt-1 pl-4">No refixes recorded.</p>`;
-            }
+            let refixDetailHtml = tech.refixDetails.length > 0
+                ? `<ul class="list-disc list-inside text-xs text-gray-700 mt-1 space-y-0.5">${tech.refixDetails.map(r => `<li>Task: <span class="font-mono font-semibold">${r.round}</span> (Project: ${r.project})</li>`).join('')}</ul>`
+                : `<p class="text-xs text-gray-500 italic mt-1 pl-4">No refixes recorded.</p>`;
 
-            let bodyHtml = `<div class="space-y-4 text-sm">
-                
+            modalBody.innerHTML = `<div class="space-y-4 text-sm">
                 <div class="p-3 bg-gray-50 rounded-lg border">
                     <h4 class="font-semibold text-base text-gray-800 mb-2">Core Stats</h4>
                     <div class="flex justify-between"><span class="text-gray-600">Primary Fix Tasks:</span><span class="font-bold">${tech.fixTasks}</span></div>
@@ -1426,7 +1352,6 @@
                         <ul class="list-disc list-inside mt-1 space-y-1 pl-2">${categoryHtml}</ul>
                     </details>
                 </div>
-                
                 <div class="p-3 bg-gray-50 rounded-lg border">
                     <h4 class="font-semibold text-base text-gray-800 mb-2">Points Calculation</h4>
                     <div class="flex justify-between"><span class="text-gray-600">Points from Fix Tasks:</span><span class="font-mono">${tech.pointsBreakdown.fix.toFixed(3)}</span></div>
@@ -1436,22 +1361,18 @@
                     <hr class="my-2">
                     <div class="flex justify-between font-bold"><span class="text-gray-800">Total Points:</span><span class="font-mono">${tech.points.toFixed(3)}</span></div>
                 </div>
-
                 <div class="p-3 bg-gray-50 rounded-lg border">
                     <h4 class="font-semibold text-base text-gray-800 mb-2">Quality Calculation</h4>
                      <p class="text-xs text-gray-500 mb-2">Formula: [Fix Tasks] / ([Fix Tasks] + [Refix Tasks] + [Warnings])</p>
                     <div class="p-2 bg-white rounded text-center"><code>${tech.fixTasks} / (${tech.fixTasks} + ${tech.refixTasks} + ${warningsCount}) = ${(fixQuality).toFixed(4)}</code></div>
                     <div class="flex justify-between font-bold"><span class="text-gray-800">Fix Quality %:</span><span class="font-mono">${(fixQuality * 100).toFixed(2)}%</span></div>
                 </div>
-
                 <div class="p-3 bg-blue-50 rounded-lg border border-blue-200">
                     <h4 class="font-semibold text-base text-blue-800 mb-2">Final Payout</h4>
-                    <div class="flex justify-between"><span class="text-gray-600">% of Bonus Earned:</span><span class="font-bold text-green-600">${(qualityModifier * 100).toFixed(0)}%</span></div>
                     <p class="text-xs text-gray-500 mt-2 mb-2">Formula: Total Points * Bonus Multiplier * % of Bonus Earned</p>
                     <div class="p-2 bg-white rounded text-center text-xs md:text-sm mb-2"><code>${tech.points.toFixed(3)} (Points) * ${multiplierDisplay} * ${qualityModifier.toFixed(2)} (Earned)</code></div>
                     <div class="flex justify-between font-bold text-lg"><span class="text-blue-900">Final Payout (PHP):</span><span class="text-blue-600 font-mono">${finalPayout.toFixed(2)}</span></div>
                 </div>
-
             </div>`;
 
             modalBody.innerHTML = bodyHtml;
@@ -1459,8 +1380,7 @@
         }
 
         function closeModal() {
-            const modal = document.getElementById('info-modal');
-            modal.classList.add('hidden');
+            document.getElementById('info-modal').classList.add('hidden');
         }
 
     </script>
