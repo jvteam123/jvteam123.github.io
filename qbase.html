@@ -187,6 +187,11 @@
                         <input type="text" id="project-name" class="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Enter Project Name to Save/Update">
                         <button id="save-project-btn" class="bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-indigo-700 transition-colors duration-300 shadow-md whitespace-nowrap">Save Project</button>
                     </div>
+                    <div class="mt-4">
+                        <button id="calculatePastedDataBtn" class="w-full bg-purple-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-purple-700 transition-colors duration-300 shadow-md">
+                            Calculate Pasted Data
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -449,6 +454,9 @@
             const projectDataEntry = document.getElementById('project-data-entry');
             const projectSelect = document.getElementById('project-select');
             const projectId = projectSelect.value;
+            const techData = document.getElementById('techData');
+            const calculatePastedDataBtn = document.getElementById('calculatePastedDataBtn');
+
 
             projectDataEntry.classList.toggle('hidden', !isAdmin);
             
@@ -465,6 +473,9 @@
             document.getElementById('save-project-btn').disabled = !isAdmin || (projectId && !isEditMode);
             document.getElementById('techData').readOnly = !isAdmin || (projectId && !isEditMode);
             document.getElementById('is-ir-project-checkbox').disabled = !isAdmin;
+
+            // Enable/disable calculate pasted data button based on textarea content
+            calculatePastedDataBtn.disabled = techData.value.trim() === '';
         }
         
         async function handleAdminLogin() {
@@ -666,6 +677,13 @@
                 }
             });
 
+            // Event listener for the new "Calculate Pasted Data" button
+            document.getElementById('calculatePastedDataBtn').addEventListener('click', calculatePastedData);
+            
+            // Event listener for techData input to manage button state
+            document.getElementById('techData').addEventListener('input', manageButtonState);
+
+
             document.getElementById('search-tech-id').addEventListener('input', (e) => {
                 lastFilterValue = e.target.value;
                 filterTable();
@@ -822,6 +840,47 @@
             document.getElementById('tl-summary-card').classList.add('visible');
         }
         
+        function calculatePastedData() {
+            let bonusMultiplier = 1;
+            let isMultiplierUsed = false;
+            const directMultiplierInput = document.getElementById('bonusMultiplierDirect').value;
+
+            if (directMultiplierInput.trim() !== '') {
+                const parsedMultiplier = parseFloat(directMultiplierInput);
+                if (!isNaN(parsedMultiplier) && parsedMultiplier >= 0) {
+                    bonusMultiplier = parsedMultiplier;
+                    isMultiplierUsed = true;
+                } else {
+                    alert("Bonus Multiplier must be a valid number.");
+                    return;
+                }
+            }
+            
+            lastUsedBonusMultiplier = bonusMultiplier;
+            lastCalculationUsedMultiplier = isMultiplierUsed;
+
+            const resultsTitleEl = document.getElementById('results-title');
+            const data = document.getElementById('techData').value.trim();
+            const isProjectLevelIR = document.getElementById('is-ir-project-checkbox').checked;
+
+            if (!data) {
+                alert("Please paste data into the 'Project Data Entry' text area before calculating.");
+                return;
+            }
+
+            resultsTitleEl.textContent = `Pasted Data - Bonus Results ${isMultiplierUsed ? `(Multiplier: ${bonusMultiplier})` : ''}`;
+            
+            const parsedData = parseRawData(data, isProjectLevelIR);
+            if (parsedData) {
+                currentTechStats = parsedData.techStats;
+                renderSingleProjectTable(currentTechStats, bonusMultiplier);
+                renderTlSummary(parsedData.summaryStats);
+            }
+            document.getElementById('tech-results-container').classList.add('visible');
+            document.getElementById('tl-summary-card').classList.add('visible');
+        }
+
+
         function renderSingleProjectTable(techStats, bonusMultiplier) {
             const resultsThead = document.getElementById('results-thead');
             const resultsBody = document.getElementById('tech-results-body');
@@ -1311,7 +1370,7 @@
                     <h4 class="font-semibold text-base text-gray-800 mb-2">Points Calculation</h4>
                     <div class="flex justify-between"><span class="text-gray-600">Points from Fix Tasks:</span><span class="font-mono">${tech.pointsBreakdown.fix.toFixed(3)}</span></div>
                     <div class="flex justify-between"><span class="text-gray-600">Points from QC Tasks:</span><span class="font-mono">${tech.pointsBreakdown.qc.toFixed(3)}</span></div>
-                    <div class="flex justify-between"><span class="text-gray-600">Points from i3QA Tasks:</span><span class="font-mono">${tech.pointsBreakdown.i3qa.toFixed(3)}</span></div>
+                    <div class="flex justify-between"><span class="text-gray-600">Points from i3qa Tasks:</span><span class="font-mono">${tech.pointsBreakdown.i3qa.toFixed(3)}</span></div>
                     <div class="flex justify-between"><span class="text-gray-600">Points from RV Tasks:</span><span class="font-mono">${tech.pointsBreakdown.rv.toFixed(3)}</span></div>
                     <hr class="my-2">
                     <div class="flex justify-between font-bold"><span class="text-gray-800">Total Points:</span><span class="font-mono">${tech.points.toFixed(3)}</span></div>
