@@ -171,12 +171,21 @@
                         </div>
                         
                         <div class="bg-yellow-50 border border-yellow-200 p-3 rounded-lg mb-4">
-                             <div class="flex items-center">
+                             <div class="flex items-center mb-2">
                                 <input id="is-ir-project-checkbox" type="checkbox" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded">
                                 <label for="is-ir-project-checkbox" class="ml-3 block text-sm font-medium text-yellow-800">
                                     Mark Project as IR (for Fix Tasks)
                                     <span class="block text-xs text-yellow-700">Applies 1.5x points multiplier to the sum of all categories in a Fix Task row.</span>
                                 </label>
+                            </div>
+                            <div class="flex items-center">
+                                <label for="gsd-value-select" class="block text-sm font-medium text-gray-700 mr-2">GSD Point Value:</label>
+                                <select id="gsd-value-select" class="w-1/2 px-3 py-1 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm">
+                                    <option value="3in">3in Value</option>
+                                    <option value="4in">4in Value</option>
+                                    <option value="6in">6in Value</option>
+                                    <option value="9in">9in Value</option>
+                                </select>
                             </div>
                         </div>
 
@@ -280,8 +289,20 @@
         let teamSettings = {};
 
         // --- DATA FROM DOCUMENTATION ---
-        const categoryValues = { 1: { points: 2.19 }, 2: { points: 5.86 }, 3: { points: 7.44 }, 4: { points: 2.29 }, 5: { points: 1.55 }, 6: { points: 1.84 }, 7: { points: 1.00 }, 8: { points: 3.74 }, 9: { points: 1.73 } };
-        const irModifierValue = 1.5;
+        // UPDATED: Category values to include GSD-specific points
+        const categoryValues = {
+            1: { "3in": 2.19, "4in": 2.19, "6in": 2.19, "9in": 0.99, "IR": 1.5 },
+            2: { "3in": 5.86, "4in": 5.86, "6in": 5.86, "9in": 2.07, "IR": 1.5 },
+            3: { "3in": 7.44, "4in": 7.44, "6in": 7.44, "9in": 2.78, "IR": 1.5 },
+            4: { "3in": 2.29, "4in": 2.29, "6in": 2.29, "9in": 1.57, "IR": 1.5 },
+            5: { "3in": 1.55, "4in": 1.55, "6in": 1.55, "9in": 0.6, "IR": 1.5 },
+            6: { "3in": 1.84, "4in": 1.84, "6in": 1.84, "9in": 0.78, "IR": 1.5 },
+            7: { "3in": 1, "4in": 1, "6in": 1, "9in": 1, "IR": 1.5 },
+            8: { "3in": 3.74, "4in": 3.74, "6in": 3.74, "9in": 3.74, "IR": 1.5 },
+            9: { "3in": 1.73, "4in": 1.73, "6in": 1.73, "9in": 1.73, "IR": 1.5 }
+        };
+
+        const irModifierValue = 1.5; // This is now a general fallback/project-level IR modifier
         const calculationInfo = {
             howItWorks: {
                 title: 'How It Works & How to Use',
@@ -311,7 +332,8 @@
 
         function createNewTechStat() {
             return {
-                id: '', points: 0, fixTasks: 0, refixTasks: 0, warnings: [], 
+                id: '', points: 0, fixTasks: 0, refixTasks: 0, warnings: [], // warnings will store objects {type, project}
+                refixDetails: [], // New: to store objects {round, project}
                 categoryCounts: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0, 8: 0, 9: 0 },
                 pointsBreakdown: { fix: 0, qc: 0, i3qa: 0, rv: 0 }
             };
@@ -456,6 +478,7 @@
             const projectId = projectSelect.value;
             const techData = document.getElementById('techData');
             const calculatePastedDataBtn = document.getElementById('calculatePastedDataBtn');
+            const gsdValueSelect = document.getElementById('gsd-value-select');
 
 
             projectDataEntry.classList.toggle('hidden', !isAdmin);
@@ -473,6 +496,7 @@
             document.getElementById('save-project-btn').disabled = !isAdmin || (projectId && !isEditMode);
             document.getElementById('techData').readOnly = !isAdmin || (projectId && !isEditMode);
             document.getElementById('is-ir-project-checkbox').disabled = !isAdmin;
+            gsdValueSelect.disabled = !isAdmin; // Disable GSD select if not admin
 
             // Enable/disable calculate pasted data button based on textarea content
             calculatePastedDataBtn.disabled = techData.value.trim() === '';
@@ -565,6 +589,7 @@
                 const projectName = document.getElementById('project-name').value.trim();
                 const rawData = document.getElementById('techData').value.trim();
                 const isIR = document.getElementById('is-ir-project-checkbox').checked;
+                const gsdValue = document.getElementById('gsd-value-select').value; // Get selected GSD value
 
                 if (projectName.length > 50) {
                     alert("Project name cannot exceed 50 characters.");
@@ -586,6 +611,7 @@
                     name: projectName,
                     rawData: rawData,
                     isIR: isIR,
+                    gsdValue: gsdValue, // Save selected GSD value
                     createdAt: savedProjects[projectId]?.createdAt || new Date().toISOString()
                 };
 
@@ -619,6 +645,7 @@
                 }
                 const projectId = projectSelect.value;
                 const irCheckbox = document.getElementById('is-ir-project-checkbox');
+                const gsdValueSelect = document.getElementById('gsd-value-select');
                 
                 isEditMode = false; 
 
@@ -627,10 +654,12 @@
                     document.getElementById('techData').value = project.rawData;
                     document.getElementById('project-name').value = project.name;
                     irCheckbox.checked = project.isIR || false;
+                    gsdValueSelect.value = project.gsdValue || '3in'; // Load saved GSD value, default to '3in'
                 } else {
                     document.getElementById('techData').value = '';
                     document.getElementById('project-name').value = '';
                     irCheckbox.checked = false;
+                    gsdValueSelect.value = '3in'; // Reset GSD value
                     lastFilterValue = "";
                 }
                 manageButtonState();
@@ -755,8 +784,9 @@
                         corruptedProjects.push(project.name);
                         continue;
                     }
-
-                    const parsedData = parseRawData(project.rawData, project.isIR || false); 
+                    // Pass the GSD value from the saved project, default to '3in' if not present
+                    const gsdForCalculation = project.gsdValue || '3in'; 
+                    const parsedData = parseRawData(project.rawData, project.isIR || false, project.name, gsdForCalculation); 
                     if (parsedData) {
                         // Merge Tech Stats
                         for (const techId in parsedData.techStats) {
@@ -769,6 +799,7 @@
                             combinedTechStats[techId].fixTasks += singleProjectTechStats.fixTasks;
                             combinedTechStats[techId].refixTasks += singleProjectTechStats.refixTasks;
                             combinedTechStats[techId].warnings.push(...singleProjectTechStats.warnings);
+                            combinedTechStats[techId].refixDetails.push(...singleProjectTechStats.refixDetails); // New: merge refix details
                             for (let i = 1; i <= 9; i++) {
                                 combinedTechStats[techId].categoryCounts[i] += singleProjectTechStats.categoryCounts[i];
                             }
@@ -829,7 +860,8 @@
                     return;
                 }
                 const isProjectLevelIR = savedProjects[projectId].isIR;
-                const parsedData = parseRawData(data, isProjectLevelIR);
+                const gsdForCalculation = savedProjects[projectId].gsdValue || '3in'; // Get GSD from saved project or default
+                const parsedData = parseRawData(data, isProjectLevelIR, savedProjects[projectId].name, gsdForCalculation);
                 if (parsedData) {
                     currentTechStats = parsedData.techStats;
                     renderSingleProjectTable(currentTechStats, bonusMultiplier);
@@ -862,6 +894,7 @@
             const resultsTitleEl = document.getElementById('results-title');
             const data = document.getElementById('techData').value.trim();
             const isProjectLevelIR = document.getElementById('is-ir-project-checkbox').checked;
+            const gsdForCalculation = document.getElementById('gsd-value-select').value; // Get selected GSD for pasted data
 
             if (!data) {
                 alert("Please paste data into the 'Project Data Entry' text area before calculating.");
@@ -870,7 +903,7 @@
 
             resultsTitleEl.textContent = `Pasted Data - Bonus Results ${isMultiplierUsed ? `(Multiplier: ${bonusMultiplier})` : ''}`;
             
-            const parsedData = parseRawData(data, isProjectLevelIR);
+            const parsedData = parseRawData(data, isProjectLevelIR, 'Pasted Data', gsdForCalculation);
             if (parsedData) {
                 currentTechStats = parsedData.techStats;
                 renderSingleProjectTable(currentTechStats, bonusMultiplier);
@@ -945,7 +978,7 @@
             return row;
         }
 
-        function parseRawData(data, isFixTaskIR = false) {
+        function parseRawData(data, isFixTaskIR = false, currentProjectName = "Pasted Data", gsdForCalculation = "3in") {
             const techStats = {};
             const lines = data.split('\n').filter(line => line.trim() !== '');
             
@@ -1043,11 +1076,15 @@
                                     if (rvLabelIndex !== undefined) {
                                         const rvLabelValue = values[rvLabelIndex]?.trim().toUpperCase();
                                         if (rvLabelValue && rvLabelValue.includes('I')) {
-                                            techStats[techId].refixTasks += 1;
+                                            techStats[techId].refixTasks += 1; // Keep count for original summary
+                                            techStats[techId].refixDetails.push({ // Store detailed info
+                                                round: `RV${round}`,
+                                                project: currentProjectName
+                                            });
                                         }
                                     }
                                 }
-                            } else { 
+                            } else { // This is the 'fix1_id' section
                                 techStats[techId].fixTasks += 1;
                                 let totalRowFixPoints = 0;
                                 
@@ -1058,11 +1095,12 @@
                                     if (i3qaLabelValue && i3qaLabelValue.includes('M')) {
                                         const categoryValue = parseInt(values[i3qaCatIndex]);
                                         if (!isNaN(categoryValue) && categoryValue >= 1 && categoryValue <= 9) {
+                                            // Use the GSD-specific point value if available, fallback to "3in" if the selected GSD value is not found for the category
+                                            const catPoints = categoryValues[categoryValue] ? (categoryValues[categoryValue][gsdForCalculation] || categoryValues[categoryValue]["3in"]) : 0;
                                             if (techStats[techId].categoryCounts[categoryValue] !== undefined) {
                                                 techStats[techId].categoryCounts[categoryValue]++;
                                             }
-                                            const catInfo = categoryValues[categoryValue];
-                                            if (catInfo) { totalRowFixPoints += catInfo.points; }
+                                            if (catPoints) { totalRowFixPoints += catPoints; }
                                         }
                                     }
                                 }
@@ -1071,11 +1109,12 @@
                                     if (headerMap[catHeader] !== undefined) {
                                         const categoryValue = parseInt(values[headerMap[catHeader]]);
                                         if (!isNaN(categoryValue) && categoryValue >= 1 && categoryValue <= 9) {
+                                            // Use the GSD-specific point value if available
+                                            const catPoints = categoryValues[categoryValue] ? (categoryValues[categoryValue][gsdForCalculation] || categoryValues[categoryValue]["3in"]) : 0;
                                             if (techStats[techId].categoryCounts[categoryValue] !== undefined) {
                                                 techStats[techId].categoryCounts[categoryValue]++;
                                             }
-                                            const catInfo = categoryValues[categoryValue];
-                                            if (catInfo) { totalRowFixPoints += catInfo.points; }
+                                            if (catPoints) { totalRowFixPoints += catPoints; }
                                         }
                                     }
                                 });
@@ -1083,27 +1122,27 @@
                                 if (afp1StatIndex !== undefined && afp1CatIndex !== undefined && values[afp1StatIndex]?.trim().toUpperCase() === 'AA') {
                                     const afp1CatValue = parseInt(values[afp1CatIndex]);
                                     if (!isNaN(afp1CatValue) && afp1CatValue >= 1 && afp1CatValue <= 9) {
+                                        const catPoints = categoryValues[afp1CatValue] ? (categoryValues[afp1CatValue][gsdForCalculation] || categoryValues[afp1CatValue]["3in"]) : 0;
                                         if (techStats[techId].categoryCounts[afp1CatValue] !== undefined) {
                                             techStats[techId].categoryCounts[afp1CatValue]++;
                                         }
-                                        const catInfo = categoryValues[afp1CatValue];
-                                        if (catInfo) { totalRowFixPoints += catInfo.points; }
+                                        if (catPoints) { totalRowFixPoints += catPoints; }
                                     }
                                 }
                                 
                                 if (afp2StatIndex !== undefined && afp2CatIndex !== undefined && values[afp2StatIndex]?.trim().toUpperCase() === 'AA') {
                                     const afp2CatValue = parseInt(values[afp2CatIndex]);
                                      if (!isNaN(afp2CatValue) && afp2CatValue >= 1 && afp2CatValue <= 9) {
+                                        const catPoints = categoryValues[afp2CatValue] ? (categoryValues[afp2CatValue][gsdForCalculation] || categoryValues[afp2CatValue]["3in"]) : 0;
                                         if (techStats[techId].categoryCounts[afp2CatValue] !== undefined) {
                                             techStats[techId].categoryCounts[afp2CatValue]++;
                                         }
-                                        const catInfo = categoryValues[afp2CatValue];
-                                        if (catInfo) { totalRowFixPoints += catInfo.points; }
+                                        if (catPoints) { totalRowFixPoints += catPoints; }
                                     }
                                 }
 
                                 if (isFixTaskIR && totalRowFixPoints > 0) {
-                                    totalRowFixPoints *= irModifierValue;
+                                    totalRowFixPoints *= irModifierValue; // This is the project-level IR multiplier
                                 }
 
                                 techStats[techId].pointsBreakdown.fix += totalRowFixPoints;
@@ -1132,7 +1171,11 @@
                         const round = colName.match(/\d+/)[0];
                         const fixTechId = values[headerMap[`fix${round}_id`]]?.trim();
                         if (fixTechId && techStats[fixTechId]) {
-                            techStats[fixTechId].warnings.push(warnValue);
+                            // Store warning as an object with type and project name
+                            techStats[fixTechId].warnings.push({
+                                type: warnValue,
+                                project: currentProjectName
+                            });
                         }
                     }
                 });
@@ -1347,11 +1390,27 @@
                 ? `${lastUsedBonusMultiplier.toFixed(2)} (Multiplier)`
                 : '1 (No Multiplier Applied)';
 
-            const warningsText = warningsCount > 0 ? tech.warnings.join(', ') : 'None';
-            const warningsDisplayHtml = warningsCount > 0 
-                ? `<div class="flex justify-between"><span class="text-gray-600">Warnings:</span><span class="font-bold text-red-600">${warningsCount}</span></div>
-                   <div class="text-xs text-gray-500 text-right">(${warningsText})</div>`
-                : `<div class="flex justify-between"><span class="text-gray-600">Warnings:</span><span class="font-bold text-red-600">${warningsCount}</span></div>`;
+            let warningsDetailHtml = '';
+            if (tech.warnings.length > 0) {
+                warningsDetailHtml = `<ul class="list-disc list-inside text-xs text-gray-700 mt-1 space-y-0.5">`;
+                tech.warnings.forEach(w => {
+                    warningsDetailHtml += `<li>Type: <span class="font-mono font-semibold">${w.type}</span> (Project: ${w.project})</li>`;
+                });
+                warningsDetailHtml += `</ul>`;
+            } else {
+                warningsDetailHtml = `<p class="text-xs text-gray-500 italic mt-1 pl-4">No warnings recorded.</p>`;
+            }
+
+            let refixDetailHtml = '';
+            if (tech.refixDetails.length > 0) {
+                refixDetailHtml = `<ul class="list-disc list-inside text-xs text-gray-700 mt-1 space-y-0.5">`;
+                tech.refixDetails.forEach(r => {
+                    refixDetailHtml += `<li>Round: <span class="font-mono font-semibold">${r.round}</span> (Project: ${r.project})</li>`;
+                });
+                refixDetailHtml += `</ul>`;
+            } else {
+                refixDetailHtml = `<p class="text-xs text-gray-500 italic mt-1 pl-4">No refixes recorded.</p>`;
+            }
 
             let bodyHtml = `<div class="space-y-4 text-sm">
                 
@@ -1359,7 +1418,9 @@
                     <h4 class="font-semibold text-base text-gray-800 mb-2">Core Stats</h4>
                     <div class="flex justify-between"><span class="text-gray-600">Primary Fix Tasks:</span><span class="font-bold">${tech.fixTasks}</span></div>
                     <div class="flex justify-between"><span class="text-gray-600">Refix Tasks:</span><span class="font-bold">${tech.refixTasks}</span></div>
-                    ${warningsDisplayHtml}
+                    ${refixDetailHtml}
+                    <div class="flex justify-between mt-2"><span class="text-gray-600">Warnings:</span><span class="font-bold text-red-600">${tech.warnings.length}</span></div>
+                    ${warningsDetailHtml}
                     <details class="mt-2 text-xs">
                         <summary class="cursor-pointer font-medium text-gray-500">Show Category Counts</summary>
                         <ul class="list-disc list-inside mt-1 space-y-1 pl-2">${categoryHtml}</ul>
