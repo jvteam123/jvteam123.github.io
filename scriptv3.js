@@ -7,21 +7,17 @@
  * global variables, improves performance, and ensures correct
  * timezone handling.
  *
- * @version 3.5.0
+ * @version 3.5.1
  * @author Gemini AI Refactor & Bug-Fix
  * @changeLog
- * - ADDED: (User Request) Notification badge on the "Team Chat" button for new messages.
- * - ADDED: (User Request) Simple emoji parsing for chat messages (e.g., :) becomes 😊).
- * - UPDATED: (User Request) Increased chat history limit from 15 to 30 messages.
+ * - FIXED: (User Request) Corrected logic for the chat notification badge. It now only appears for new, incoming messages from other users and not on the initial load.
+ * - ADDED: Notification badge on the "Team Chat" button for new messages.
+ * - ADDED: Simple emoji parsing for chat messages (e.g., :) becomes 😊).
+ * - UPDATED: Increased chat history limit from 15 to 30 messages.
  * - ADDED: A "Team Chat" button and a fully functional, real-time chat modal powered by Firebase.
  * - ADDED: The chat automatically keeps the last 30 messages, deleting older ones to manage history.
  * - ADDED: User's Tech ID is used as their display name in the chat.
  * - ADDED: "Import Users" and "Export Users" buttons and functionality to the User Management modal.
- * - Import logic skips existing users to prevent duplicates.
- * - FIXED: Corrected a "TypeError: Cannot read properties of undefined (reading 'call')" error in the notification listener by explicitly binding the 'this' context.
- * - ADDED: Notifications now appear in a custom modal with a "View Project" button that filters the dashboard.
- * - ADDED: The number of notifications in Firestore is now automatically limited to 5.
- * - REFACTORED: Implemented a centralized user management system with add/edit/remove functionality.
  */
 document.addEventListener('DOMContentLoaded', () => {
 
@@ -106,6 +102,7 @@ document.addEventListener('DOMContentLoaded', () => {
             users: [],
             chatMessages: [], // To store chat messages
             hasUnreadMessages: false, // To track chat notifications
+            isInitialChatLoad: true, // Flag to prevent notification on initial load
             groupVisibilityState: {},
             isAppInitialized: false,
             editingUser: null,
@@ -2429,15 +2426,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 const chatRef = this.db.collection(this.config.firestorePaths.CHAT).orderBy("timestamp", "asc");
 
                 this.chatListenerUnsubscribe = chatRef.onSnapshot(snapshot => {
-                    snapshot.docChanges().forEach(change => {
-                        if (change.type === "added") {
-                            // If the chat window is closed, mark as unread
-                            if (self.elements.teamChatModal.style.display === 'none') {
-                                self.state.hasUnreadMessages = true;
-                                self.methods.updateChatBadgeVisibility.call(self);
+                    // This logic runs for every update, including the initial load.
+                    // We only want to trigger notifications for NEW messages after the app has loaded.
+                    if (self.state.isInitialChatLoad) {
+                        self.state.isInitialChatLoad = false; // Set flag to false after first snapshot
+                    } else {
+                        snapshot.docChanges().forEach(change => {
+                            if (change.type === "added") {
+                                const messageData = change.doc.data();
+                                // Only show badge if the modal is closed AND the message is from another user
+                                if (self.elements.teamChatModal.style.display === 'none' && messageData.techId !== self.state.currentUserTechId) {
+                                    self.state.hasUnreadMessages = true;
+                                    self.methods.updateChatBadgeVisibility.call(self);
+                                }
                             }
-                        }
-                    });
+                        });
+                    }
 
                     self.state.chatMessages = snapshot.docs.map(doc => ({
                         id: doc.id,
@@ -2458,7 +2462,8 @@ document.addEventListener('DOMContentLoaded', () => {
             renderChatMessages() {
                 if (!this.elements.chatMessagesContainer) return;
                 const container = this.elements.chatMessagesContainer;
-                const shouldScroll = container.scrollTop + container.clientHeight === container.scrollHeight;
+                // Check if user is scrolled to the bottom before re-rendering
+                const shouldScroll = container.scrollTop + container.clientHeight >= container.scrollHeight - 20;
                 
                 container.innerHTML = '';
 
@@ -2473,18 +2478,24 @@ document.addEventListener('DOMContentLoaded', () => {
                         hour: '2-digit',
                         minute: '2-digit'
                     }) : '';
+                    
+                    // Create a text node for the message to prevent HTML injection
+                    const messageTextNode = document.createTextNode(msg.text);
+                    const messageParagraph = document.createElement('p');
+                    messageParagraph.className = 'message-text';
+                    messageParagraph.appendChild(messageTextNode);
 
                     msgDiv.innerHTML = `
                         <div class="message-header">
                             <span class="message-user">${msg.techId || 'Anonymous'}</span>
                             <span class="message-time">${time}</span>
                         </div>
-                        <p class="message-text">${msg.text}</p>
                     `;
+                    msgDiv.appendChild(messageParagraph);
                     container.appendChild(msgDiv);
                 });
 
-                // Scroll to the bottom if it was already at the bottom
+                // Scroll to the bottom only if it was already near the bottom or if the modal is visible
                 if (shouldScroll || this.elements.teamChatModal.style.display !== 'none') {
                      container.scrollTop = container.scrollHeight;
                 }
