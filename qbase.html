@@ -36,7 +36,6 @@
         .info-icon:hover {
             color: #1d4ed8;
         }
-        /* MODIFIED: Updated modal styles for reordering and info */
         .modal-overlay {
             position: fixed;
             top: 0;
@@ -74,41 +73,25 @@
         #update-notification {
             transition: opacity 0.5s, transform 0.5s;
         }
-        #project-list {
-            height: 10rem;
-            background-color: white;
-            border: 1px solid #d1d5db;
-            border-radius: 0.5rem;
-            overflow-y: auto;
-            padding: 0.5rem;
-        }
-        .project-list-item {
+        /* Styles for the reorder modal list */
+        #reorder-list .project-list-item {
             padding: 0.5rem 0.75rem;
             border-radius: 0.375rem;
-            cursor: pointer; /* Changed from grab to pointer for selection */
-            margin-bottom: 0.25rem;
-            transition: background-color 0.2s;
-        }
-        .project-list-item:last-child {
-            margin-bottom: 0;
-        }
-        .project-list-item:hover {
-            background-color: #f3f4f6;
-        }
-        .project-list-item.selected {
-            background-color: #3b82f6;
-            color: white;
-            font-weight: 600;
-        }
-        /* NEW: Styles for the draggable list inside the modal */
-        #reorder-list .project-list-item {
             cursor: grab;
+            margin-bottom: 0.25rem;
+            background-color: #f9fafb;
+            border: 1px solid #e5e7eb;
         }
         .sortable-ghost {
             opacity: 0.4;
             background: #c7d2fe;
         }
-
+        /* Style for multi-select dropdown */
+        select[multiple] {
+            height: 10rem;
+            background-color: white;
+            padding: 0.5rem;
+        }
         details > summary { list-style: none; }
         details > summary::-webkit-details-marker { display: none; }
         details > summary::before {
@@ -152,9 +135,9 @@
                         </div>
                         
                          <div class="flex items-center gap-2">
-                            <div id="project-list" class="w-full">
-                                <p class="text-gray-500 text-sm p-2">Loading Projects...</p>
-                            </div>
+                            <select id="project-select" class="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all duration-300">
+                                <option value="">Loading Projects...</option>
+                            </select>
                              <button id="delete-project-btn" title="Delete Selected Project" class="p-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:bg-red-300 transition-colors">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>
                              </button>
@@ -167,7 +150,7 @@
                          <div class="mt-4 border-t pt-4">
                              <div class="flex items-center">
                                 <input id="customize-calc-all-cb" type="checkbox" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded">
-                                <label for="customize-calc-all-cb" class="ml-3 block text-sm font-medium text-gray-700">Select multiple projects to calculate</label>
+                                <label for="customize-calc-all-cb" class="ml-3 block text-sm font-medium text-gray-700">Select specific projects to calculate</label>
                             </div>
                             <button id="calculate-all-btn" class="mt-2 w-full bg-green-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-700 transition-colors duration-300 shadow-md">Calculate All Projects</button>
                         </div>
@@ -329,7 +312,6 @@
         let isEditMode = false;
         let unsubscribe;
         let teamSettings = {};
-        let selectedProjectId = null;
         let reorderSortable = null;
 
         // --- DATA FROM DOCUMENTATION ---
@@ -456,7 +438,7 @@
                     loadedProjects[doc.id] = project;
                 });
                 savedProjects = loadedProjects;
-                updateProjectList();
+                updateProjectDropdown();
                 if (!isInitialLoad) {
                     showUpdateNotification();
                 }
@@ -478,9 +460,10 @@
             }
         }
 
-        function updateProjectList() {
-            const projectList = document.getElementById('project-list');
-            projectList.innerHTML = '';
+        function updateProjectDropdown() {
+            const projectSelect = document.getElementById('project-select');
+            const currentVal = projectSelect.value;
+            projectSelect.innerHTML = '<option value="">Select a Project</option>';
 
             const sortedProjects = Object.values(savedProjects).sort((a, b) => {
                 const orderA = a.projectOrder ?? Infinity;
@@ -488,36 +471,29 @@
                 if (orderA !== orderB) return orderA - orderB;
                 return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
             });
-
-            if (sortedProjects.length === 0) {
-                projectList.innerHTML = '<p class="text-gray-500 text-sm p-2">No projects found.</p>';
-                return;
-            }
             
-            const selectedBeforeUpdate = Array.from(document.querySelectorAll('#project-list .project-list-item.selected')).map(el => el.dataset.id);
-
             sortedProjects.forEach(project => {
-                const item = document.createElement('div');
-                item.className = 'project-list-item';
-                item.dataset.id = project.id;
-                
+                const option = document.createElement('option');
+                option.value = project.id;
                 const displayName = project.isCorrupted ? `${project.name} (Data Corrupted)` : (project.isIR ? `${project.name} (IR)` : project.name);
-                item.textContent = displayName;
-
-                if (project.isCorrupted) item.classList.add('text-red-500', 'font-bold');
-                
-                if (selectedBeforeUpdate.includes(project.id)) {
-                    item.classList.add('selected');
+                option.textContent = displayName;
+                if (project.isCorrupted) {
+                    option.classList.add('text-red-500', 'font-bold');
                 }
-
-                projectList.appendChild(item);
+                projectSelect.appendChild(option);
             });
+
+            if (savedProjects[currentVal]) {
+                projectSelect.value = currentVal;
+            }
             manageButtonState();
         }
         
         function manageButtonState() {
             const projectDataEntry = document.getElementById('project-data-entry');
             const mainGrid = document.getElementById('main-grid');
+            const projectSelect = document.getElementById('project-select');
+            const projectId = projectSelect.value;
             const techData = document.getElementById('techData');
             const calcPastedDataBtn = document.getElementById('calculatePastedDataBtn');
             const gsdValueSelect = document.getElementById('gsd-value-select');
@@ -527,13 +503,11 @@
             mainGrid.classList.toggle('lg:grid-cols-1', !isAdmin);
             mainGrid.classList.toggle('lg:grid-cols-5', isAdmin);
             reorderBtn.classList.toggle('hidden', !isAdmin);
-
-            const hasSelection = document.querySelector('#project-list .selected') !== null;
-
-            document.getElementById('delete-project-btn').disabled = !isAdmin || !hasSelection;
-            document.getElementById('edit-data-btn').classList.toggle('hidden', !isAdmin || !hasSelection);
-            document.getElementById('save-project-btn').disabled = !isAdmin || (hasSelection && !isEditMode);
-            techData.readOnly = !isAdmin || (hasSelection && !isEditMode);
+            
+            document.getElementById('delete-project-btn').disabled = !isAdmin || !projectId;
+            document.getElementById('edit-data-btn').classList.toggle('hidden', !isAdmin || !projectId);
+            document.getElementById('save-project-btn').disabled = !isAdmin || (projectId && !isEditMode);
+            techData.readOnly = !isAdmin || (projectId && !isEditMode);
             document.getElementById('is-ir-project-checkbox').disabled = !isAdmin;
             gsdValueSelect.disabled = !isAdmin;
 
@@ -552,7 +526,6 @@
                 document.getElementById('admin-dashboard').classList.add('visible');
                 await loadTeamSettings();
                 manageButtonState();
-                updateProjectList();
                 alert("Admin Mode Activated.");
             } else if (user || pass) {
                 alert("Incorrect username or password.");
@@ -566,7 +539,6 @@
             document.getElementById('admin-login-btn').classList.remove('hidden');
             document.getElementById('admin-dashboard').classList.remove('visible');
             manageButtonState();
-            updateProjectList();
             alert("You have been logged out.");
         }
 
@@ -579,23 +551,6 @@
                     setTimeout(() => notification.classList.add('hidden'), 500);
                 }, 3000);
             }
-        }
-        
-        function loadProjectDataIntoForm(projectId) {
-            isEditMode = false;
-            const project = savedProjects[projectId];
-            if (project) {
-                document.getElementById('techData').value = project.rawData;
-                document.getElementById('project-name').value = project.name;
-                document.getElementById('is-ir-project-checkbox').checked = project.isIR || false;
-                document.getElementById('gsd-value-select').value = project.gsdValue || '3in';
-            } else {
-                document.getElementById('techData').value = '';
-                document.getElementById('project-name').value = '';
-                document.getElementById('is-ir-project-checkbox').checked = false;
-                document.getElementById('gsd-value-select').value = '3in';
-            }
-            manageButtonState();
         }
 
         document.addEventListener('DOMContentLoaded', () => {
@@ -640,7 +595,7 @@
                 const rawData = document.getElementById('techData').value.trim();
                 const isIR = document.getElementById('is-ir-project-checkbox').checked;
                 const gsdValue = document.getElementById('gsd-value-select').value;
-                const projIdToSave = selectedProjectId;
+                const projIdToSave = document.getElementById('project-select').value;
 
                 if (projectName.length > 50) return alert("Project name cannot exceed 50 characters.");
                 if (!projectName || !rawData) return alert("Please enter a project name and paste project data.");
@@ -661,46 +616,41 @@
                 if (await saveProjectToFirestore(projectData)) {
                     alert(`Project "${projectName}" saved successfully.`);
                     isEditMode = false;
-                    selectedProjectId = id;
+                    document.getElementById('project-select').value = id;
                     manageButtonState();
                 }
             });
             
             document.getElementById('delete-project-btn').addEventListener('click', async () => {
                 if (!isAdmin) return;
-                const selectedItems = document.querySelectorAll('#project-list .project-list-item.selected');
-                if (selectedItems.length === 0) return;
+                const projectId = document.getElementById('project-select').value;
+                if (!projectId) return;
                 
-                const projectsToDelete = Array.from(selectedItems).map(item => ({
-                    id: item.dataset.id,
-                    name: savedProjects[item.dataset.id].name
-                }));
-                
-                const names = projectsToDelete.map(p => p.name).join('", "');
-                if (confirm(`Are you sure you want to delete "${names}"? This action cannot be undone.`)) {
-                    const batch = writeBatch(db);
-                    projectsToDelete.forEach(p => batch.delete(doc(db, "public_projects", p.id)));
-                    await batch.commit();
-                    alert(`Deleted ${projectsToDelete.length} project(s).`);
-                    selectedProjectId = null;
-                    loadProjectDataIntoForm(null);
+                const projectName = savedProjects[projectId].name;
+                if (confirm(`Are you sure you want to delete the project "${projectName}"? This action cannot be undone.`)) {
+                    if (await deleteProjectFromFirestore(projectId)) {
+                        alert(`Project "${projectName}" has been deleted.`);
+                        document.getElementById('techData').value = '';
+                        document.getElementById('project-name').value = '';
+                    }
                 }
             });
 
-            document.getElementById('project-list').addEventListener('click', (e) => {
-                const item = e.target.closest('.project-list-item');
-                if (!item) return;
+            document.getElementById('project-select').addEventListener('change', (e) => {
+                const projectId = e.target.value;
+                isEditMode = false;
 
-                const projectId = item.dataset.id;
-                const isMultiSelect = document.getElementById('customize-calc-all-cb').checked;
-
-                if (isMultiSelect) {
-                    item.classList.toggle('selected');
+                if (projectId && savedProjects[projectId]) {
+                    const project = savedProjects[projectId];
+                    document.getElementById('techData').value = project.rawData;
+                    document.getElementById('project-name').value = project.name;
+                    document.getElementById('is-ir-project-checkbox').checked = project.isIR || false;
+                    document.getElementById('gsd-value-select').value = project.gsdValue || '3in';
                 } else {
-                    document.querySelectorAll('.project-list-item.selected').forEach(el => el.classList.remove('selected'));
-                    item.classList.add('selected');
-                    selectedProjectId = projectId;
-                    loadProjectDataIntoForm(projectId);
+                    document.getElementById('techData').value = '';
+                    document.getElementById('project-name').value = '';
+                    document.getElementById('is-ir-project-checkbox').checked = false;
+                    document.getElementById('gsd-value-select').value = '3in';
                 }
                 manageButtonState();
             });
@@ -716,9 +666,8 @@
             
             document.getElementById('calculate-all-btn').addEventListener('click', () => {
                 const isCustomized = document.getElementById('customize-calc-all-cb').checked;
-                const selectedProjectIds = Array.from(document.querySelectorAll('#project-list .project-list-item.selected')).map(opt => opt.dataset.id);
-
                 if (isCustomized) {
+                    const selectedProjectIds = [...document.getElementById('project-select').selectedOptions].map(opt => opt.value).filter(Boolean);
                     if (selectedProjectIds.length === 0) return alert('Please select one or more projects to calculate.');
                     calculateAndRender(true, selectedProjectIds);
                 } else {
@@ -727,20 +676,21 @@
             });
 
             document.getElementById('customize-calc-all-cb').addEventListener('change', (e) => {
+                const projectSelect = document.getElementById('project-select');
                 const calcCurrentBtn = document.getElementById('calculateCurrentBtn');
                 const calcAllBtn = document.getElementById('calculate-all-btn');
-                const selectedItems = document.querySelectorAll('.project-list-item.selected');
 
                 if (e.target.checked) {
+                    projectSelect.multiple = true;
+                    projectSelect.size = 8;
                     calcCurrentBtn.disabled = true;
-                    calcAllBtn.textContent = 'Calculate Selected Projects';
+                    calcAllBtn.textContent = 'Calculate Checked Projects';
                 } else {
+                    projectSelect.multiple = false;
+                    projectSelect.size = 1;
                     calcCurrentBtn.disabled = false;
                     calcAllBtn.textContent = 'Calculate All Projects';
-                    selectedItems.forEach((item, i) => { if (i > 0) item.classList.remove('selected'); });
-                    selectedProjectId = selectedItems.length > 0 ? selectedItems[0].dataset.id : null;
                 }
-                manageButtonState();
             });
 
             document.getElementById('calculatePastedDataBtn').addEventListener('click', calculatePastedData);
@@ -834,8 +784,9 @@
                 renderSingleProjectTable(currentTechStats, bonusMultiplier);
                 renderTlSummary(combinedSummaryStats);
             } else {
-                if (!selectedProjectId) return alert("Please select a project to calculate.");
-                const project = savedProjects[selectedProjectId];
+                const projectId = document.getElementById('project-select').value;
+                if (!projectId) return alert("Please select a project to calculate.");
+                const project = savedProjects[projectId];
                 if (project.isCorrupted) return alert(`Cannot calculate corrupted project "${project.name}".`);
 
                 resultsTitleEl.textContent = `Project: ${project.name} - Bonus Results ${isMultiplierUsed ? `(Multiplier: ${bonusMultiplier})` : ''}`;
@@ -1388,7 +1339,7 @@
 
         function openReorderModal() {
             const reorderList = document.getElementById('reorder-list');
-            reorderList.innerHTML = ''; // Clear previous list
+            reorderList.innerHTML = '';
 
             const sortedProjects = Object.values(savedProjects).sort((a, b) => {
                 const orderA = a.projectOrder ?? Infinity;
