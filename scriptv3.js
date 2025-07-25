@@ -7,13 +7,16 @@
  * global variables, improves performance, and ensures correct
  * timezone handling.
  *
- * @version 3.4.0
+ * @version 3.5.0
  * @author Gemini AI Refactor & Bug-Fix
  * @changeLog
- * - ADDED: (User Request) A "Team Chat" button and a fully functional, real-time chat modal powered by Firebase.
- * - ADDED: The chat automatically keeps the last 15 messages, deleting older ones to manage history.
+ * - ADDED: (User Request) Notification badge on the "Team Chat" button for new messages.
+ * - ADDED: (User Request) Simple emoji parsing for chat messages (e.g., :) becomes 😊).
+ * - UPDATED: (User Request) Increased chat history limit from 15 to 30 messages.
+ * - ADDED: A "Team Chat" button and a fully functional, real-time chat modal powered by Firebase.
+ * - ADDED: The chat automatically keeps the last 30 messages, deleting older ones to manage history.
  * - ADDED: User's Tech ID is used as their display name in the chat.
- * - ADDED: (User Request) "Import Users" and "Export Users" buttons and functionality to the User Management modal.
+ * - ADDED: "Import Users" and "Export Users" buttons and functionality to the User Management modal.
  * - Import logic skips existing users to prevent duplicates.
  * - FIXED: Corrected a "TypeError: Cannot read properties of undefined (reading 'call')" error in the notification listener by explicitly binding the 'this' context.
  * - ADDED: Notifications now appear in a custom modal with a "View Project" button that filters the dashboard.
@@ -44,7 +47,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 CHAT: "chat" // Path for chat messages
             },
             chat: {
-                MAX_MESSAGES: 15 // Max number of chat messages to keep
+                MAX_MESSAGES: 30 // Max number of chat messages to keep
             },
             FIX_CATEGORIES: {
                 ORDER: ["Fix1", "Fix2", "Fix3", "Fix4", "Fix5", "Fix6"],
@@ -102,6 +105,7 @@ document.addEventListener('DOMContentLoaded', () => {
             projects: [],
             users: [],
             chatMessages: [], // To store chat messages
+            hasUnreadMessages: false, // To track chat notifications
             groupVisibilityState: {},
             isAppInitialized: false,
             editingUser: null,
@@ -226,6 +230,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     chatMessagesContainer: document.getElementById('chatMessagesContainer'),
                     chatMessageForm: document.getElementById('chatMessageForm'),
                     chatMessageInput: document.getElementById('chatMessageInput'),
+                    chatNotificationBadge: document.getElementById('chatNotificationBadge'),
                 };
             },
 
@@ -285,6 +290,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Team Chat event listeners
                 attachClick(self.elements.openTeamChatBtn, () => {
                     self.elements.teamChatModal.style.display = 'block';
+                    self.state.hasUnreadMessages = false; // Mark as read
+                    self.methods.updateChatBadgeVisibility.call(self); // Hide badge
                     self.elements.chatMessagesContainer.scrollTop = self.elements.chatMessagesContainer.scrollHeight;
                 });
                 attachClick(self.elements.closeTeamChatBtn, () => {
@@ -2399,7 +2406,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             <div class="modal-body">
                                 <div id="chatMessagesContainer" class="chat-messages"></div>
                                 <form id="chatMessageForm" class="chat-form">
-                                    <input type="text" id="chatMessageInput" placeholder="Type a message..." autocomplete="off" required>
+                                    <input type="text" id="chatMessageInput" placeholder="Type a message... (try 'lol' or ':)')" autocomplete="off" required>
                                     <button type="submit" class="btn btn-primary">Send</button>
                                 </form>
                             </div>
@@ -2422,6 +2429,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 const chatRef = this.db.collection(this.config.firestorePaths.CHAT).orderBy("timestamp", "asc");
 
                 this.chatListenerUnsubscribe = chatRef.onSnapshot(snapshot => {
+                    snapshot.docChanges().forEach(change => {
+                        if (change.type === "added") {
+                            // If the chat window is closed, mark as unread
+                            if (self.elements.teamChatModal.style.display === 'none') {
+                                self.state.hasUnreadMessages = true;
+                                self.methods.updateChatBadgeVisibility.call(self);
+                            }
+                        }
+                    });
+
                     self.state.chatMessages = snapshot.docs.map(doc => ({
                         id: doc.id,
                         ...doc.data()
@@ -2432,9 +2449,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             },
 
+            updateChatBadgeVisibility() {
+                if (this.elements.chatNotificationBadge) {
+                    this.elements.chatNotificationBadge.style.display = this.state.hasUnreadMessages ? 'block' : 'none';
+                }
+            },
+
             renderChatMessages() {
                 if (!this.elements.chatMessagesContainer) return;
                 const container = this.elements.chatMessagesContainer;
+                const shouldScroll = container.scrollTop + container.clientHeight === container.scrollHeight;
+                
                 container.innerHTML = '';
 
                 this.state.chatMessages.forEach(msg => {
@@ -2459,20 +2484,45 @@ document.addEventListener('DOMContentLoaded', () => {
                     container.appendChild(msgDiv);
                 });
 
-                // Scroll to the bottom
-                container.scrollTop = container.scrollHeight;
+                // Scroll to the bottom if it was already at the bottom
+                if (shouldScroll || this.elements.teamChatModal.style.display !== 'none') {
+                     container.scrollTop = container.scrollHeight;
+                }
+            },
+            
+            parseEmojis(text) {
+                const emojiMap = {
+                    ":)": "😊", ":-)": "😊",
+                    ":(": "😢", ":-(": "😢",
+                    ":D": "😄", ":-D": "😄",
+                    "lol": "😂",
+                    "<3": "❤️",
+                    ":p": "😛", ":-p": "😛",
+                    ";)": "😉", ";-)": "😉",
+                    ":o": "😮", ":-o": "😮",
+                    "yay": "🎉",
+                    "wow": "🤩",
+                    "ok": "👍",
+                    "tada": "🎉"
+                };
+                // Use a regex to replace all occurrences, case-insensitively for text
+                const regex = new RegExp(Object.keys(emojiMap).map(e => e.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')).join("|"), "gi");
+                return text.replace(regex, (match) => emojiMap[match.toLowerCase()]);
             },
 
             async handleSendMessage(event) {
                 event.preventDefault();
                 const input = this.elements.chatMessageInput;
-                const messageText = input.value.trim();
+                let messageText = input.value.trim();
 
                 if (!messageText) return;
                 if (!this.state.currentUserTechId) {
                     alert("Cannot send message. Your user ID is not set.");
                     return;
                 }
+                
+                // Parse emojis before sending
+                messageText = this.methods.parseEmojis.call(this, messageText);
 
                 const messageData = {
                     text: messageText,
@@ -2499,7 +2549,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     if (messageCount > this.config.chat.MAX_MESSAGES) {
                         const toDeleteCount = messageCount - this.config.chat.MAX_MESSAGES;
-                        const toDelete = snapshot.docs.slice(this.config.chat.MAX_MESSAGES); // Oldest messages are at the end
+                        // Oldest messages are at the end because of "desc" order
+                        const toDelete = snapshot.docs.slice(this.config.chat.MAX_MESSAGES); 
 
                         const batch = this.db.batch();
                         toDelete.forEach(doc => {
