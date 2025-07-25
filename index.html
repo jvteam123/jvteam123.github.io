@@ -373,14 +373,16 @@
         .btn-warning:hover { background-color: #e67e22; }
         .btn-info { background-color: #17a2b8; color: white; }
         .btn-info:hover { background-color: #138496; }
+        .btn-secondary { background-color: #6c757d; color: white; } .btn-secondary:hover { background-color: #5a6268; }
         .btn:disabled { background-color: #bdc3c7 !important; color: #7f8c8d !important; cursor: not-allowed; }
         .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.5); }
         .modal-content { background-color: #fefefe; margin: 5% auto; padding: 15px; border: 1px solid #888; width: 90%; border-radius: 5px; position: relative; }
+        .modal-content.large { max-width: 800px; } /* For larger modals like chat */
         #projectFormModal .modal-content { max-width: 480px; }
         #tlDashboardModal .modal-content { max-width: 750px; max-height: 85vh; overflow-y: auto;}
         #settingsModal .modal-content { max-width: 700px; max-height: 85vh; overflow-y: auto;} /* MODIFIED: Increased width for new layout */
         #importCsvModal .modal-content { max-width: 500px; } /* Added for Import CSV Modal */
-        .close-button { color: #aaa; float: right; font-size: 24px; font-weight: bold; } .close-button:hover, .close-button:focus { color: black; text-decoration: none; cursor: pointer; }
+        .close-btn { color: #aaa; float: right; font-size: 28px; font-weight: bold; } .close-btn:hover, .close-btn:focus { color: black; text-decoration: none; cursor: pointer; }
         #newProjectForm label { display: block; margin-top: 8px; font-weight: bold; font-size: 0.85em;}
         #newProjectForm input[type="text"], #newProjectForm input[type="number"], #newProjectForm select, .form-control { width: calc(100% - 18px); padding: 7px; margin-top: 3px; border: 1px solid #ddd; border-radius: 3px; box-sizing: border-box; font-size: 0.85em; }
         #newProjectForm button[type="submit"] { margin-top: 12px; }
@@ -481,6 +483,68 @@
         }
         /* === END: NEW STYLES FOR USER MANAGEMENT === */
 
+        /* === START: NEW STYLES FOR TEAM CHAT === */
+        .chat-messages {
+            height: 400px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 10px;
+            margin-bottom: 10px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            background-color: #f9f9f9;
+        }
+        .chat-message {
+            max-width: 75%;
+            padding: 8px 12px;
+            border-radius: 15px;
+            margin-bottom: 10px;
+            word-wrap: break-word;
+        }
+        .chat-message.current-user {
+            background-color: #007bff;
+            color: white;
+            align-self: flex-end;
+            border-bottom-right-radius: 3px;
+        }
+        .chat-message:not(.current-user) {
+            background-color: #e9ecef;
+            color: #333;
+            align-self: flex-start;
+            border-bottom-left-radius: 3px;
+        }
+        .message-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 4px;
+            font-size: 0.8em;
+        }
+        .message-user {
+            font-weight: bold;
+        }
+        .message-time {
+            color: #888;
+        }
+        .chat-message.current-user .message-time {
+            color: #e0e0e0;
+        }
+        .message-text {
+            margin: 0;
+            font-size: 0.95em;
+        }
+        .chat-form {
+            display: flex;
+        }
+        #chatMessageInput {
+            flex-grow: 1;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            margin-right: 10px;
+        }
+        /* === END: NEW STYLES FOR TEAM CHAT === */
+
     </style>
     <link rel="icon" type="image/png" href="icon.png">
 </head>
@@ -528,13 +592,14 @@
                 <button id="openTlDashboardBtn" class="btn btn-primary btn-lg">👑 Project Settings</button>
                 <button id="openSettingsBtn" class="btn btn-info btn-lg" style="display:none;">⚙️ User Settings</button>
                 <button id="openTlSummaryBtn" class="btn btn-info btn-lg">📝 TL Summary</button>
+                <button id="openTeamChatBtn" class="btn btn-secondary btn-lg">💬 Team Chat</button>
                 <button id="exportCsvBtn" class="btn btn-info btn-lg" style="margin-left: 10px;">📊 Export to CSV</button>
                 <button id="openImportCsvBtn" class="btn btn-secondary btn-lg" style="margin-left: 10px;">📥 Import CSV</button> 
                 <a href="https://jvteam123.github.io/qbase" target="_blank" class="btn btn-warning btn-lg" style="text-decoration: none; margin-left: 10px;">Estimate Bunos</a>
             </div>
             <div id="projectFormModal" class="modal">
                 <div class="modal-content">
-                    <span class="close-button" id="closeProjectFormBtn">&times;</span>
+                    <span class="close-btn" id="closeProjectFormBtn">&times;</span>
                     <h2>Add New Tracker</h2>
                     <form id="newProjectForm">
                         <label for="numRows">Number of Area:</label>
@@ -554,14 +619,14 @@
             </div>
             <div id="tlDashboardModal" class="modal">
                 <div class="modal-content">
-                    <span class="close-button" id="closeTlDashboardBtn">&times;</span>
+                    <span class="close-btn" id="closeTlDashboardBtn">&times;</span>
                     <h2>👑 Project Settings</h2>
                     <div id="tlDashboardContent"></div>
                 </div>
             </div>
             <div id="settingsModal" class="modal">
                 <div class="modal-content">
-                    <span class="close-button" id="closeSettingsBtn">&times;</span>
+                    <span class="close-btn" id="closeSettingsBtn">&times;</span>
                     <div class="user-management-header">
                         <h2>⚙️ User Management</h2>
                         <div>
@@ -606,7 +671,7 @@
             </div>
             <div id="tlSummaryModal" class="modal">
                 <div class="modal-content">
-                    <span class="close-button" id="closeTlSummaryBtn">&times;</span>
+                    <span class="close-btn" id="closeTlSummaryBtn">&times;</span>
                     <div class="summary-header">
                         <h2 class="summary-title">TL Summary</h2>
                     </div>
@@ -617,7 +682,7 @@
             </div>
             <div id="importCsvModal" class="modal">
                 <div class="modal-content">
-                    <span class="close-button" id="closeImportCsvBtn">&times;</span>
+                    <span class="close-btn" id="closeImportCsvBtn">&times;</span>
                     <h2>📥 Import Projects from CSV</h2>
                     <p>Upload a CSV file. The file should have headers matching the export format.</p>
                     <input type="file" id="csvFileInput" accept=".csv" style="margin-bottom: 15px;">
