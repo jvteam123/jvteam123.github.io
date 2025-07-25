@@ -7,9 +7,12 @@
  * global variables, improves performance, and ensures correct
  * timezone handling.
  *
- * @version 3.3.0
+ * @version 3.4.0
  * @author Gemini AI Refactor & Bug-Fix
  * @changeLog
+ * - ADDED: (User Request) A "Team Chat" button and a fully functional, real-time chat modal powered by Firebase.
+ * - ADDED: The chat automatically keeps the last 15 messages, deleting older ones to manage history.
+ * - ADDED: User's Tech ID is used as their display name in the chat.
  * - ADDED: (User Request) "Import Users" and "Export Users" buttons and functionality to the User Management modal.
  * - Import logic skips existing users to prevent duplicates.
  * - FIXED: Corrected a "TypeError: Cannot read properties of undefined (reading 'call')" error in the notification listener by explicitly binding the 'this' context.
@@ -37,7 +40,11 @@ document.addEventListener('DOMContentLoaded', () => {
             },
             firestorePaths: {
                 USERS: "users",
-                NOTIFICATIONS: "notifications"
+                NOTIFICATIONS: "notifications",
+                CHAT: "chat" // Path for chat messages
+            },
+            chat: {
+                MAX_MESSAGES: 15 // Max number of chat messages to keep
             },
             FIX_CATEGORIES: {
                 ORDER: ["Fix1", "Fix2", "Fix3", "Fix4", "Fix5", "Fix6"],
@@ -88,14 +95,17 @@ document.addEventListener('DOMContentLoaded', () => {
         auth: null,
         firestoreListenerUnsubscribe: null,
         notificationListenerUnsubscribe: null,
+        chatListenerUnsubscribe: null, // Unsubscriber for chat listener
 
         // --- 3. APPLICATION STATE ---
         state: {
             projects: [],
-            users: [], 
+            users: [],
+            chatMessages: [], // To store chat messages
             groupVisibilityState: {},
             isAppInitialized: false,
             editingUser: null,
+            currentUserTechId: null, // Store the current user's tech ID
             filters: {
                 batchId: localStorage.getItem('currentSelectedBatchId') || "",
                 fixCategory: "",
@@ -130,6 +140,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 this.auth = firebase.auth();
                 console.log("Firebase initialized successfully!");
 
+                this.methods.injectChatModalHTML.call(this); // Inject Chat HTML first
                 this.methods.setupDOMReferences.call(this);
                 this.methods.injectNotificationStyles.call(this);
                 this.methods.loadColumnVisibilityState.call(this);
@@ -207,6 +218,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     importUsersBtn: document.getElementById('importUsersBtn'),
                     exportUsersBtn: document.getElementById('exportUsersBtn'),
                     userCsvInput: document.getElementById('userCsvInput'),
+
+                    // Team Chat DOM elements
+                    openTeamChatBtn: document.getElementById('openTeamChatBtn'),
+                    teamChatModal: document.getElementById('teamChatModal'),
+                    closeTeamChatBtn: document.getElementById('closeTeamChatBtn'),
+                    chatMessagesContainer: document.getElementById('chatMessagesContainer'),
+                    chatMessageForm: document.getElementById('chatMessageForm'),
+                    chatMessageInput: document.getElementById('chatMessageInput'),
                 };
             },
 
@@ -262,6 +281,19 @@ document.addEventListener('DOMContentLoaded', () => {
                     self.elements.tlSummaryModal.style.display = 'block';
                     self.methods.generateTlSummaryData.call(self);
                 });
+
+                // Team Chat event listeners
+                attachClick(self.elements.openTeamChatBtn, () => {
+                    self.elements.teamChatModal.style.display = 'block';
+                    self.elements.chatMessagesContainer.scrollTop = self.elements.chatMessagesContainer.scrollHeight;
+                });
+                attachClick(self.elements.closeTeamChatBtn, () => {
+                    self.elements.teamChatModal.style.display = 'none';
+                });
+                if (self.elements.chatMessageForm) {
+                    self.elements.chatMessageForm.addEventListener('submit', self.methods.handleSendMessage.bind(self));
+                }
+
 
                 attachClick(self.elements.exportCsvBtn, self.methods.handleExportCsv.bind(self));
 
@@ -386,6 +418,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (event.target == self.elements.settingsModal) self.elements.settingsModal.style.display = 'none';
                     if (event.target == self.elements.tlSummaryModal) self.elements.tlSummaryModal.style.display = 'none';
                     if (event.target == self.elements.importCsvModal) self.elements.importCsvModal.style.display = 'none';
+                    if (event.target == self.elements.teamChatModal) self.elements.teamChatModal.style.display = 'none';
                 };
             },
 
@@ -413,11 +446,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 this.auth.onAuthStateChanged(async (user) => {
                     if (user) {
                         this.methods.showLoading.call(this, "Checking authorization...");
-                        await this.methods.fetchUsers.call(this); 
+                        await this.methods.fetchUsers.call(this);
                         const userEmailLower = user.email ? user.email.toLowerCase() : "";
                         const authorizedUser = this.state.users.find(u => u.email.toLowerCase() === userEmailLower);
 
                         if (authorizedUser) {
+                            this.state.currentUserTechId = authorizedUser.techId; // Set current user's tech ID
                             this.methods.handleAuthorizedUser.call(this, user);
                         } else {
                             alert("Access Denied: Your email address is not authorized for this application.");
@@ -449,6 +483,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     this.methods.initializeFirebaseAndLoadData.call(this);
                     this.state.isAppInitialized = true;
                     this.methods.listenForNotifications.call(this);
+                    this.methods.listenForChatMessages.call(this); // Start listening for chat messages
                 }
             },
 
@@ -463,6 +498,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 this.elements.loadingAuthMessageDiv.innerHTML = "<p>Please sign in to access the Project Tracker.</p>";
                 this.elements.loadingAuthMessageDiv.style.display = 'block';
                 if (this.elements.openSettingsBtn) this.elements.openSettingsBtn.style.display = 'none';
+                this.state.currentUserTechId = null; // Clear tech ID on sign out
 
                 if (this.firestoreListenerUnsubscribe) {
                     this.firestoreListenerUnsubscribe();
@@ -471,6 +507,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (this.notificationListenerUnsubscribe) {
                     this.notificationListenerUnsubscribe();
                     this.notificationListenerUnsubscribe = null;
+                }
+                if (this.chatListenerUnsubscribe) { // Stop chat listener
+                    this.chatListenerUnsubscribe();
+                    this.chatListenerUnsubscribe = null;
                 }
                 this.state.isAppInitialized = false;
             },
@@ -701,7 +741,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     this.methods.hideLoading.call(this);
                     return;
                 }
-                
+
                 try {
                     const message = `A new project "${baseProjectName}" with ${numRows} areas has been added!`;
                     await this.methods.createNotification.call(this, message, "new_project", baseProjectName);
@@ -709,7 +749,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const batchId = `batch_${this.methods.generateId.call(this)}`;
                     const creationTimestamp = firebase.firestore.FieldValue.serverTimestamp();
                     const batch = this.db.batch();
-                    
+
                     for (let i = 1; i <= numRows; i++) {
                         const projectData = {
                             batchId,
@@ -986,7 +1026,7 @@ document.addEventListener('DOMContentLoaded', () => {
             renderProjects() {
                 if (!this.elements.projectTableBody) return;
                 this.elements.projectTableBody.innerHTML = "";
-            
+
                 const sortedProjects = [...this.state.projects].sort((a, b) => {
                     const nameA = a.baseProjectName || "";
                     const nameB = b.baseProjectName || "";
@@ -994,7 +1034,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const fixB = this.config.FIX_CATEGORIES.ORDER.indexOf(b.fixCategory || "");
                     const areaA = a.areaTask || "";
                     const areaB = b.areaTask || "";
-            
+
                     if (nameA < nameB) return -1;
                     if (nameA > nameB) return 1;
                     if (fixA < fixB) return -1;
@@ -1003,7 +1043,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (areaA > areaB) return 1;
                     return 0;
                 });
-            
+
                 const groupLockStatus = {};
                 sortedProjects.forEach(p => {
                     const groupKey = `${p.baseProjectName}_${p.fixCategory}`;
@@ -1018,19 +1058,19 @@ document.addEventListener('DOMContentLoaded', () => {
                         groupLockStatus[groupKey].locked++;
                     }
                 });
-            
+
                 let currentBaseProjectNameHeader = null,
                     currentFixCategoryHeader = null;
-            
+
                 if (sortedProjects.length === 0) {
                     const row = this.elements.projectTableBody.insertRow();
                     row.innerHTML = `<td colspan="${this.config.NUM_TABLE_COLUMNS}" style="text-align:center; padding: 20px;">No projects to display for the current filter or page.</td>`;
                     return;
                 }
-            
+
                 sortedProjects.forEach(project => {
                     if (!project?.id || !project.baseProjectName || !project.fixCategory) return;
-            
+
                     if (project.baseProjectName !== currentBaseProjectNameHeader) {
                         currentBaseProjectNameHeader = project.baseProjectName;
                         currentFixCategoryHeader = null;
@@ -1038,7 +1078,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         headerRow.className = "batch-header-row";
                         headerRow.innerHTML = `<td colspan="${this.config.NUM_TABLE_COLUMNS}"># ${project.baseProjectName}</td>`;
                     }
-            
+
                     if (project.fixCategory !== currentFixCategoryHeader) {
                         currentFixCategoryHeader = project.fixCategory;
                         const groupKey = `${currentBaseProjectNameHeader}_${currentFixCategoryHeader}`;
@@ -1048,19 +1088,19 @@ document.addEventListener('DOMContentLoaded', () => {
                             };
                         }
                         const isExpanded = this.state.groupVisibilityState[groupKey]?.isExpanded !== false;
-            
+
                         const status = groupLockStatus[groupKey];
                         let lockIcon = '';
                         if (status && status.total > 0) {
                             if (status.locked === status.total) {
-                                lockIcon = ' 🔒';
+                                lockIcon = ' 白';
                             } else if (status.locked > 0) {
-                                lockIcon = ' 🔑';
+                                lockIcon = ' 泊';
                             } else {
-                                lockIcon = ' 🔓';
+                                lockIcon = ' 箔';
                             }
                         }
-            
+
                         const groupHeaderRow = this.elements.projectTableBody.insertRow();
                         groupHeaderRow.className = "fix-group-header";
                         groupHeaderRow.innerHTML = `<td colspan="${this.config.NUM_TABLE_COLUMNS}">${currentFixCategoryHeader}${lockIcon} <button class="btn btn-group-toggle">${isExpanded ? "Collapse" : "Expand"}</button></td>`;
@@ -1071,26 +1111,26 @@ document.addEventListener('DOMContentLoaded', () => {
                             this.methods.applyColumnVisibility.call(this);
                         };
                     }
-            
+
                     const row = this.elements.projectTableBody.insertRow();
                     row.style.backgroundColor = this.config.FIX_CATEGORIES.COLORS[project.fixCategory] || this.config.FIX_CATEGORIES.COLORS.default;
                     const groupKey = `${currentBaseProjectNameHeader}_${project.fixCategory}`;
                     if (this.state.groupVisibilityState[groupKey]?.isExpanded === false) row.classList.add("hidden-group-row");
                     if (project.isReassigned) row.classList.add("reassigned-task-highlight");
                     if (project.isLocked) row.classList.add("locked-task-highlight");
-            
+
                     row.insertCell().textContent = project.fixCategory;
                     const projectNameCell = row.insertCell();
                     projectNameCell.textContent = project.baseProjectName;
                     projectNameCell.className = 'column-project-name';
                     row.insertCell().textContent = project.areaTask;
                     row.insertCell().textContent = project.gsd;
-            
+
                     const assignedToCell = row.insertCell();
                     const assignedToSelect = document.createElement('select');
                     assignedToSelect.className = 'assigned-to-select';
                     assignedToSelect.disabled = project.status === "Reassigned_TechAbsent" || project.isLocked;
-                    
+
                     let optionsHtml = '<option value="">Select Tech ID</option>';
                     this.state.users.sort((a, b) => a.techId.localeCompare(b.techId)).forEach(user => {
                         optionsHtml += `<option value="${user.techId}" title="${user.name}">${user.techId}</option>`;
@@ -1103,7 +1143,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         lastModifiedTimestamp: firebase.firestore.FieldValue.serverTimestamp()
                     });
                     assignedToCell.appendChild(assignedToSelect);
-            
+
                     const statusCell = row.insertCell();
                     let displayStatus = project.status || "Unknown";
                     if (displayStatus === "Day1Ended_AwaitingNext" || displayStatus === "Day2Ended_AwaitingNext" || displayStatus === "Day3Ended_AwaitingNext") {
@@ -1112,9 +1152,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         displayStatus = displayStatus.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').trim();
                     }
                     statusCell.innerHTML = `<span class="status status-${(project.status || "unknown").toLowerCase()}">${displayStatus}</span>`;
-            
+
                     const formatTime = (ts) => ts?.toDate ? ts.toDate().toTimeString().slice(0, 5) : "";
-            
+
                     const createTimeInput = (timeValue, fieldName, dayClass) => {
                         const cell = row.insertCell();
                         cell.className = dayClass || '';
@@ -1125,7 +1165,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         input.onchange = (e) => this.methods.updateTimeField.call(this, project.id, fieldName, e.target.value);
                         cell.appendChild(input);
                     };
-            
+
                     const createBreakSelect = (day, currentProject, dayClass) => {
                         const cell = row.insertCell();
                         cell.className = `break-cell ${dayClass || ''}`;
@@ -1140,26 +1180,26 @@ document.addEventListener('DOMContentLoaded', () => {
                         });
                         cell.appendChild(select);
                     };
-            
+
                     createTimeInput(project.startTimeDay1, 'startTimeDay1');
                     createTimeInput(project.finishTimeDay1, 'finishTimeDay1');
                     createBreakSelect(1, project);
-            
+
                     createTimeInput(project.startTimeDay2, 'startTimeDay2', 'column-day2');
                     createTimeInput(project.finishTimeDay2, 'finishTimeDay2', 'column-day2');
                     createBreakSelect(2, project, 'column-day2');
-            
+
                     createTimeInput(project.startTimeDay3, 'startTimeDay3', 'column-day3');
                     createTimeInput(project.finishTimeDay3, 'finishTimeDay3', 'column-day3');
                     createBreakSelect(3, project, 'column-day3');
-            
+
                     const totalDurationMs = (project.durationDay1Ms || 0) + (project.durationDay2Ms || 0) + (project.durationDay3Ms || 0);
                     const totalBreakMs = ((project.breakDurationMinutesDay1 || 0) + (project.breakDurationMinutesDay2 || 0) + (project.breakDurationMinutesDay3 || 0)) * 60000;
                     const additionalMs = (project.additionalMinutesManual || 0) * 60000;
                     const finalAdjustedDurationMs = Math.max(0, totalDurationMs - totalBreakMs) + additionalMs;
                     const totalMinutes = this.methods.formatMillisToMinutes.call(this, finalAdjustedDurationMs);
                     const progressPercentage = totalMinutes === "N/A" ? 0 : Math.min(100, (totalMinutes / 480) * 100);
-            
+
                     const progressBarCell = row.insertCell();
                     const progressBarColor = this.methods.getProgressBarColor(progressPercentage);
                     progressBarCell.innerHTML = `
@@ -1169,11 +1209,11 @@ document.addEventListener('DOMContentLoaded', () => {
                             </div>
                         </div>
                     `;
-            
+
                     const totalDurationCell = row.insertCell();
                     totalDurationCell.textContent = totalMinutes;
                     totalDurationCell.className = 'total-duration-column';
-            
+
                     const techNotesCell = row.insertCell();
                     const techNotesInput = document.createElement('textarea');
                     techNotesInput.value = project.techNotes || "";
@@ -1184,11 +1224,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         lastModifiedTimestamp: firebase.firestore.FieldValue.serverTimestamp()
                     });
                     techNotesCell.appendChild(techNotesInput);
-            
+
                     const actionsCell = row.insertCell();
                     const actionButtonsDiv = document.createElement('div');
                     actionButtonsDiv.className = 'action-buttons-container';
-            
+
                     const createActionButton = (text, className, disabled, action) => {
                         const button = document.createElement('button');
                         button.textContent = text;
@@ -1197,7 +1237,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         button.onclick = () => this.methods.updateProjectState.call(this, project.id, action);
                         return button;
                     };
-            
+
                     actionButtonsDiv.appendChild(createActionButton("Start D1", "btn-day-start", project.status !== "Available", "startDay1"));
                     actionButtonsDiv.appendChild(createActionButton("End D1", "btn-day-end", project.status !== "InProgressDay1", "endDay1"));
                     actionButtonsDiv.appendChild(createActionButton("Start D2", "btn-day-start", project.status !== "Day1Ended_AwaitingNext", "startDay2"));
@@ -1205,11 +1245,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     actionButtonsDiv.appendChild(createActionButton("Start D3", "btn-day-start", project.status !== "Day2Ended_AwaitingNext", "startDay3"));
                     actionButtonsDiv.appendChild(createActionButton("End D3", "btn-day-end", project.status !== "InProgressDay3", "endD3"));
                     actionButtonsDiv.appendChild(createActionButton("Done", "btn-mark-done", project.status === "Completed" || project.status === "Reassigned_TechAbsent" || (project.status === "Available" && !(project.durationDay1Ms || project.durationDay2Ms || project.durationDay3Ms)), "markDone"));
-            
+
                     const reassignBtn = createActionButton("Re-Assign", "btn-warning", project.status === "Completed" || project.status === "Reassigned_TechAbsent", "reassign");
                     reassignBtn.onclick = () => this.methods.handleReassignment.call(this, project);
                     actionButtonsDiv.appendChild(reassignBtn);
-            
+
                     actionsCell.appendChild(actionButtonsDiv);
                 });
             },
@@ -1246,7 +1286,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const showTitle = localStorage.getItem('showTitleColumn') !== 'false';
                 const showDay2 = localStorage.getItem('showDay2Column') !== 'false';
                 const showDay3 = localStorage.getItem('showDay3Column') !== 'false';
-            
+
                 if (this.elements.toggleTitleCheckbox) {
                     this.elements.toggleTitleCheckbox.checked = showTitle;
                 }
@@ -1272,7 +1312,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const showTitle = this.elements.toggleTitleCheckbox.checked;
                 const showDay2 = this.elements.toggleDay2Checkbox.checked;
                 const showDay3 = this.elements.toggleDay3Checkbox.checked;
-            
+
                 document.querySelectorAll('#projectTable .column-project-name').forEach(el => el.classList.toggle('column-hidden', !showTitle));
                 document.querySelectorAll('#projectTable .column-day2').forEach(el => el.classList.toggle('column-hidden', !showDay2));
                 document.querySelectorAll('#projectTable .column-day3').forEach(el => el.classList.toggle('column-hidden', !showDay3));
@@ -1281,11 +1321,14 @@ document.addEventListener('DOMContentLoaded', () => {
             async fetchUsers() {
                 try {
                     const snapshot = await this.db.collection(this.config.firestorePaths.USERS).get();
-                    this.state.users = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    this.state.users = snapshot.docs.map(doc => ({
+                        id: doc.id,
+                        ...doc.data()
+                    }));
                     console.log("Successfully fetched user list.", this.state.users);
                 } catch (error) {
                     console.error("Error fetching user list:", error);
-                    this.state.users = []; 
+                    this.state.users = [];
                 }
             },
 
@@ -1692,7 +1735,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 this.methods.showLoading.call(this, `Releasing ${currentFixCategory} tasks...`);
                 try {
                     const snapshot = await this.db.collection("projects").where("batchId", "==", batchId).where("fixCategory", "==", currentFixCategory).where("releasedToNextStage", "==", false).get();
-                    
+
                     let projectNameForNotification = "";
                     if (!snapshot.empty) {
                         projectNameForNotification = snapshot.docs[0].data().baseProjectName;
@@ -1707,7 +1750,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     const firestoreBatch = this.db.batch();
                     const serverTimestamp = firebase.firestore.FieldValue.serverTimestamp();
-                    
+
                     for (const doc of snapshot.docs) {
                         const task = {
                             id: doc.id,
@@ -1871,13 +1914,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (this.state.users.length === 0) {
                     this.elements.userManagementTableBody.innerHTML = '<tr><td colspan="4" style="text-align:center;">No users found. Add one above.</td></tr>';
                 } else {
-                    this.state.users.sort((a,b) => a.name.localeCompare(b.name)).forEach(user => {
+                    this.state.users.sort((a, b) => a.name.localeCompare(b.name)).forEach(user => {
                         const row = this.elements.userManagementTableBody.insertRow();
                         row.insertCell().textContent = user.name;
                         row.insertCell().textContent = user.email;
                         row.insertCell().textContent = user.techId;
                         const actionCell = row.insertCell();
-                        
+
                         const editBtn = document.createElement('button');
                         editBtn.textContent = "Edit";
                         editBtn.className = 'btn btn-secondary btn-small';
@@ -1924,13 +1967,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 this.methods.showLoading.call(this, `Adding user ${name}...`);
                 try {
-                    const newUser = { name, email, techId };
+                    const newUser = {
+                        name,
+                        email,
+                        techId
+                    };
                     await this.db.collection(this.config.firestorePaths.USERS).add(newUser);
-                    
+
                     alert(`User "${name}" added successfully!`);
                     this.elements.userManagementForm.reset();
                     await this.methods.renderUserManagement.call(this);
-                    this.methods.renderProjects.call(this); 
+                    this.methods.renderProjects.call(this);
 
                 } catch (error) {
                     console.error("Error adding new user:", error);
@@ -1944,12 +1991,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 const name = this.elements.newUserName.value.trim();
                 const email = this.elements.newUserEmail.value.trim().toLowerCase();
                 const techId = this.elements.newUserTechId.value.trim().toUpperCase();
-            
+
                 if (!name || !email || !techId) {
                     alert("Please fill in all fields: Full Name, Email, and Tech ID.");
                     return;
                 }
-            
+
                 if (this.state.users.some(u => u.email === email && u.id !== this.state.editingUser.id)) {
                     alert(`Error: The email "${email}" is already registered to another user.`);
                     return;
@@ -1958,17 +2005,21 @@ document.addEventListener('DOMContentLoaded', () => {
                     alert(`Error: The Tech ID "${techId}" is already registered to another user.`);
                     return;
                 }
-            
+
                 this.methods.showLoading.call(this, `Updating user ${name}...`);
                 try {
-                    const updatedUser = { name, email, techId };
+                    const updatedUser = {
+                        name,
+                        email,
+                        techId
+                    };
                     await this.db.collection(this.config.firestorePaths.USERS).doc(this.state.editingUser.id).update(updatedUser);
-                    
+
                     alert(`User "${name}" updated successfully!`);
                     this.methods.exitEditMode.call(this);
                     await this.methods.renderUserManagement.call(this);
                     this.methods.renderProjects.call(this);
-            
+
                 } catch (error) {
                     console.error("Error updating user:", error);
                     alert("An error occurred while updating the user: " + error.message);
@@ -1976,35 +2027,35 @@ document.addEventListener('DOMContentLoaded', () => {
                     this.methods.hideLoading.call(this);
                 }
             },
-            
+
             enterEditMode(user) {
                 this.state.editingUser = user;
                 this.elements.newUserName.value = user.name;
                 this.elements.newUserEmail.value = user.email;
                 this.elements.newUserTechId.value = user.techId;
-            
+
                 this.elements.userFormButtons.innerHTML = '';
-            
+
                 const saveBtn = document.createElement('button');
                 saveBtn.type = 'submit';
                 saveBtn.className = 'btn btn-primary';
                 saveBtn.textContent = 'Save Changes';
-                
+
                 const cancelBtn = document.createElement('button');
                 cancelBtn.type = 'button';
                 cancelBtn.className = 'btn btn-secondary';
                 cancelBtn.textContent = 'Cancel';
                 cancelBtn.onclick = () => this.methods.exitEditMode.call(this);
-            
+
                 this.elements.userFormButtons.appendChild(saveBtn);
                 this.elements.userFormButtons.appendChild(cancelBtn);
             },
-            
+
             exitEditMode() {
                 this.state.editingUser = null;
                 this.elements.userManagementForm.reset();
                 this.elements.userFormButtons.innerHTML = '';
-            
+
                 const addBtn = document.createElement('button');
                 addBtn.type = 'submit';
                 addBtn.className = 'btn btn-success';
@@ -2056,7 +2107,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 this.methods.showLoading.call(this, "Generating TL Summary...");
                 this.elements.tlSummaryContent.innerHTML = "";
-            
+
                 const summaryHeader = document.createElement('div');
                 summaryHeader.style.display = 'flex';
                 summaryHeader.style.justifyContent = 'space-between';
@@ -2064,20 +2115,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 summaryHeader.style.marginBottom = '20px';
                 summaryHeader.style.paddingBottom = '10px';
                 summaryHeader.style.borderBottom = '1px solid #ddd';
-            
+
                 const summaryTitle = document.createElement('h3');
                 summaryTitle.textContent = 'Team Lead Summary';
                 summaryTitle.style.margin = '0';
-            
+
                 const refreshButton = document.createElement('button');
                 refreshButton.className = 'btn btn-primary';
                 refreshButton.innerHTML = '<i class="fas fa-sync-alt"></i> Refresh';
                 refreshButton.onclick = () => this.methods.generateTlSummaryData.call(this);
-            
+
                 summaryHeader.appendChild(summaryTitle);
                 summaryHeader.appendChild(refreshButton);
                 this.elements.tlSummaryContent.appendChild(summaryHeader);
-            
+
                 try {
                     const snapshot = await this.db.collection("projects").get();
                     const projectTotals = {};
@@ -2086,23 +2137,23 @@ document.addEventListener('DOMContentLoaded', () => {
                         assigned: new Set(),
                         withTime: new Set()
                     };
-            
+
                     snapshot.forEach(doc => {
                         const p = doc.data();
                         const totalWorkMs = (p.durationDay1Ms || 0) + (p.durationDay2Ms || 0) + (p.durationDay3Ms || 0);
                         const breakMs = ((p.breakDurationMinutesDay1 || 0) + (p.breakDurationMinutesDay2 || 0) + (p.breakDurationMinutesDay3 || 0)) * 60000;
                         const additionalMs = (p.additionalMinutesManual || 0) * 60000;
                         const adjustedNetMs = Math.max(0, totalWorkMs - breakMs) + additionalMs;
-            
+
                         if (p.assignedTo) {
                             techData.assigned.add(p.assignedTo);
                         }
-            
+
                         if (adjustedNetMs > 0) {
                             const minutes = Math.floor(adjustedNetMs / 60000);
                             const projName = p.baseProjectName || "Unknown Project";
                             const fixCat = p.fixCategory || "Unknown Fix";
-            
+
                             if (!projectTotals[projName]) {
                                 projectTotals[projName] = {};
                                 if (p.creationTimestamp) {
@@ -2110,36 +2161,36 @@ document.addEventListener('DOMContentLoaded', () => {
                                 }
                             }
                             projectTotals[projName][fixCat] = (projectTotals[projName][fixCat] || 0) + minutes;
-            
+
                             if (p.assignedTo) {
                                 techData.withTime.add(p.assignedTo);
                             }
                         }
                     });
-            
+
                     const sortedProjectNames = Object.keys(projectTotals).sort((a, b) => {
                         const tsA = projectCreationTimestamps[a]?.toMillis ? projectCreationTimestamps[a].toMillis() : 0;
                         const tsB = projectCreationTimestamps[b]?.toMillis ? projectCreationTimestamps[b].toMillis() : 0;
                         return tsB - tsA;
                     });
-            
+
                     if (sortedProjectNames.length > 0) {
                         const summaryContainer = document.createElement('div');
                         summaryContainer.className = 'summary-container';
-            
+
                         sortedProjectNames.forEach(projName => {
                             const projectCard = document.createElement('div');
                             projectCard.className = 'project-summary-card';
-            
+
                             let cardHtml = `<h4 class="project-name-header" style="font-size: 1.1rem; margin-bottom: 12px;">${projName}</h4><div class="fix-categories-grid">`;
                             const fixCategoryTotals = projectTotals[projName];
                             const sortedFixCategories = Object.keys(fixCategoryTotals).sort((a, b) => this.config.FIX_CATEGORIES.ORDER.indexOf(a) - this.config.FIX_CATEGORIES.ORDER.indexOf(b));
-            
+
                             sortedFixCategories.forEach(fixCat => {
                                 const totalMinutes = fixCategoryTotals[fixCat];
                                 const hoursDecimal = (totalMinutes / 60).toFixed(2);
                                 const bgColor = this.config.FIX_CATEGORIES.COLORS[fixCat] || this.config.FIX_CATEGORIES.COLORS.default;
-            
+
                                 cardHtml += `
                                     <div class="fix-category-item" style="background-color: ${bgColor};">
                                         <span class="fix-category-name">${fixCat}</span>
@@ -2151,14 +2202,14 @@ document.addEventListener('DOMContentLoaded', () => {
                                     </div>
                                 `;
                             });
-            
+
                             cardHtml += '</div>';
                             projectCard.innerHTML = cardHtml;
                             summaryContainer.appendChild(projectCard);
                         });
-            
+
                         this.elements.tlSummaryContent.appendChild(summaryContainer);
-            
+
                         this.elements.tlSummaryContent.querySelectorAll('.btn-copy-hours').forEach(button => {
                             button.addEventListener('click', (event) => {
                                 const targetId = event.currentTarget.dataset.targetId;
@@ -2175,9 +2226,9 @@ document.addEventListener('DOMContentLoaded', () => {
                             });
                         });
                     }
-            
+
                     const techsWithNoTime = [...techData.assigned].filter(tech => !techData.withTime.has(tech));
-            
+
                     if (techsWithNoTime.length > 0) {
                         const techInfoSection = document.createElement('div');
                         techInfoSection.className = 'tech-info-section';
@@ -2189,14 +2240,14 @@ document.addEventListener('DOMContentLoaded', () => {
                         techInfoSection.innerHTML = techInfoHtml;
                         this.elements.tlSummaryContent.appendChild(techInfoSection);
                     }
-            
+
                     if (sortedProjectNames.length === 0 && techsWithNoTime.length === 0) {
                         const noDataMessage = document.createElement('p');
                         noDataMessage.className = 'no-data-message';
                         noDataMessage.textContent = 'No project time data or unlogged tech information found.';
                         this.elements.tlSummaryContent.appendChild(noDataMessage);
                     }
-            
+
                 } catch (error) {
                     console.error("Error generating TL summary:", error);
                     const errorMessage = document.createElement('p');
@@ -2235,8 +2286,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 modal.className = 'notification-modal-content';
 
                 const title = document.createElement('h4');
-                title.textContent = '🔔 New Update';
-                
+                title.textContent = '粕 New Update';
+
                 const messageP = document.createElement('p');
                 messageP.textContent = notification.message;
 
@@ -2251,7 +2302,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const viewBtn = document.createElement('button');
                 viewBtn.textContent = 'View Project';
                 viewBtn.className = 'btn btn-primary';
-                
+
                 if (notification.baseProjectName) {
                     viewBtn.onclick = () => {
                         this.state.filters.batchId = notification.baseProjectName;
@@ -2274,10 +2325,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 backdrop.appendChild(modal);
                 document.body.appendChild(backdrop);
             },
-            
+
             async createNotification(message, type, baseProjectName) {
                 const notificationsRef = this.db.collection(this.config.firestorePaths.NOTIFICATIONS);
-                
+
                 try {
                     const query = notificationsRef.orderBy("timestamp", "asc");
                     const snapshot = await query.get();
@@ -2311,7 +2362,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (this.notificationListenerUnsubscribe) {
                     this.notificationListenerUnsubscribe();
                 }
-                
+
                 const self = this;
 
                 this.notificationListenerUnsubscribe = this.db.collection(this.config.firestorePaths.NOTIFICATIONS)
@@ -2335,6 +2386,136 @@ document.addEventListener('DOMContentLoaded', () => {
                     );
             },
 
+            // --- TEAM CHAT METHODS ---
+
+            injectChatModalHTML() {
+                const chatModalHTML = `
+                    <div class="modal" id="teamChatModal" style="display: none;">
+                        <div class="modal-content large">
+                            <div class="modal-header">
+                                <h2>Team Chat</h2>
+                                <span class="close-btn" id="closeTeamChatBtn">&times;</span>
+                            </div>
+                            <div class="modal-body">
+                                <div id="chatMessagesContainer" class="chat-messages"></div>
+                                <form id="chatMessageForm" class="chat-form">
+                                    <input type="text" id="chatMessageInput" placeholder="Type a message..." autocomplete="off" required>
+                                    <button type="submit" class="btn btn-primary">Send</button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                document.body.insertAdjacentHTML('beforeend', chatModalHTML);
+            },
+
+            listenForChatMessages() {
+                if (!this.db) {
+                    console.error("Firestore not initialized for chat.");
+                    return;
+                }
+                if (this.chatListenerUnsubscribe) {
+                    this.chatListenerUnsubscribe();
+                }
+
+                const self = this;
+                const chatRef = this.db.collection(this.config.firestorePaths.CHAT).orderBy("timestamp", "asc");
+
+                this.chatListenerUnsubscribe = chatRef.onSnapshot(snapshot => {
+                    self.state.chatMessages = snapshot.docs.map(doc => ({
+                        id: doc.id,
+                        ...doc.data()
+                    }));
+                    self.methods.renderChatMessages.call(self);
+                }, error => {
+                    console.error("Error listening for chat messages:", error);
+                });
+            },
+
+            renderChatMessages() {
+                if (!this.elements.chatMessagesContainer) return;
+                const container = this.elements.chatMessagesContainer;
+                container.innerHTML = '';
+
+                this.state.chatMessages.forEach(msg => {
+                    const msgDiv = document.createElement('div');
+                    msgDiv.className = 'chat-message';
+                    if (msg.techId === this.state.currentUserTechId) {
+                        msgDiv.classList.add('current-user');
+                    }
+
+                    const time = msg.timestamp ? msg.timestamp.toDate().toLocaleTimeString([], {
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    }) : '';
+
+                    msgDiv.innerHTML = `
+                        <div class="message-header">
+                            <span class="message-user">${msg.techId || 'Anonymous'}</span>
+                            <span class="message-time">${time}</span>
+                        </div>
+                        <p class="message-text">${msg.text}</p>
+                    `;
+                    container.appendChild(msgDiv);
+                });
+
+                // Scroll to the bottom
+                container.scrollTop = container.scrollHeight;
+            },
+
+            async handleSendMessage(event) {
+                event.preventDefault();
+                const input = this.elements.chatMessageInput;
+                const messageText = input.value.trim();
+
+                if (!messageText) return;
+                if (!this.state.currentUserTechId) {
+                    alert("Cannot send message. Your user ID is not set.");
+                    return;
+                }
+
+                const messageData = {
+                    text: messageText,
+                    techId: this.state.currentUserTechId,
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                };
+
+                try {
+                    await this.db.collection(this.config.firestorePaths.CHAT).add(messageData);
+                    input.value = '';
+                    // After sending, check and limit the number of messages
+                    this.methods.limitChatMessages.call(this);
+                } catch (error) {
+                    console.error("Error sending message:", error);
+                    alert("Failed to send message: " + error.message);
+                }
+            },
+
+            async limitChatMessages() {
+                const chatRef = this.db.collection(this.config.firestorePaths.CHAT);
+                try {
+                    const snapshot = await chatRef.orderBy("timestamp", "desc").get();
+                    const messageCount = snapshot.size;
+
+                    if (messageCount > this.config.chat.MAX_MESSAGES) {
+                        const toDeleteCount = messageCount - this.config.chat.MAX_MESSAGES;
+                        const toDelete = snapshot.docs.slice(this.config.chat.MAX_MESSAGES); // Oldest messages are at the end
+
+                        const batch = this.db.batch();
+                        toDelete.forEach(doc => {
+                            batch.delete(doc.ref);
+                        });
+                        await batch.commit();
+                        console.log(`Auto-deleted ${toDelete.length} oldest chat message(s).`);
+                    }
+                } catch (error) {
+                    console.error("Error trimming chat history:", error);
+                }
+            },
+
+
+            // --- IMPORT / EXPORT METHODS ---
+
             async handleExportUsers() {
                 this.methods.showLoading.call(this, "Exporting users...");
                 try {
@@ -2342,10 +2523,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         alert("No users to export.");
                         return;
                     }
-            
+
                     const headers = ["name", "email", "techId"];
                     const rows = [headers.join(',')];
-            
+
                     this.state.users.forEach(user => {
                         const rowData = [
                             `"${user.name.replace(/"/g, '""')}"`,
@@ -2354,7 +2535,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         ];
                         rows.push(rowData.join(','));
                     });
-            
+
                     const csvContent = "data:text/csv;charset=utf-8," + rows.join('\n');
                     const encodedUri = encodeURI(csvContent);
                     const link = document.createElement("a");
@@ -2363,7 +2544,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     document.body.appendChild(link);
                     link.click();
                     document.body.removeChild(link);
-            
+
                 } catch (error) {
                     console.error("Error exporting users:", error);
                     alert("Failed to export users: " + error.message);
@@ -2375,36 +2556,36 @@ document.addEventListener('DOMContentLoaded', () => {
             handleImportUsers(event) {
                 const file = event.target.files[0];
                 if (!file) return;
-            
+
                 this.methods.showLoading.call(this, "Processing user CSV...");
                 const reader = new FileReader();
-            
+
                 reader.onload = async (e) => {
                     try {
                         const csvText = e.target.result;
                         const newUsers = this.methods.parseUserCsv.call(this, csvText);
-            
+
                         if (newUsers.length === 0) {
                             alert("No new, valid users found in the CSV file. Please check for duplicates or formatting errors.");
                             return;
                         }
-            
+
                         if (!confirm(`Found ${newUsers.length} new user(s). Do you want to import them?`)) {
                             return;
                         }
-            
+
                         this.methods.showLoading.call(this, `Importing ${newUsers.length} user(s)...`);
                         const batch = this.db.batch();
                         newUsers.forEach(user => {
                             const newDocRef = this.db.collection(this.config.firestorePaths.USERS).doc();
                             batch.set(newDocRef, user);
                         });
-            
+
                         await batch.commit();
                         alert(`Successfully imported ${newUsers.length} new user(s)!`);
                         await this.methods.renderUserManagement.call(this);
                         this.methods.renderProjects.call(this);
-            
+
                     } catch (error) {
                         console.error("Error processing user CSV:", error);
                         alert("Error importing users: " + error.message);
@@ -2413,41 +2594,45 @@ document.addEventListener('DOMContentLoaded', () => {
                         this.elements.userCsvInput.value = ''; // Reset file input
                     }
                 };
-            
+
                 reader.readAsText(file);
             },
 
             parseUserCsv(csvText) {
                 const lines = csvText.split('\n').map(l => l.trim()).filter(l => l);
                 if (lines.length <= 1) return [];
-            
+
                 const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
                 const requiredHeaders = ["name", "email", "techid"];
                 if (!requiredHeaders.every(h => headers.includes(h))) {
                     throw new Error("CSV must contain 'name', 'email', and 'techId' headers.");
                 }
-            
+
                 const newUsers = [];
                 const existingEmails = new Set(this.state.users.map(u => u.email.toLowerCase()));
                 const existingTechIds = new Set(this.state.users.map(u => u.techId.toUpperCase()));
-            
+
                 for (let i = 1; i < lines.length; i++) {
                     const values = lines[i].split(',');
                     const name = (values[headers.indexOf('name')] || "").trim();
                     const email = (values[headers.indexOf('email')] || "").trim().toLowerCase();
                     const techId = (values[headers.indexOf('techid')] || "").trim().toUpperCase();
-            
+
                     if (!name || !email || !techId) {
                         console.warn(`Skipping row ${i+1}: Missing required data.`);
                         continue;
                     }
-            
+
                     if (existingEmails.has(email) || existingTechIds.has(techId)) {
                         console.warn(`Skipping row ${i+1}: User with email '${email}' or Tech ID '${techId}' already exists.`);
                         continue;
                     }
-            
-                    newUsers.push({ name, email, techId });
+
+                    newUsers.push({
+                        name,
+                        email,
+                        techId
+                    });
                     existingEmails.add(email); // Add to set to prevent duplicates within the same file
                     existingTechIds.add(techId);
                 }
@@ -2691,7 +2876,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             let cleanedStatus = (value || "").replace(/\s/g, '').toLowerCase();
 
                             if (cleanedStatus.includes('startedavailable')) {
-                                cleanedStatus = 'Available'; 
+                                cleanedStatus = 'Available';
                             } else if (cleanedStatus.includes('inprogressday1')) cleanedStatus = 'InProgressDay1';
                             else if (cleanedStatus.includes('day1ended_awaitingnext')) cleanedStatus = 'Day1Ended_AwaitingNext';
                             else if (cleanedStatus.includes('inprogressday2')) cleanedStatus = 'InProgressDay2';
