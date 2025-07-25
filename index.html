@@ -332,7 +332,7 @@
         cursor: pointer;
         border: none;
         border-radius: 4px;
-        transition: background-color 0.3s ease;
+        transition: background-color: 0.3s ease;
         margin-top: 8px;
         }
         #signOutBtn { background-color: #e74c3c; color: white; } #signOutBtn:hover { background-color: #c0392b; }
@@ -484,6 +484,17 @@
         /* === END: NEW STYLES FOR USER MANAGEMENT === */
 
         /* === START: NEW STYLES FOR TEAM CHAT === */
+        .chat-notification-badge {
+            position: absolute;
+            top: -2px;
+            right: -2px;
+            width: 12px;
+            height: 12px;
+            background-color: #e74c3c; /* Red color for notification */
+            border-radius: 50%;
+            border: 2px solid white;
+            display: block; /* Will be toggled by JS */
+        }
         .chat-messages {
             height: 400px;
             border: 1px solid #ddd;
@@ -514,6 +525,14 @@
             align-self: flex-start;
             border-bottom-left-radius: 3px;
         }
+        .chat-message.invitation {
+            background-color: #e8f5e9; /* Light green background */
+            border-left: 4px solid #4CAF50; /* Green accent bar */
+            width: 100%;
+            max-width: 100%;
+            box-sizing: border-box;
+            align-self: center;
+        }
         .message-header {
             display: flex;
             justify-content: space-between;
@@ -532,6 +551,12 @@
         .message-text {
             margin: 0;
             font-size: 0.95em;
+            white-space: pre-wrap; /* To respect newlines in the invitation */
+        }
+        .message-text a {
+            color: #0056b3;
+            font-weight: bold;
+            text-decoration: underline;
         }
         .chat-form {
             display: flex;
@@ -542,6 +567,18 @@
             border: 1px solid #ccc;
             border-radius: 5px;
             margin-right: 10px;
+        }
+        .typing-indicator {
+            height: 20px;
+            font-style: italic;
+            color: #888;
+            font-size: 0.9em;
+            padding-left: 5px;
+        }
+        .modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
         }
         /* === END: NEW STYLES FOR TEAM CHAT === */
 
@@ -592,7 +629,11 @@
                 <button id="openTlDashboardBtn" class="btn btn-primary btn-lg">👑 Project Settings</button>
                 <button id="openSettingsBtn" class="btn btn-info btn-lg" style="display:none;">⚙️ User Settings</button>
                 <button id="openTlSummaryBtn" class="btn btn-info btn-lg">📝 TL Summary</button>
-                <button id="openTeamChatBtn" class="btn btn-secondary btn-lg">💬 Team Chat</button>
+                <button id="openTeamChatBtn" class="btn btn-secondary btn-lg" style="position: relative;">
+                    💬 Team Chat
+                    <span id="chatNotificationBadge" class="chat-notification-badge" style="display: none;"></span>
+                </button>
+                <button id="tscLinkBtn" class="btn btn-warning btn-lg" style="display: none;"></button>
                 <button id="exportCsvBtn" class="btn btn-info btn-lg" style="margin-left: 10px;">📊 Export to CSV</button>
                 <button id="openImportCsvBtn" class="btn btn-secondary btn-lg" style="margin-left: 10px;">📥 Import CSV</button> 
                 <a href="https://jvteam123.github.io/qbase" target="_blank" class="btn btn-warning btn-lg" style="text-decoration: none; margin-left: 10px;">Estimate Bunos</a>
