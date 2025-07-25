@@ -7,17 +7,16 @@
  * global variables, improves performance, and ensures correct
  * timezone handling.
  *
- * @version 3.5.1
+ * @version 3.6.0
  * @author Gemini AI Refactor & Bug-Fix
  * @changeLog
- * - FIXED: (User Request) Corrected logic for the chat notification badge. It now only appears for new, incoming messages from other users and not on the initial load.
+ * - ADDED: (User Request) "User is typing..." indicator in the chat window.
+ * - ADDED: (User Request) Sound notifications for new messages when the chat window is closed.
+ * - ADDED: (User Request) A "Start Voice Call" button that links to an external meeting service.
+ * - FIXED: Corrected logic for the chat notification badge.
  * - ADDED: Notification badge on the "Team Chat" button for new messages.
- * - ADDED: Simple emoji parsing for chat messages (e.g., :) becomes 😊).
- * - UPDATED: Increased chat history limit from 15 to 30 messages.
- * - ADDED: A "Team Chat" button and a fully functional, real-time chat modal powered by Firebase.
- * - ADDED: The chat automatically keeps the last 30 messages, deleting older ones to manage history.
- * - ADDED: User's Tech ID is used as their display name in the chat.
- * - ADDED: "Import Users" and "Export Users" buttons and functionality to the User Management modal.
+ * - ADDED: Simple emoji parsing for chat messages.
+ * - UPDATED: Increased chat history limit to 30 messages.
  */
 document.addEventListener('DOMContentLoaded', () => {
 
@@ -40,10 +39,12 @@ document.addEventListener('DOMContentLoaded', () => {
             firestorePaths: {
                 USERS: "users",
                 NOTIFICATIONS: "notifications",
-                CHAT: "chat" // Path for chat messages
+                CHAT: "chat",
+                TYPING_STATUS: "typing_status" // For typing indicator
             },
             chat: {
-                MAX_MESSAGES: 30 // Max number of chat messages to keep
+                MAX_MESSAGES: 30,
+                MEETING_URL: "https://meet.google.com/new" // Easy to update meeting link
             },
             FIX_CATEGORIES: {
                 ORDER: ["Fix1", "Fix2", "Fix3", "Fix4", "Fix5", "Fix6"],
@@ -94,19 +95,22 @@ document.addEventListener('DOMContentLoaded', () => {
         auth: null,
         firestoreListenerUnsubscribe: null,
         notificationListenerUnsubscribe: null,
-        chatListenerUnsubscribe: null, // Unsubscriber for chat listener
+        chatListenerUnsubscribe: null,
+        typingListenerUnsubscribe: null, // Unsubscriber for typing listener
 
         // --- 3. APPLICATION STATE ---
         state: {
             projects: [],
             users: [],
-            chatMessages: [], // To store chat messages
-            hasUnreadMessages: false, // To track chat notifications
-            isInitialChatLoad: true, // Flag to prevent notification on initial load
+            chatMessages: [],
+            hasUnreadMessages: false,
+            isInitialChatLoad: true,
+            typingUsers: [], // To store users who are typing
+            typingTimeout: null, // Timeout for typing indicator
             groupVisibilityState: {},
             isAppInitialized: false,
             editingUser: null,
-            currentUserTechId: null, // Store the current user's tech ID
+            currentUserTechId: null,
             filters: {
                 batchId: localStorage.getItem('currentSelectedBatchId') || "",
                 fixCategory: "",
@@ -141,7 +145,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 this.auth = firebase.auth();
                 console.log("Firebase initialized successfully!");
 
-                this.methods.injectChatModalHTML.call(this); // Inject Chat HTML first
+                this.methods.injectChatModalHTML.call(this);
                 this.methods.setupDOMReferences.call(this);
                 this.methods.injectNotificationStyles.call(this);
                 this.methods.loadColumnVisibilityState.call(this);
@@ -228,6 +232,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     chatMessageForm: document.getElementById('chatMessageForm'),
                     chatMessageInput: document.getElementById('chatMessageInput'),
                     chatNotificationBadge: document.getElementById('chatNotificationBadge'),
+                    startVoiceCallBtn: document.getElementById('startVoiceCallBtn'),
+                    typingIndicator: document.getElementById('typingIndicator'),
+                    chatAudioNotification: document.getElementById('chatAudioNotification'),
                 };
             },
 
@@ -287,8 +294,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Team Chat event listeners
                 attachClick(self.elements.openTeamChatBtn, () => {
                     self.elements.teamChatModal.style.display = 'block';
-                    self.state.hasUnreadMessages = false; // Mark as read
-                    self.methods.updateChatBadgeVisibility.call(self); // Hide badge
+                    self.state.hasUnreadMessages = false;
+                    self.methods.updateChatBadgeVisibility.call(self);
                     self.elements.chatMessagesContainer.scrollTop = self.elements.chatMessagesContainer.scrollHeight;
                 });
                 attachClick(self.elements.closeTeamChatBtn, () => {
@@ -297,6 +304,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (self.elements.chatMessageForm) {
                     self.elements.chatMessageForm.addEventListener('submit', self.methods.handleSendMessage.bind(self));
                 }
+                if (self.elements.chatMessageInput) {
+                    self.elements.chatMessageInput.addEventListener('keyup', self.methods.handleUserTyping.bind(self));
+                }
+                attachClick(self.elements.startVoiceCallBtn, () => {
+                    window.open(self.config.chat.MEETING_URL, '_blank');
+                });
 
 
                 attachClick(self.elements.exportCsvBtn, self.methods.handleExportCsv.bind(self));
@@ -353,7 +366,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     self.elements.userManagementForm.addEventListener('submit', self.methods.handleUserFormSubmit.bind(self));
                 }
 
-                // ADDED: Listeners for user import/export
                 attachClick(self.elements.importUsersBtn, () => self.elements.userCsvInput.click());
                 attachClick(self.elements.exportUsersBtn, self.methods.handleExportUsers.bind(self));
                 if (self.elements.userCsvInput) {
@@ -455,7 +467,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         const authorizedUser = this.state.users.find(u => u.email.toLowerCase() === userEmailLower);
 
                         if (authorizedUser) {
-                            this.state.currentUserTechId = authorizedUser.techId; // Set current user's tech ID
+                            this.state.currentUserTechId = authorizedUser.techId;
                             this.methods.handleAuthorizedUser.call(this, user);
                         } else {
                             alert("Access Denied: Your email address is not authorized for this application.");
@@ -487,7 +499,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     this.methods.initializeFirebaseAndLoadData.call(this);
                     this.state.isAppInitialized = true;
                     this.methods.listenForNotifications.call(this);
-                    this.methods.listenForChatMessages.call(this); // Start listening for chat messages
+                    this.methods.listenForChatMessages.call(this);
+                    this.methods.listenForTypingStatus.call(this);
                 }
             },
 
@@ -502,7 +515,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 this.elements.loadingAuthMessageDiv.innerHTML = "<p>Please sign in to access the Project Tracker.</p>";
                 this.elements.loadingAuthMessageDiv.style.display = 'block';
                 if (this.elements.openSettingsBtn) this.elements.openSettingsBtn.style.display = 'none';
-                this.state.currentUserTechId = null; // Clear tech ID on sign out
+                this.state.currentUserTechId = null;
 
                 if (this.firestoreListenerUnsubscribe) {
                     this.firestoreListenerUnsubscribe();
@@ -512,9 +525,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     this.notificationListenerUnsubscribe();
                     this.notificationListenerUnsubscribe = null;
                 }
-                if (this.chatListenerUnsubscribe) { // Stop chat listener
+                if (this.chatListenerUnsubscribe) {
                     this.chatListenerUnsubscribe();
                     this.chatListenerUnsubscribe = null;
+                }
+                if (this.typingListenerUnsubscribe) {
+                    this.typingListenerUnsubscribe();
+                    this.typingListenerUnsubscribe = null;
                 }
                 this.state.isAppInitialized = false;
             },
@@ -2398,10 +2415,12 @@ document.addEventListener('DOMContentLoaded', () => {
                         <div class="modal-content large">
                             <div class="modal-header">
                                 <h2>Team Chat</h2>
+                                <button id="startVoiceCallBtn" class="btn btn-success" style="margin-left: auto; margin-right: 20px;">📞 Start Voice Call</button>
                                 <span class="close-btn" id="closeTeamChatBtn">&times;</span>
                             </div>
                             <div class="modal-body">
                                 <div id="chatMessagesContainer" class="chat-messages"></div>
+                                <div id="typingIndicator" class="typing-indicator"></div>
                                 <form id="chatMessageForm" class="chat-form">
                                     <input type="text" id="chatMessageInput" placeholder="Type a message... (try 'lol' or ':)')" autocomplete="off" required>
                                     <button type="submit" class="btn btn-primary">Send</button>
@@ -2409,6 +2428,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             </div>
                         </div>
                     </div>
+                    <audio id="chatAudioNotification" src="https://firebasestorage.googleapis.com/v0/b/project-tracker-pro-728b1.appspot.com/o/notification.mp3?alt=media&token=8934ed53-220a-4a2f-893f-8898a11b669e"></audio>
                 `;
                 document.body.insertAdjacentHTML('beforeend', chatModalHTML);
             },
@@ -2426,18 +2446,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 const chatRef = this.db.collection(this.config.firestorePaths.CHAT).orderBy("timestamp", "asc");
 
                 this.chatListenerUnsubscribe = chatRef.onSnapshot(snapshot => {
-                    // This logic runs for every update, including the initial load.
-                    // We only want to trigger notifications for NEW messages after the app has loaded.
                     if (self.state.isInitialChatLoad) {
-                        self.state.isInitialChatLoad = false; // Set flag to false after first snapshot
+                        self.state.isInitialChatLoad = false;
                     } else {
                         snapshot.docChanges().forEach(change => {
                             if (change.type === "added") {
                                 const messageData = change.doc.data();
-                                // Only show badge if the modal is closed AND the message is from another user
                                 if (self.elements.teamChatModal.style.display === 'none' && messageData.techId !== self.state.currentUserTechId) {
                                     self.state.hasUnreadMessages = true;
                                     self.methods.updateChatBadgeVisibility.call(self);
+                                    self.methods.playNotificationSound.call(self);
                                 }
                             }
                         });
@@ -2458,11 +2476,18 @@ document.addEventListener('DOMContentLoaded', () => {
                     this.elements.chatNotificationBadge.style.display = this.state.hasUnreadMessages ? 'block' : 'none';
                 }
             },
+            
+            playNotificationSound() {
+                if (this.elements.chatAudioNotification) {
+                    this.elements.chatAudioNotification.play().catch(error => {
+                        console.warn("Audio notification blocked by browser:", error.message);
+                    });
+                }
+            },
 
             renderChatMessages() {
                 if (!this.elements.chatMessagesContainer) return;
                 const container = this.elements.chatMessagesContainer;
-                // Check if user is scrolled to the bottom before re-rendering
                 const shouldScroll = container.scrollTop + container.clientHeight >= container.scrollHeight - 20;
                 
                 container.innerHTML = '';
@@ -2479,7 +2504,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         minute: '2-digit'
                     }) : '';
                     
-                    // Create a text node for the message to prevent HTML injection
                     const messageTextNode = document.createTextNode(msg.text);
                     const messageParagraph = document.createElement('p');
                     messageParagraph.className = 'message-text';
@@ -2495,7 +2519,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     container.appendChild(msgDiv);
                 });
 
-                // Scroll to the bottom only if it was already near the bottom or if the modal is visible
                 if (shouldScroll || this.elements.teamChatModal.style.display !== 'none') {
                      container.scrollTop = container.scrollHeight;
                 }
@@ -2508,7 +2531,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     ":D": "😄", ":-D": "😄",
                     "lol": "😂",
                     "<3": "❤️",
-                    ":p": "😛", ":-p": "😛",
+                    ":p": "😛", ":-p": "�",
                     ";)": "😉", ";-)": "😉",
                     ":o": "😮", ":-o": "😮",
                     "yay": "🎉",
@@ -2516,7 +2539,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     "ok": "👍",
                     "tada": "🎉"
                 };
-                // Use a regex to replace all occurrences, case-insensitively for text
                 const regex = new RegExp(Object.keys(emojiMap).map(e => e.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')).join("|"), "gi");
                 return text.replace(regex, (match) => emojiMap[match.toLowerCase()]);
             },
@@ -2532,7 +2554,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     return;
                 }
                 
-                // Parse emojis before sending
                 messageText = this.methods.parseEmojis.call(this, messageText);
 
                 const messageData = {
@@ -2544,7 +2565,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 try {
                     await this.db.collection(this.config.firestorePaths.CHAT).add(messageData);
                     input.value = '';
-                    // After sending, check and limit the number of messages
+                    this.methods.updateTypingStatus.call(this, false); // User is no longer typing
                     this.methods.limitChatMessages.call(this);
                 } catch (error) {
                     console.error("Error sending message:", error);
@@ -2560,7 +2581,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     if (messageCount > this.config.chat.MAX_MESSAGES) {
                         const toDeleteCount = messageCount - this.config.chat.MAX_MESSAGES;
-                        // Oldest messages are at the end because of "desc" order
                         const toDelete = snapshot.docs.slice(this.config.chat.MAX_MESSAGES); 
 
                         const batch = this.db.batch();
@@ -2575,6 +2595,66 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             },
 
+            handleUserTyping() {
+                clearTimeout(this.state.typingTimeout);
+                this.methods.updateTypingStatus.call(this, true);
+                this.state.typingTimeout = setTimeout(() => {
+                    this.methods.updateTypingStatus.call(this, false);
+                }, 2000); // 2 seconds of inactivity
+            },
+
+            async updateTypingStatus(isTyping) {
+                if (!this.state.currentUserTechId) return;
+                const typingRef = this.db.collection(this.config.firestorePaths.TYPING_STATUS).doc(this.state.currentUserTechId);
+                if (isTyping) {
+                    await typingRef.set({
+                        techId: this.state.currentUserTechId,
+                        timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                } else {
+                    await typingRef.delete();
+                }
+            },
+
+            listenForTypingStatus() {
+                if (this.typingListenerUnsubscribe) this.typingListenerUnsubscribe();
+
+                const self = this;
+                const typingRef = this.db.collection(this.config.firestorePaths.TYPING_STATUS);
+
+                this.typingListenerUnsubscribe = typingRef.onSnapshot(snapshot => {
+                    const now = Date.now();
+                    const typingUsers = [];
+                    snapshot.forEach(doc => {
+                        const data = doc.data();
+                        // Consider users who typed in the last 5 seconds
+                        if (data.timestamp && (now - data.timestamp.toMillis() < 5000) && data.techId !== self.state.currentUserTechId) {
+                            typingUsers.push(data.techId);
+                        }
+                    });
+                    self.state.typingUsers = typingUsers;
+                    self.methods.renderTypingIndicator.call(self);
+                });
+            },
+
+            renderTypingIndicator() {
+                const indicator = this.elements.typingIndicator;
+                if (!indicator) return;
+
+                if (this.state.typingUsers.length === 0) {
+                    indicator.textContent = '';
+                    indicator.style.display = 'none';
+                } else if (this.state.typingUsers.length === 1) {
+                    indicator.textContent = `${this.state.typingUsers[0]} is typing...`;
+                    indicator.style.display = 'block';
+                } else if (this.state.typingUsers.length <= 3) {
+                    indicator.textContent = `${this.state.typingUsers.join(', ')} are typing...`;
+                    indicator.style.display = 'block';
+                } else {
+                    indicator.textContent = 'Several people are typing...';
+                    indicator.style.display = 'block';
+                }
+            },
 
             // --- IMPORT / EXPORT METHODS ---
 
@@ -2653,7 +2733,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         alert("Error importing users: " + error.message);
                     } finally {
                         this.methods.hideLoading.call(this);
-                        this.elements.userCsvInput.value = ''; // Reset file input
+                        this.elements.userCsvInput.value = '';
                     }
                 };
 
@@ -2695,7 +2775,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         email,
                         techId
                     });
-                    existingEmails.add(email); // Add to set to prevent duplicates within the same file
+                    existingEmails.add(email);
                     existingTechIds.add(techId);
                 }
                 return newUsers;
