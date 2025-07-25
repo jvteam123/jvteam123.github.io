@@ -1293,7 +1293,7 @@
                 ? `<ul class="list-disc list-inside text-xs text-gray-700 mt-1 space-y-0.5">${tech.refixDetails.map(r => `<li>Task: <span class="font-mono font-semibold">${r.round}</span> (Project: ${r.project})</li>`).join('')}</ul>`
                 : `<p class="text-xs text-gray-500 italic mt-1 pl-4">No refixes recorded.</p>`;
 
-            modalBody.innerHTML = `<div class="space-y-4 text-sm">
+            const bodyHtml = `<div class="space-y-4 text-sm">
                 <div class="p-3 bg-gray-50 rounded-lg border">
                     <h4 class="font-semibold text-base text-gray-800 mb-2">Core Stats</h4>
                     <div class="flex justify-between"><span class="text-gray-600">Primary Fix Tasks:</span><span class="font-bold">${tech.fixTasks}</span></div>
