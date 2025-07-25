@@ -7,16 +7,14 @@
  * global variables, improves performance, and ensures correct
  * timezone handling.
  *
- * @version 3.8.0
+ * @version 3.9.0
  * @author Gemini AI Refactor & Bug-Fix
  * @changeLog
- * - ADDED: (User Request) Admins can now set a persistent team meeting URL in Project Settings.
- * - UPDATED: (User Request) "Start Voice Call" button now uses the persistent meeting URL, ensuring all users join the same call.
+ * - ADDED: (User Request) A dynamic, configurable button ("TSC [Month]") on the main action bar.
+ * - ADDED: (User Request) Admins can now set the name and URL for the dynamic button in Project Settings.
+ * - UPDATED: "Start Voice Call" button now uses a persistent meeting URL set by an admin.
  * - ADDED: Chat messages that are links are now automatically clickable.
- * - ADDED: Invitation messages have a special style and icon to stand out.
- * - ADDED: "User is typing..." indicator in the chat window.
- * - ADDED: Sound notifications for new messages when the chat window is closed.
- * - FIXED: Corrected logic for the chat notification badge.
+ * - ADDED: "User is typing..." indicator and sound notifications for new chat messages.
  */
 document.addEventListener('DOMContentLoaded', () => {
 
@@ -41,7 +39,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 NOTIFICATIONS: "notifications",
                 CHAT: "chat",
                 TYPING_STATUS: "typing_status",
-                APP_CONFIG: "app_config" // For app-wide settings like the meeting link
+                APP_CONFIG: "app_config"
             },
             chat: {
                 MAX_MESSAGES: 30
@@ -97,6 +95,7 @@ document.addEventListener('DOMContentLoaded', () => {
         notificationListenerUnsubscribe: null,
         chatListenerUnsubscribe: null,
         typingListenerUnsubscribe: null,
+        appConfigListenerUnsubscribe: null, // Listener for app settings
 
         // --- 3. APPLICATION STATE ---
         state: {
@@ -111,6 +110,7 @@ document.addEventListener('DOMContentLoaded', () => {
             isAppInitialized: false,
             editingUser: null,
             currentUserTechId: null,
+            appConfig: {}, // To store fetched app settings
             filters: {
                 batchId: localStorage.getItem('currentSelectedBatchId') || "",
                 fixCategory: "",
@@ -212,6 +212,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     toggleTitleCheckbox: document.getElementById('toggleTitleCheckbox'),
                     toggleDay2Checkbox: document.getElementById('toggleDay2Checkbox'),
                     toggleDay3Checkbox: document.getElementById('toggleDay3Checkbox'),
+                    tscLinkBtn: document.getElementById('tscLinkBtn'), // Dynamic TSC button
 
                     // User Management DOM elements
                     userManagementForm: document.getElementById('userManagementForm'),
@@ -499,6 +500,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (this.elements.openSettingsBtn) this.elements.openSettingsBtn.style.display = 'block';
 
                 if (!this.state.isAppInitialized) {
+                    this.methods.listenForAppConfigChanges.call(this); // Listen for settings first
                     this.methods.initializeFirebaseAndLoadData.call(this);
                     this.state.isAppInitialized = true;
                     this.methods.listenForNotifications.call(this);
@@ -520,22 +522,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (this.elements.openSettingsBtn) this.elements.openSettingsBtn.style.display = 'none';
                 this.state.currentUserTechId = null;
 
-                if (this.firestoreListenerUnsubscribe) {
-                    this.firestoreListenerUnsubscribe();
-                    this.firestoreListenerUnsubscribe = null;
-                }
-                if (this.notificationListenerUnsubscribe) {
-                    this.notificationListenerUnsubscribe();
-                    this.notificationListenerUnsubscribe = null;
-                }
-                if (this.chatListenerUnsubscribe) {
-                    this.chatListenerUnsubscribe();
-                    this.chatListenerUnsubscribe = null;
-                }
-                if (this.typingListenerUnsubscribe) {
-                    this.typingListenerUnsubscribe();
-                    this.typingListenerUnsubscribe = null;
-                }
+                if (this.firestoreListenerUnsubscribe) this.firestoreListenerUnsubscribe();
+                if (this.notificationListenerUnsubscribe) this.notificationListenerUnsubscribe();
+                if (this.chatListenerUnsubscribe) this.chatListenerUnsubscribe();
+                if (this.typingListenerUnsubscribe) this.typingListenerUnsubscribe();
+                if (this.appConfigListenerUnsubscribe) this.appConfigListenerUnsubscribe();
+                
                 this.state.isAppInitialized = false;
             },
 
@@ -1402,30 +1394,56 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!this.elements.tlDashboardContentElement) return;
                 this.elements.tlDashboardContentElement.innerHTML = "";
             
-                // --- Meeting Link Settings ---
-                const chatSettingsDiv = document.createElement('div');
-                chatSettingsDiv.className = 'dashboard-batch-item';
-                chatSettingsDiv.innerHTML = `
-                    <h4>💬 Chat Settings</h4>
-                    <div class="form-group">
-                        <label for="meetingLinkInput" style="font-weight: bold; font-size: 1em;">Team Meeting URL</label>
-                        <div style="display: flex; gap: 10px;">
-                            <input type="url" id="meetingLinkInput" class="form-control" placeholder="https://meet.google.com/xxx-xxxx-xxx">
-                            <button id="saveMeetingLinkBtn" class="btn btn-primary">Save</button>
-                        </div>
+                // --- General Settings Section ---
+                const settingsDiv = document.createElement('div');
+                settingsDiv.className = 'dashboard-batch-item';
+                settingsDiv.innerHTML = `<h4>⚙️ General Settings</h4>`;
+            
+                // Meeting Link Settings
+                const chatSettingsForm = document.createElement('div');
+                chatSettingsForm.className = 'form-group';
+                chatSettingsForm.innerHTML = `
+                    <label for="meetingLinkInput" style="font-weight: bold; font-size: 1em;">Team Meeting URL</label>
+                    <div style="display: flex; gap: 10px;">
+                        <input type="url" id="meetingLinkInput" class="form-control" placeholder="https://meet.google.com/xxx-xxxx-xxx">
+                        <button id="saveMeetingLinkBtn" class="btn btn-primary">Save</button>
                     </div>
                 `;
-                this.elements.tlDashboardContentElement.appendChild(chatSettingsDiv);
+                settingsDiv.appendChild(chatSettingsForm);
             
-                // Fetch and display the current meeting link
-                const configDoc = await this.db.collection(this.config.firestorePaths.APP_CONFIG).doc('chat_settings').get();
-                const meetingLinkInput = chatSettingsDiv.querySelector('#meetingLinkInput');
-                if (configDoc.exists && configDoc.data().meetingUrl) {
-                    meetingLinkInput.value = configDoc.data().meetingUrl;
+                // TSC Link Settings
+                const tscSettingsForm = document.createElement('div');
+                tscSettingsForm.className = 'form-group';
+                tscSettingsForm.innerHTML = `
+                    <label for="tscLinkNameInput" style="font-weight: bold; font-size: 1em; margin-top: 15px;">Custom Link Button</label>
+                    <div style="display: grid; grid-template-columns: 1fr 2fr auto; gap: 10px;">
+                        <input type="text" id="tscLinkNameInput" class="form-control" placeholder="e.g., July">
+                        <input type="url" id="tscLinkUrlInput" class="form-control" placeholder="https://chat.google.com/...">
+                        <button id="saveTscLinkBtn" class="btn btn-primary">Save</button>
+                    </div>
+                `;
+                settingsDiv.appendChild(tscSettingsForm);
+            
+                this.elements.tlDashboardContentElement.appendChild(settingsDiv);
+            
+                // Fetch and display current settings
+                const configDoc = await this.db.collection(this.config.firestorePaths.APP_CONFIG).doc('settings').get();
+                if (configDoc.exists) {
+                    const data = configDoc.data();
+                    if (data.meetingUrl) {
+                        settingsDiv.querySelector('#meetingLinkInput').value = data.meetingUrl;
+                    }
+                    if (data.tscButtonName) {
+                        settingsDiv.querySelector('#tscLinkNameInput').value = data.tscButtonName;
+                    }
+                    if (data.tscButtonUrl) {
+                        settingsDiv.querySelector('#tscLinkUrlInput').value = data.tscButtonUrl;
+                    }
                 }
             
-                // Add event listener for the save button
-                chatSettingsDiv.querySelector('#saveMeetingLinkBtn').onclick = this.methods.handleSaveMeetingLink.bind(this);
+                // Add event listeners
+                settingsDiv.querySelector('#saveMeetingLinkBtn').onclick = this.methods.handleSaveMeetingLink.bind(this);
+                settingsDiv.querySelector('#saveTscLinkBtn').onclick = this.methods.handleSaveTscLink.bind(this);
             
                 // --- Project Management Sections ---
                 const batches = await this.methods.getManageableBatches.call(this);
@@ -1565,20 +1583,46 @@ document.addEventListener('DOMContentLoaded', () => {
                 const input = document.getElementById('meetingLinkInput');
                 const newUrl = input.value.trim();
             
-                if (!newUrl || !newUrl.startsWith('http')) {
+                if (newUrl && !newUrl.startsWith('http')) {
                     alert('Please enter a valid URL (e.g., https://meet.google.com/...).');
                     return;
                 }
             
-                this.methods.showLoading.call(this, 'Saving link...');
+                this.methods.showLoading.call(this, 'Saving Meeting Link...');
                 try {
-                    await this.db.collection(this.config.firestorePaths.APP_CONFIG).doc('chat_settings').set({
+                    await this.db.collection(this.config.firestorePaths.APP_CONFIG).doc('settings').set({
                         meetingUrl: newUrl
                     }, { merge: true });
                     alert('Meeting link saved successfully!');
                 } catch (error) {
                     console.error("Error saving meeting link:", error);
                     alert('Failed to save meeting link: ' + error.message);
+                } finally {
+                    this.methods.hideLoading.call(this);
+                }
+            },
+            
+            async handleSaveTscLink() {
+                const nameInput = document.getElementById('tscLinkNameInput');
+                const urlInput = document.getElementById('tscLinkUrlInput');
+                const newName = nameInput.value.trim();
+                const newUrl = urlInput.value.trim();
+            
+                if (newUrl && !newUrl.startsWith('http')) {
+                    alert('Please enter a valid URL for the custom link.');
+                    return;
+                }
+            
+                this.methods.showLoading.call(this, 'Saving Custom Link...');
+                try {
+                    await this.db.collection(this.config.firestorePaths.APP_CONFIG).doc('settings').set({
+                        tscButtonName: newName,
+                        tscButtonUrl: newUrl
+                    }, { merge: true });
+                    alert('Custom link saved successfully!');
+                } catch (error) {
+                    console.error("Error saving custom link:", error);
+                    alert('Failed to save custom link: ' + error.message);
                 } finally {
                     this.methods.hideLoading.call(this);
                 }
@@ -2633,9 +2677,8 @@ document.addEventListener('DOMContentLoaded', () => {
             async handleStartVoiceCall() {
                 this.methods.showLoading.call(this, 'Getting meeting link...');
                 try {
-                    const configDoc = await this.db.collection(this.config.firestorePaths.APP_CONFIG).doc('chat_settings').get();
-                    if (configDoc.exists && configDoc.data().meetingUrl) {
-                        const meetingUrl = configDoc.data().meetingUrl;
+                    const meetingUrl = this.state.appConfig.meetingUrl;
+                    if (meetingUrl) {
                         const message = `${this.state.currentUserTechId} has started a voice call! Click to join:\n${meetingUrl}`;
                         await this.methods.handleSendMessage.call(this, message, 'invitation');
                         window.open(meetingUrl, '_blank');
@@ -2734,6 +2777,31 @@ document.addEventListener('DOMContentLoaded', () => {
                 } else {
                     indicator.textContent = 'Several people are typing...';
                     indicator.style.display = 'block';
+                }
+            },
+            
+            listenForAppConfigChanges() {
+                if (this.appConfigListenerUnsubscribe) this.appConfigListenerUnsubscribe();
+                const self = this;
+                this.appConfigListenerUnsubscribe = this.db.collection(this.config.firestorePaths.APP_CONFIG).doc('settings')
+                    .onSnapshot(doc => {
+                        if (doc.exists) {
+                            self.state.appConfig = doc.data();
+                            self.methods.updateTscButton.call(self);
+                        }
+                    });
+            },
+            
+            updateTscButton() {
+                const { tscButtonName, tscButtonUrl } = this.state.appConfig;
+                const btn = this.elements.tscLinkBtn;
+            
+                if (btn && tscButtonName && tscButtonUrl) {
+                    btn.textContent = `TSC ${tscButtonName}`;
+                    btn.onclick = () => window.open(tscButtonUrl, '_blank');
+                    btn.style.display = 'inline-block';
+                } else if (btn) {
+                    btn.style.display = 'none';
                 }
             },
 
