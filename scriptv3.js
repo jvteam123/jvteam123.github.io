@@ -7,16 +7,15 @@
  * global variables, improves performance, and ensures correct
  * timezone handling.
  *
- * @version 3.6.0
+ * @version 3.7.0
  * @author Gemini AI Refactor & Bug-Fix
  * @changeLog
- * - ADDED: (User Request) "User is typing..." indicator in the chat window.
- * - ADDED: (User Request) Sound notifications for new messages when the chat window is closed.
- * - ADDED: (User Request) A "Start Voice Call" button that links to an external meeting service.
+ * - ADDED: (User Request) Clicking "Start Voice Call" now automatically posts a clickable meeting link into the chat.
+ * - ADDED: (User Request) Chat messages that are links are now automatically clickable.
+ * - ADDED: (User Request) Invitation messages have a special style and icon to stand out.
+ * - ADDED: "User is typing..." indicator in the chat window.
+ * - ADDED: Sound notifications for new messages when the chat window is closed.
  * - FIXED: Corrected logic for the chat notification badge.
- * - ADDED: Notification badge on the "Team Chat" button for new messages.
- * - ADDED: Simple emoji parsing for chat messages.
- * - UPDATED: Increased chat history limit to 30 messages.
  */
 document.addEventListener('DOMContentLoaded', () => {
 
@@ -307,9 +306,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (self.elements.chatMessageInput) {
                     self.elements.chatMessageInput.addEventListener('keyup', self.methods.handleUserTyping.bind(self));
                 }
-                attachClick(self.elements.startVoiceCallBtn, () => {
-                    window.open(self.config.chat.MEETING_URL, '_blank');
-                });
+                attachClick(self.elements.startVoiceCallBtn, self.methods.handleStartVoiceCall.bind(self));
 
 
                 attachClick(self.elements.exportCsvBtn, self.methods.handleExportCsv.bind(self));
@@ -2498,24 +2495,24 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (msg.techId === this.state.currentUserTechId) {
                         msgDiv.classList.add('current-user');
                     }
+                    if (msg.type === 'invitation') {
+                        msgDiv.classList.add('invitation');
+                    }
 
                     const time = msg.timestamp ? msg.timestamp.toDate().toLocaleTimeString([], {
                         hour: '2-digit',
                         minute: '2-digit'
                     }) : '';
                     
-                    const messageTextNode = document.createTextNode(msg.text);
-                    const messageParagraph = document.createElement('p');
-                    messageParagraph.className = 'message-text';
-                    messageParagraph.appendChild(messageTextNode);
+                    const messageTextWithLinks = this.methods.linkify.call(this, msg.text);
 
                     msgDiv.innerHTML = `
                         <div class="message-header">
                             <span class="message-user">${msg.techId || 'Anonymous'}</span>
                             <span class="message-time">${time}</span>
                         </div>
+                        <p class="message-text">${messageTextWithLinks}</p>
                     `;
-                    msgDiv.appendChild(messageParagraph);
                     container.appendChild(msgDiv);
                 });
 
@@ -2524,6 +2521,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             },
             
+            linkify(text) {
+                const urlRegex = /(\b(https?|ftp|file):\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/ig;
+                return text.replace(urlRegex, (url) => {
+                    return `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`;
+                });
+            },
+
             parseEmojis(text) {
                 const emojiMap = {
                     ":)": "😊", ":-)": "😊",
@@ -2531,7 +2535,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     ":D": "😄", ":-D": "😄",
                     "lol": "😂",
                     "<3": "❤️",
-                    ":p": "😛", ":-p": "�",
+                    ":p": "😛", ":-p": "😛",
                     ";)": "😉", ";-)": "😉",
                     ":o": "😮", ":-o": "😮",
                     "yay": "🎉",
@@ -2543,34 +2547,36 @@ document.addEventListener('DOMContentLoaded', () => {
                 return text.replace(regex, (match) => emojiMap[match.toLowerCase()]);
             },
 
-            async handleSendMessage(event) {
-                event.preventDefault();
-                const input = this.elements.chatMessageInput;
-                let messageText = input.value.trim();
-
-                if (!messageText) return;
+            async handleSendMessage(messageText, messageType = 'standard') {
+                if (typeof messageText !== 'string' || !messageText.trim()) return;
                 if (!this.state.currentUserTechId) {
                     alert("Cannot send message. Your user ID is not set.");
                     return;
                 }
                 
-                messageText = this.methods.parseEmojis.call(this, messageText);
+                let processedText = this.methods.parseEmojis.call(this, messageText);
 
                 const messageData = {
-                    text: messageText,
+                    text: processedText,
                     techId: this.state.currentUserTechId,
-                    timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                    type: messageType
                 };
 
                 try {
                     await this.db.collection(this.config.firestorePaths.CHAT).add(messageData);
-                    input.value = '';
-                    this.methods.updateTypingStatus.call(this, false); // User is no longer typing
+                    this.methods.updateTypingStatus.call(this, false);
                     this.methods.limitChatMessages.call(this);
                 } catch (error) {
                     console.error("Error sending message:", error);
                     alert("Failed to send message: " + error.message);
                 }
+            },
+            
+            async handleStartVoiceCall() {
+                const message = `${this.state.currentUserTechId} has started a voice call! Click to join:\n${this.config.chat.MEETING_URL}`;
+                await this.methods.handleSendMessage.call(this, message, 'invitation');
+                window.open(this.config.chat.MEETING_URL, '_blank');
             },
 
             async limitChatMessages() {
@@ -2595,7 +2601,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             },
 
-            handleUserTyping() {
+            handleUserTyping(event) {
+                // If the user submits the form with Enter, don't trigger typing indicator
+                if (event.key === 'Enter') {
+                    clearTimeout(this.state.typingTimeout);
+                    this.methods.updateTypingStatus.call(this, false);
+                    return;
+                }
                 clearTimeout(this.state.typingTimeout);
                 this.methods.updateTypingStatus.call(this, true);
                 this.state.typingTimeout = setTimeout(() => {
@@ -2627,7 +2639,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     const typingUsers = [];
                     snapshot.forEach(doc => {
                         const data = doc.data();
-                        // Consider users who typed in the last 5 seconds
                         if (data.timestamp && (now - data.timestamp.toMillis() < 5000) && data.techId !== self.state.currentUserTechId) {
                             typingUsers.push(data.techId);
                         }
