@@ -7,12 +7,13 @@
  * global variables, improves performance, and ensures correct
  * timezone handling.
  *
- * @version 3.7.0
+ * @version 3.8.0
  * @author Gemini AI Refactor & Bug-Fix
  * @changeLog
- * - ADDED: (User Request) Clicking "Start Voice Call" now automatically posts a clickable meeting link into the chat.
- * - ADDED: (User Request) Chat messages that are links are now automatically clickable.
- * - ADDED: (User Request) Invitation messages have a special style and icon to stand out.
+ * - ADDED: (User Request) Admins can now set a persistent team meeting URL in Project Settings.
+ * - UPDATED: (User Request) "Start Voice Call" button now uses the persistent meeting URL, ensuring all users join the same call.
+ * - ADDED: Chat messages that are links are now automatically clickable.
+ * - ADDED: Invitation messages have a special style and icon to stand out.
  * - ADDED: "User is typing..." indicator in the chat window.
  * - ADDED: Sound notifications for new messages when the chat window is closed.
  * - FIXED: Corrected logic for the chat notification badge.
@@ -39,11 +40,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 USERS: "users",
                 NOTIFICATIONS: "notifications",
                 CHAT: "chat",
-                TYPING_STATUS: "typing_status" // For typing indicator
+                TYPING_STATUS: "typing_status",
+                APP_CONFIG: "app_config" // For app-wide settings like the meeting link
             },
             chat: {
-                MAX_MESSAGES: 30,
-                MEETING_URL: "https://meet.google.com/new" // Easy to update meeting link
+                MAX_MESSAGES: 30
             },
             FIX_CATEGORIES: {
                 ORDER: ["Fix1", "Fix2", "Fix3", "Fix4", "Fix5", "Fix6"],
@@ -95,7 +96,7 @@ document.addEventListener('DOMContentLoaded', () => {
         firestoreListenerUnsubscribe: null,
         notificationListenerUnsubscribe: null,
         chatListenerUnsubscribe: null,
-        typingListenerUnsubscribe: null, // Unsubscriber for typing listener
+        typingListenerUnsubscribe: null,
 
         // --- 3. APPLICATION STATE ---
         state: {
@@ -104,8 +105,8 @@ document.addEventListener('DOMContentLoaded', () => {
             chatMessages: [],
             hasUnreadMessages: false,
             isInitialChatLoad: true,
-            typingUsers: [], // To store users who are typing
-            typingTimeout: null, // Timeout for typing indicator
+            typingUsers: [],
+            typingTimeout: null,
             groupVisibilityState: {},
             isAppInitialized: false,
             editingUser: null,
@@ -301,7 +302,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     self.elements.teamChatModal.style.display = 'none';
                 });
                 if (self.elements.chatMessageForm) {
-                    self.elements.chatMessageForm.addEventListener('submit', self.methods.handleSendMessage.bind(self));
+                    self.elements.chatMessageForm.addEventListener('submit', (e) => {
+                        e.preventDefault();
+                        const input = self.elements.chatMessageInput;
+                        self.methods.handleSendMessage.call(self, input.value.trim());
+                        input.value = '';
+                    });
                 }
                 if (self.elements.chatMessageInput) {
                     self.elements.chatMessageInput.addEventListener('keyup', self.methods.handleUserTyping.bind(self));
@@ -1395,13 +1401,41 @@ document.addEventListener('DOMContentLoaded', () => {
             async renderTLDashboard() {
                 if (!this.elements.tlDashboardContentElement) return;
                 this.elements.tlDashboardContentElement.innerHTML = "";
+            
+                // --- Meeting Link Settings ---
+                const chatSettingsDiv = document.createElement('div');
+                chatSettingsDiv.className = 'dashboard-batch-item';
+                chatSettingsDiv.innerHTML = `
+                    <h4>💬 Chat Settings</h4>
+                    <div class="form-group">
+                        <label for="meetingLinkInput" style="font-weight: bold; font-size: 1em;">Team Meeting URL</label>
+                        <div style="display: flex; gap: 10px;">
+                            <input type="url" id="meetingLinkInput" class="form-control" placeholder="https://meet.google.com/xxx-xxxx-xxx">
+                            <button id="saveMeetingLinkBtn" class="btn btn-primary">Save</button>
+                        </div>
+                    </div>
+                `;
+                this.elements.tlDashboardContentElement.appendChild(chatSettingsDiv);
+            
+                // Fetch and display the current meeting link
+                const configDoc = await this.db.collection(this.config.firestorePaths.APP_CONFIG).doc('chat_settings').get();
+                const meetingLinkInput = chatSettingsDiv.querySelector('#meetingLinkInput');
+                if (configDoc.exists && configDoc.data().meetingUrl) {
+                    meetingLinkInput.value = configDoc.data().meetingUrl;
+                }
+            
+                // Add event listener for the save button
+                chatSettingsDiv.querySelector('#saveMeetingLinkBtn').onclick = this.methods.handleSaveMeetingLink.bind(this);
+            
+                // --- Project Management Sections ---
                 const batches = await this.methods.getManageableBatches.call(this);
-
                 if (batches.length === 0) {
-                    this.elements.tlDashboardContentElement.innerHTML = "<p>No project batches found.</p>";
+                    const noProjectsEl = document.createElement('p');
+                    noProjectsEl.textContent = "No project batches found.";
+                    this.elements.tlDashboardContentElement.appendChild(noProjectsEl);
                     return;
                 }
-
+            
                 batches.forEach(batch => {
                     if (!batch?.batchId) return;
                     const batchItemDiv = document.createElement('div');
@@ -1525,6 +1559,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     this.elements.tlDashboardContentElement.appendChild(batchItemDiv);
                 });
+            },
+            
+            async handleSaveMeetingLink() {
+                const input = document.getElementById('meetingLinkInput');
+                const newUrl = input.value.trim();
+            
+                if (!newUrl || !newUrl.startsWith('http')) {
+                    alert('Please enter a valid URL (e.g., https://meet.google.com/...).');
+                    return;
+                }
+            
+                this.methods.showLoading.call(this, 'Saving link...');
+                try {
+                    await this.db.collection(this.config.firestorePaths.APP_CONFIG).doc('chat_settings').set({
+                        meetingUrl: newUrl
+                    }, { merge: true });
+                    alert('Meeting link saved successfully!');
+                } catch (error) {
+                    console.error("Error saving meeting link:", error);
+                    alert('Failed to save meeting link: ' + error.message);
+                } finally {
+                    this.methods.hideLoading.call(this);
+                }
             },
 
             async recalculateFixStageTotals(batchId, fixCategory) {
@@ -2574,9 +2631,23 @@ document.addEventListener('DOMContentLoaded', () => {
             },
             
             async handleStartVoiceCall() {
-                const message = `${this.state.currentUserTechId} has started a voice call! Click to join:\n${this.config.chat.MEETING_URL}`;
-                await this.methods.handleSendMessage.call(this, message, 'invitation');
-                window.open(this.config.chat.MEETING_URL, '_blank');
+                this.methods.showLoading.call(this, 'Getting meeting link...');
+                try {
+                    const configDoc = await this.db.collection(this.config.firestorePaths.APP_CONFIG).doc('chat_settings').get();
+                    if (configDoc.exists && configDoc.data().meetingUrl) {
+                        const meetingUrl = configDoc.data().meetingUrl;
+                        const message = `${this.state.currentUserTechId} has started a voice call! Click to join:\n${meetingUrl}`;
+                        await this.methods.handleSendMessage.call(this, message, 'invitation');
+                        window.open(meetingUrl, '_blank');
+                    } else {
+                        alert('The team meeting link has not been set. An admin can set it in Project Settings.');
+                    }
+                } catch (error) {
+                    console.error("Error starting voice call:", error);
+                    alert('Could not start voice call. Please check settings.');
+                } finally {
+                    this.methods.hideLoading.call(this);
+                }
             },
 
             async limitChatMessages() {
@@ -2602,7 +2673,6 @@ document.addEventListener('DOMContentLoaded', () => {
             },
 
             handleUserTyping(event) {
-                // If the user submits the form with Enter, don't trigger typing indicator
                 if (event.key === 'Enter') {
                     clearTimeout(this.state.typingTimeout);
                     this.methods.updateTypingStatus.call(this, false);
@@ -2612,7 +2682,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 this.methods.updateTypingStatus.call(this, true);
                 this.state.typingTimeout = setTimeout(() => {
                     this.methods.updateTypingStatus.call(this, false);
-                }, 2000); // 2 seconds of inactivity
+                }, 2000);
             },
 
             async updateTypingStatus(isTyping) {
