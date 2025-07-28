@@ -7,9 +7,10 @@
  * global variables, improves performance, and ensures correct
  * timezone handling.
  *
- * @version 3.9.0
+ * @version 3.9.1
  * @author Gemini AI Refactor & Bug-Fix
  * @changeLog
+ * - ADDED: A "Reset" button next to the "Re-Assign" button to reset a task's time and status.
  * - ADDED: (User Request) A dynamic, configurable button ("TSC [Month]") on the main action bar.
  * - ADDED: (User Request) Admins can now set the name and URL for the dynamic button in Project Settings.
  * - UPDATED: "Start Voice Call" button now uses a persistent meeting URL set by an admin.
@@ -1262,12 +1263,57 @@ document.addEventListener('DOMContentLoaded', () => {
                     actionButtonsDiv.appendChild(createActionButton("End D3", "btn-day-end", project.status !== "InProgressDay3", "endD3"));
                     actionButtonsDiv.appendChild(createActionButton("Done", "btn-mark-done", project.status === "Completed" || project.status === "Reassigned_TechAbsent" || (project.status === "Available" && !(project.durationDay1Ms || project.durationDay2Ms || project.durationDay3Ms)), "markDone"));
 
+                    const resetBtn = createActionButton("Reset", "btn-secondary", project.status === "Available" , "reset");
+                    resetBtn.onclick = () => this.methods.handleResetTask.call(this, project);
+                    actionButtonsDiv.appendChild(resetBtn);
+
                     const reassignBtn = createActionButton("Re-Assign", "btn-warning", project.status === "Completed" || project.status === "Reassigned_TechAbsent", "reassign");
                     reassignBtn.onclick = () => this.methods.handleReassignment.call(this, project);
                     actionButtonsDiv.appendChild(reassignBtn);
 
                     actionsCell.appendChild(actionButtonsDiv);
                 });
+            },
+
+            async handleResetTask(project) {
+                if (!project || project.isLocked) {
+                    alert("This task is locked and cannot be reset.");
+                    return;
+                }
+        
+                if (confirm(`Are you sure you want to reset the task '${project.areaTask}'? This will clear all recorded times and set the status to "Available". This action cannot be undone.`)) {
+                    this.methods.showLoading.call(this, "Resetting task...");
+                    const projectRef = this.db.collection("projects").doc(project.id);
+                    const serverTimestamp = firebase.firestore.FieldValue.serverTimestamp();
+        
+                    const updates = {
+                        status: "Available",
+                        startTimeDay1: null,
+                        finishTimeDay1: null,
+                        durationDay1Ms: null,
+                        startTimeDay2: null,
+                        finishTimeDay2: null,
+                        durationDay2Ms: null,
+                        startTimeDay3: null,
+                        finishTimeDay3: null,
+                        durationDay3Ms: null,
+                        breakDurationMinutesDay1: 0,
+                        breakDurationMinutesDay2: 0,
+                        breakDurationMinutesDay3: 0,
+                        additionalMinutesManual: 0,
+                        techNotes: "",
+                        lastModifiedTimestamp: serverTimestamp
+                    };
+        
+                    try {
+                        await projectRef.update(updates);
+                    } catch (error) {
+                        console.error("Error resetting task:", error);
+                        alert("Error resetting task: " + error.message);
+                    } finally {
+                        this.methods.hideLoading.call(this);
+                    }
+                }
             },
 
             showLoading(message = "Loading...") {
