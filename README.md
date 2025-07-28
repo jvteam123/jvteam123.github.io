@@ -13,6 +13,7 @@ This repository contains the front-end code for the Team123 Project Tracker, a w
     * Automatic calculation of task durations.
     * Option to deduct break durations and add manual additional minutes.
     * Add technical notes for each task.
+    * **Reset Task:** A "Reset" button is available to clear all time entries, notes, and reset the status to "Available".
 * **Project Filters:** Filter tasks by project batch, month of creation, and fix category.
 * **Grouped View:** Tasks are grouped by project batch and fix category, with collapsible sections for better organization.
 * **Team Lead (TL) Dashboard:**
