@@ -7,9 +7,12 @@
  * global variables, improves performance, and ensures correct
  * timezone handling.
  *
- * @version 3.9.1
+ * @version 4.0.0
  * @author Gemini AI Refactor & Bug-Fix
  * @changeLog
+ * - ADDED: Optional tracking for Day 4, Day 5, and Day 6.
+ * - ADDED: Checkboxes to show/hide Day 4, 5, and 6 columns, hidden by default.
+ * - UPDATED: All relevant functions (rendering, calculations, state management, CSV handling) to support up to 6 days.
  * - ADDED: A "Reset" button next to the "Re-Assign" button to reset a task's time and status.
  * - ADDED: (User Request) A dynamic, configurable button ("TSC [Month]") on the main action bar.
  * - ADDED: (User Request) Admins can now set the name and URL for the dynamic button in Project Settings.
@@ -57,12 +60,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     "default": "#FFFFFF"
                 }
             },
-            NUM_TABLE_COLUMNS: 19,
+            NUM_TABLE_COLUMNS: 28, // Increased from 19 to 28 to account for 9 new columns (3 for each new day) + progress bar
             CSV_HEADERS_FOR_IMPORT: [
                 "Fix Cat", "Project Name", "Area/Task", "GSD", "Assigned To", "Status",
                 "Day 1 Start", "Day 1 Finish", "Day 1 Break",
                 "Day 2 Start", "Day 2 Finish", "Day 2 Break",
                 "Day 3 Start", "Day 3 Finish", "Day 3 Break",
+                "Day 4 Start", "Day 4 Finish", "Day 4 Break",
+                "Day 5 Start", "Day 5 Finish", "Day 5 Break",
+                "Day 6 Start", "Day 6 Finish", "Day 6 Break",
                 "Total (min)", "Tech Notes", "Creation Date", "Last Modified"
             ],
             CSV_HEADER_TO_FIELD_MAP: {
@@ -81,6 +87,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 "Day 3 Start": "startTimeDay3",
                 "Day 3 Finish": "finishTimeDay3",
                 "Day 3 Break": "breakDurationMinutesDay3",
+                "Day 4 Start": "startTimeDay4",
+                "Day 4 Finish": "finishTimeDay4",
+                "Day 4 Break": "breakDurationMinutesDay4",
+                "Day 5 Start": "startTimeDay5",
+                "Day 5 Finish": "finishTimeDay5",
+                "Day 5 Break": "breakDurationMinutesDay5",
+                "Day 6 Start": "startTimeDay6",
+                "Day 6 Finish": "finishTimeDay6",
+                "Day 6 Break": "breakDurationMinutesDay6",
                 "Total (min)": null,
                 "Tech Notes": "techNotes",
                 "Creation Date": null,
@@ -213,6 +228,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     toggleTitleCheckbox: document.getElementById('toggleTitleCheckbox'),
                     toggleDay2Checkbox: document.getElementById('toggleDay2Checkbox'),
                     toggleDay3Checkbox: document.getElementById('toggleDay3Checkbox'),
+                    toggleDay4Checkbox: document.getElementById('toggleDay4Checkbox'),
+                    toggleDay5Checkbox: document.getElementById('toggleDay5Checkbox'),
+                    toggleDay6Checkbox: document.getElementById('toggleDay6Checkbox'),
                     tscLinkBtn: document.getElementById('tscLinkBtn'), // Dynamic TSC button
 
                     // User Management DOM elements
@@ -415,24 +433,22 @@ document.addEventListener('DOMContentLoaded', () => {
                     };
                 }
 
-                if (self.elements.toggleTitleCheckbox) {
-                    self.elements.toggleTitleCheckbox.onchange = () => {
-                        self.methods.saveColumnVisibilityState.call(self);
-                        self.methods.applyColumnVisibility.call(self);
-                    };
-                }
-                if (self.elements.toggleDay2Checkbox) {
-                    self.elements.toggleDay2Checkbox.onchange = () => {
-                        self.methods.saveColumnVisibilityState.call(self);
-                        self.methods.applyColumnVisibility.call(self);
-                    };
-                }
-                if (self.elements.toggleDay3Checkbox) {
-                    self.elements.toggleDay3Checkbox.onchange = () => {
-                        self.methods.saveColumnVisibilityState.call(self);
-                        self.methods.applyColumnVisibility.call(self);
-                    };
-                }
+                const setupToggle = (checkbox) => {
+                    if (checkbox) {
+                        checkbox.onchange = () => {
+                            self.methods.saveColumnVisibilityState.call(self);
+                            self.methods.applyColumnVisibility.call(self);
+                        };
+                    }
+                };
+
+                setupToggle(self.elements.toggleTitleCheckbox);
+                setupToggle(self.elements.toggleDay2Checkbox);
+                setupToggle(self.elements.toggleDay3Checkbox);
+                setupToggle(self.elements.toggleDay4Checkbox);
+                setupToggle(self.elements.toggleDay5Checkbox);
+                setupToggle(self.elements.toggleDay6Checkbox);
+
 
                 window.onclick = (event) => {
                     if (event.target == self.elements.tlDashboardModal) self.elements.tlDashboardModal.style.display = 'none';
@@ -657,6 +673,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         breakDurationMinutesDay1: 0,
                         breakDurationMinutesDay2: 0,
                         breakDurationMinutesDay3: 0,
+                        breakDurationMinutesDay4: 0,
+                        breakDurationMinutesDay5: 0,
+                        breakDurationMinutesDay6: 0,
                         additionalMinutesManual: 0,
                         isLocked: p.isLocked || false,
                         ...p
@@ -778,15 +797,12 @@ document.addEventListener('DOMContentLoaded', () => {
                             assignedTo: "",
                             techNotes: "",
                             status: "Available",
-                            startTimeDay1: null,
-                            finishTimeDay1: null,
-                            durationDay1Ms: null,
-                            startTimeDay2: null,
-                            finishTimeDay2: null,
-                            durationDay2Ms: null,
-                            startTimeDay3: null,
-                            finishTimeDay3: null,
-                            durationDay3Ms: null,
+                            startTimeDay1: null, finishTimeDay1: null, durationDay1Ms: null,
+                            startTimeDay2: null, finishTimeDay2: null, durationDay2Ms: null,
+                            startTimeDay3: null, finishTimeDay3: null, durationDay3Ms: null,
+                            startTimeDay4: null, finishTimeDay4: null, durationDay4Ms: null,
+                            startTimeDay5: null, finishTimeDay5: null, durationDay5Ms: null,
+                            startTimeDay6: null, finishTimeDay6: null, durationDay6Ms: null,
                             releasedToNextStage: false,
                             isReassigned: false,
                             originalProjectId: null,
@@ -794,6 +810,9 @@ document.addEventListener('DOMContentLoaded', () => {
                             breakDurationMinutesDay1: 0,
                             breakDurationMinutesDay2: 0,
                             breakDurationMinutesDay3: 0,
+                            breakDurationMinutesDay4: 0,
+                            breakDurationMinutesDay5: 0,
+                            breakDurationMinutesDay6: 0,
                             additionalMinutesManual: 0,
                             isLocked: false,
                         };
@@ -939,6 +958,12 @@ document.addEventListener('DOMContentLoaded', () => {
                         lastModifiedTimestamp: serverTimestamp
                     };
 
+                    const handleDayEnd = (dayNum) => {
+                        const finishTime = firebase.firestore.Timestamp.now();
+                        updates[`finishTimeDay${dayNum}`] = finishTime;
+                        updates[`durationDay${dayNum}Ms`] = this.methods.calculateDurationMs.call(this, project[`startTimeDay${dayNum}`], finishTime);
+                    };
+
                     switch (action) {
                         case "startDay1":
                             updates.status = "InProgressDay1";
@@ -946,9 +971,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             break;
                         case "endDay1":
                             updates.status = "Day1Ended_AwaitingNext";
-                            const finishTimeD1 = firebase.firestore.Timestamp.now();
-                            updates.finishTimeDay1 = finishTimeD1;
-                            updates.durationDay1Ms = this.methods.calculateDurationMs.call(this, project.startTimeDay1, finishTimeD1);
+                            handleDayEnd(1);
                             break;
                         case "startDay2":
                             updates.status = "InProgressDay2";
@@ -956,9 +979,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             break;
                         case "endDay2":
                             updates.status = "Day2Ended_AwaitingNext";
-                            const finishTimeD2 = firebase.firestore.Timestamp.now();
-                            updates.finishTimeDay2 = finishTimeD2;
-                            updates.durationDay2Ms = this.methods.calculateDurationMs.call(this, project.startTimeDay2, finishTimeD2);
+                            handleDayEnd(2);
                             break;
                         case "startDay3":
                             updates.status = "InProgressDay3";
@@ -966,24 +987,38 @@ document.addEventListener('DOMContentLoaded', () => {
                             break;
                         case "endDay3":
                             updates.status = "Day3Ended_AwaitingNext";
-                            const finishTimeD3 = firebase.firestore.Timestamp.now();
-                            updates.finishTimeDay3 = finishTimeD3;
-                            updates.durationDay3Ms = this.methods.calculateDurationMs.call(this, project.startTimeDay3, finishTimeD3);
+                            handleDayEnd(3);
+                            break;
+                        case "startDay4":
+                            updates.status = "InProgressDay4";
+                            updates.startTimeDay4 = serverTimestamp;
+                            break;
+                        case "endDay4":
+                            updates.status = "Day4Ended_AwaitingNext";
+                            handleDayEnd(4);
+                            break;
+                        case "startDay5":
+                            updates.status = "InProgressDay5";
+                            updates.startTimeDay5 = serverTimestamp;
+                            break;
+                        case "endDay5":
+                            updates.status = "Day5Ended_AwaitingNext";
+                            handleDayEnd(5);
+                            break;
+                        case "startDay6":
+                            updates.status = "InProgressDay6";
+                            updates.startTimeDay6 = serverTimestamp;
+                            break;
+                        case "endDay6":
+                             updates.status = "Completed"; // End of Day 6 marks completion
+                            handleDayEnd(6);
                             break;
                         case "markDone":
                             updates.status = "Completed";
-                            if (project.status === "InProgressDay1" && !project.finishTimeDay1) {
-                                const finishTime = firebase.firestore.Timestamp.now();
-                                updates.finishTimeDay1 = finishTime;
-                                updates.durationDay1Ms = this.methods.calculateDurationMs.call(this, project.startTimeDay1, finishTime);
-                            } else if (project.status === "InProgressDay2" && !project.finishTimeDay2) {
-                                const finishTime = firebase.firestore.Timestamp.now();
-                                updates.finishTimeDay2 = finishTime;
-                                updates.durationDay2Ms = this.methods.calculateDurationMs.call(this, project.startTimeDay2, finishTime);
-                            } else if (project.status === "InProgressDay3" && !project.finishTimeDay3) {
-                                const finishTime = firebase.firestore.Timestamp.now();
-                                updates.finishTimeDay3 = finishTime;
-                                updates.durationDay3Ms = this.methods.calculateDurationMs.call(this, project.startTimeDay3, finishTime);
+                             for (let i = 1; i <= 6; i++) {
+                                if (project.status === `InProgressDay${i}` && !project[`finishTimeDay${i}`]) {
+                                    handleDayEnd(i);
+                                }
                             }
                             break;
                         default:
@@ -1163,12 +1198,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     const statusCell = row.insertCell();
                     let displayStatus = project.status || "Unknown";
-                    if (displayStatus === "Day1Ended_AwaitingNext" || displayStatus === "Day2Ended_AwaitingNext" || displayStatus === "Day3Ended_AwaitingNext") {
+                    if (displayStatus.includes("Ended_AwaitingNext")) {
                         displayStatus = "Started Available";
                     } else {
                         displayStatus = displayStatus.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').trim();
                     }
                     statusCell.innerHTML = `<span class="status status-${(project.status || "unknown").toLowerCase()}">${displayStatus}</span>`;
+
 
                     const formatTime = (ts) => ts?.toDate ? ts.toDate().toTimeString().slice(0, 5) : "";
 
@@ -1210,8 +1246,22 @@ document.addEventListener('DOMContentLoaded', () => {
                     createTimeInput(project.finishTimeDay3, 'finishTimeDay3', 'column-day3');
                     createBreakSelect(3, project, 'column-day3');
 
-                    const totalDurationMs = (project.durationDay1Ms || 0) + (project.durationDay2Ms || 0) + (project.durationDay3Ms || 0);
-                    const totalBreakMs = ((project.breakDurationMinutesDay1 || 0) + (project.breakDurationMinutesDay2 || 0) + (project.breakDurationMinutesDay3 || 0)) * 60000;
+                    createTimeInput(project.startTimeDay4, 'startTimeDay4', 'column-day4');
+                    createTimeInput(project.finishTimeDay4, 'finishTimeDay4', 'column-day4');
+                    createBreakSelect(4, project, 'column-day4');
+
+                    createTimeInput(project.startTimeDay5, 'startTimeDay5', 'column-day5');
+                    createTimeInput(project.finishTimeDay5, 'finishTimeDay5', 'column-day5');
+                    createBreakSelect(5, project, 'column-day5');
+
+                    createTimeInput(project.startTimeDay6, 'startTimeDay6', 'column-day6');
+                    createTimeInput(project.finishTimeDay6, 'finishTimeDay6', 'column-day6');
+                    createBreakSelect(6, project, 'column-day6');
+
+                    const totalDurationMs = (project.durationDay1Ms || 0) + (project.durationDay2Ms || 0) + (project.durationDay3Ms || 0) +
+                                          (project.durationDay4Ms || 0) + (project.durationDay5Ms || 0) + (project.durationDay6Ms || 0);
+                    const totalBreakMs = ((project.breakDurationMinutesDay1 || 0) + (project.breakDurationMinutesDay2 || 0) + (project.breakDurationMinutesDay3 || 0) +
+                                          (project.breakDurationMinutesDay4 || 0) + (project.breakDurationMinutesDay5 || 0) + (project.breakDurationMinutesDay6 || 0)) * 60000;
                     const additionalMs = (project.additionalMinutesManual || 0) * 60000;
                     const finalAdjustedDurationMs = Math.max(0, totalDurationMs - totalBreakMs) + additionalMs;
                     const totalMinutes = this.methods.formatMillisToMinutes.call(this, finalAdjustedDurationMs);
@@ -1260,8 +1310,17 @@ document.addEventListener('DOMContentLoaded', () => {
                     actionButtonsDiv.appendChild(createActionButton("Start D2", "btn-day-start", project.status !== "Day1Ended_AwaitingNext", "startDay2"));
                     actionButtonsDiv.appendChild(createActionButton("End D2", "btn-day-end", project.status !== "InProgressDay2", "endDay2"));
                     actionButtonsDiv.appendChild(createActionButton("Start D3", "btn-day-start", project.status !== "Day2Ended_AwaitingNext", "startDay3"));
-                    actionButtonsDiv.appendChild(createActionButton("End D3", "btn-day-end", project.status !== "InProgressDay3", "endD3"));
-                    actionButtonsDiv.appendChild(createActionButton("Done", "btn-mark-done", project.status === "Completed" || project.status === "Reassigned_TechAbsent" || (project.status === "Available" && !(project.durationDay1Ms || project.durationDay2Ms || project.durationDay3Ms)), "markDone"));
+                    actionButtonsDiv.appendChild(createActionButton("End D3", "btn-day-end", project.status !== "InProgressDay3", "endDay3"));
+                    actionButtonsDiv.appendChild(createActionButton("Start D4", "btn-day-start", project.status !== "Day3Ended_AwaitingNext", "startDay4"));
+                    actionButtonsDiv.appendChild(createActionButton("End D4", "btn-day-end", project.status !== "InProgressDay4", "endDay4"));
+                    actionButtonsDiv.appendChild(createActionButton("Start D5", "btn-day-start", project.status !== "Day4Ended_AwaitingNext", "startDay5"));
+                    actionButtonsDiv.appendChild(createActionButton("End D5", "btn-day-end", project.status !== "InProgressDay5", "endDay5"));
+                    actionButtonsDiv.appendChild(createActionButton("Start D6", "btn-day-start", project.status !== "Day5Ended_AwaitingNext", "startDay6"));
+                    actionButtonsDiv.appendChild(createActionButton("End D6", "btn-day-end", project.status !== "InProgressDay6", "endDay6"));
+
+                    const doneButtonDisabled = project.status === "Completed" || project.status === "Reassigned_TechAbsent" || (project.status === "Available" && !(project.durationDay1Ms || project.durationDay2Ms || project.durationDay3Ms || project.durationDay4Ms || project.durationDay5Ms || project.durationDay6Ms));
+                    actionButtonsDiv.appendChild(createActionButton("Done", "btn-mark-done", doneButtonDisabled, "markDone"));
+
 
                     const resetBtn = createActionButton("Reset", "btn-secondary", project.status === "Available" , "reset");
                     resetBtn.onclick = () => this.methods.handleResetTask.call(this, project);
@@ -1288,18 +1347,18 @@ document.addEventListener('DOMContentLoaded', () => {
         
                     const updates = {
                         status: "Available",
-                        startTimeDay1: null,
-                        finishTimeDay1: null,
-                        durationDay1Ms: null,
-                        startTimeDay2: null,
-                        finishTimeDay2: null,
-                        durationDay2Ms: null,
-                        startTimeDay3: null,
-                        finishTimeDay3: null,
-                        durationDay3Ms: null,
+                        startTimeDay1: null, finishTimeDay1: null, durationDay1Ms: null,
+                        startTimeDay2: null, finishTimeDay2: null, durationDay2Ms: null,
+                        startTimeDay3: null, finishTimeDay3: null, durationDay3Ms: null,
+                        startTimeDay4: null, finishTimeDay4: null, durationDay4Ms: null,
+                        startTimeDay5: null, finishTimeDay5: null, durationDay5Ms: null,
+                        startTimeDay6: null, finishTimeDay6: null, durationDay6Ms: null,
                         breakDurationMinutesDay1: 0,
                         breakDurationMinutesDay2: 0,
                         breakDurationMinutesDay3: 0,
+                        breakDurationMinutesDay4: 0,
+                        breakDurationMinutesDay5: 0,
+                        breakDurationMinutesDay6: 0,
                         additionalMinutesManual: 0,
                         techNotes: "",
                         lastModifiedTimestamp: serverTimestamp
@@ -1345,40 +1404,45 @@ document.addEventListener('DOMContentLoaded', () => {
                 localStorage.setItem('projectTrackerGroupVisibility', JSON.stringify(this.state.groupVisibilityState));
             },
             loadColumnVisibilityState() {
-                const showTitle = localStorage.getItem('showTitleColumn') !== 'false';
-                const showDay2 = localStorage.getItem('showDay2Column') !== 'false';
-                const showDay3 = localStorage.getItem('showDay3Column') !== 'false';
+                const loadState = (key, checkbox, defaultValue) => {
+                    const value = localStorage.getItem(key) !== 'false';
+                    if (checkbox) checkbox.checked = value;
+                };
 
-                if (this.elements.toggleTitleCheckbox) {
-                    this.elements.toggleTitleCheckbox.checked = showTitle;
-                }
-                if (this.elements.toggleDay2Checkbox) {
-                    this.elements.toggleDay2Checkbox.checked = showDay2;
-                }
-                if (this.elements.toggleDay3Checkbox) {
-                    this.elements.toggleDay3Checkbox.checked = showDay3;
-                }
+                loadState('showTitleColumn', this.elements.toggleTitleCheckbox);
+                loadState('showDay2Column', this.elements.toggleDay2Checkbox);
+                loadState('showDay3Column', this.elements.toggleDay3Checkbox);
+                loadState('showDay4Column', this.elements.toggleDay4Checkbox);
+                loadState('showDay5Column', this.elements.toggleDay5Checkbox);
+                loadState('showDay6Column', this.elements.toggleDay6Checkbox);
             },
+
             saveColumnVisibilityState() {
-                if (this.elements.toggleTitleCheckbox) {
-                    localStorage.setItem('showTitleColumn', this.elements.toggleTitleCheckbox.checked);
-                }
-                if (this.elements.toggleDay2Checkbox) {
-                    localStorage.setItem('showDay2Column', this.elements.toggleDay2Checkbox.checked);
-                }
-                if (this.elements.toggleDay3Checkbox) {
-                    localStorage.setItem('showDay3Column', this.elements.toggleDay3Checkbox.checked);
-                }
+                const saveState = (key, checkbox) => {
+                    if (checkbox) localStorage.setItem(key, checkbox.checked);
+                };
+                
+                saveState('showTitleColumn', this.elements.toggleTitleCheckbox);
+                saveState('showDay2Column', this.elements.toggleDay2Checkbox);
+                saveState('showDay3Column', this.elements.toggleDay3Checkbox);
+                saveState('showDay4Column', this.elements.toggleDay4Checkbox);
+                saveState('showDay5Column', this.elements.toggleDay5Checkbox);
+                saveState('showDay6Column', this.elements.toggleDay6Checkbox);
             },
+            
             applyColumnVisibility() {
-                const showTitle = this.elements.toggleTitleCheckbox.checked;
-                const showDay2 = this.elements.toggleDay2Checkbox.checked;
-                const showDay3 = this.elements.toggleDay3Checkbox.checked;
+                const toggleVisibility = (className, checkbox) => {
+                    document.querySelectorAll(`#projectTable .${className}`).forEach(el => el.classList.toggle('column-hidden', !checkbox.checked));
+                };
 
-                document.querySelectorAll('#projectTable .column-project-name').forEach(el => el.classList.toggle('column-hidden', !showTitle));
-                document.querySelectorAll('#projectTable .column-day2').forEach(el => el.classList.toggle('column-hidden', !showDay2));
-                document.querySelectorAll('#projectTable .column-day3').forEach(el => el.classList.toggle('column-hidden', !showDay3));
+                toggleVisibility('column-project-name', this.elements.toggleTitleCheckbox);
+                toggleVisibility('column-day2', this.elements.toggleDay2Checkbox);
+                toggleVisibility('column-day3', this.elements.toggleDay3Checkbox);
+                toggleVisibility('column-day4', this.elements.toggleDay4Checkbox);
+                toggleVisibility('column-day5', this.elements.toggleDay5Checkbox);
+                toggleVisibility('column-day6', this.elements.toggleDay6Checkbox);
             },
+
 
             async fetchUsers() {
                 try {
@@ -1696,11 +1760,17 @@ document.addEventListener('DOMContentLoaded', () => {
                         const newDurationDay1 = this.methods.calculateDurationMs.call(this, task.startTimeDay1, task.finishTimeDay1);
                         const newDurationDay2 = this.methods.calculateDurationMs.call(this, task.startTimeDay2, task.finishTimeDay2);
                         const newDurationDay3 = this.methods.calculateDurationMs.call(this, task.startTimeDay3, task.finishTimeDay3);
+                        const newDurationDay4 = this.methods.calculateDurationMs.call(this, task.startTimeDay4, task.finishTimeDay4);
+                        const newDurationDay5 = this.methods.calculateDurationMs.call(this, task.startTimeDay5, task.finishTimeDay5);
+                        const newDurationDay6 = this.methods.calculateDurationMs.call(this, task.startTimeDay6, task.finishTimeDay6);
 
                         let needsUpdate = false;
                         if ((newDurationDay1 || null) !== (task.durationDay1Ms || null)) needsUpdate = true;
                         if ((newDurationDay2 || null) !== (task.durationDay2Ms || null)) needsUpdate = true;
                         if ((newDurationDay3 || null) !== (task.durationDay3Ms || null)) needsUpdate = true;
+                        if ((newDurationDay4 || null) !== (task.durationDay4Ms || null)) needsUpdate = true;
+                        if ((newDurationDay5 || null) !== (task.durationDay5Ms || null)) needsUpdate = true;
+                        if ((newDurationDay6 || null) !== (task.durationDay6Ms || null)) needsUpdate = true;
 
                         if (needsUpdate) {
                             tasksToUpdate++;
@@ -1708,6 +1778,9 @@ document.addEventListener('DOMContentLoaded', () => {
                                 durationDay1Ms: newDurationDay1,
                                 durationDay2Ms: newDurationDay2,
                                 durationDay3Ms: newDurationDay3,
+                                durationDay4Ms: newDurationDay4,
+                                durationDay5Ms: newDurationDay5,
+                                durationDay6Ms: newDurationDay6,
                                 lastModifiedTimestamp: firebase.firestore.FieldValue.serverTimestamp()
                             };
                             batch.update(doc.ref, updates);
@@ -1817,15 +1890,12 @@ document.addEventListener('DOMContentLoaded', () => {
                             assignedTo: "",
                             techNotes: "",
                             status: "Available",
-                            startTimeDay1: null,
-                            finishTimeDay1: null,
-                            durationDay1Ms: null,
-                            startTimeDay2: null,
-                            finishTimeDay2: null,
-                            durationDay2Ms: null,
-                            startTimeDay3: null,
-                            finishTimeDay3: null,
-                            durationDay3Ms: null,
+                            startTimeDay1: null, finishTimeDay1: null, durationDay1Ms: null,
+                            startTimeDay2: null, finishTimeDay2: null, durationDay2Ms: null,
+                            startTimeDay3: null, finishTimeDay3: null, durationDay3Ms: null,
+                            startTimeDay4: null, finishTimeDay4: null, durationDay4Ms: null,
+                            startTimeDay5: null, finishTimeDay5: null, durationDay5Ms: null,
+                            startTimeDay6: null, finishTimeDay6: null, durationDay6Ms: null,
                             releasedToNextStage: false,
                             isReassigned: false,
                             originalProjectId: null,
@@ -1833,6 +1903,9 @@ document.addEventListener('DOMContentLoaded', () => {
                             breakDurationMinutesDay1: 0,
                             breakDurationMinutesDay2: 0,
                             breakDurationMinutesDay3: 0,
+                            breakDurationMinutesDay4: 0,
+                            breakDurationMinutesDay5: 0,
+                            breakDurationMinutesDay6: 0,
                             additionalMinutesManual: 0,
                             creationTimestamp: serverTimestamp,
                             lastModifiedTimestamp: serverTimestamp
@@ -1929,18 +2002,18 @@ document.addEventListener('DOMContentLoaded', () => {
                             status: "Available",
                             techNotes: "",
                             additionalMinutesManual: 0,
-                            breakDurationMinutesDay1: 0,
+                             breakDurationMinutesDay1: 0,
                             breakDurationMinutesDay2: 0,
                             breakDurationMinutesDay3: 0,
-                            startTimeDay1: null,
-                            finishTimeDay1: null,
-                            durationDay1Ms: null,
-                            startTimeDay2: null,
-                            finishTimeDay2: null,
-                            durationDay2Ms: null,
-                            startTimeDay3: null,
-                            finishTimeDay3: null,
-                            durationDay3Ms: null,
+                            breakDurationMinutesDay4: 0,
+                            breakDurationMinutesDay5: 0,
+                            breakDurationMinutesDay6: 0,
+                            startTimeDay1: null, finishTimeDay1: null, durationDay1Ms: null,
+                            startTimeDay2: null, finishTimeDay2: null, durationDay2Ms: null,
+                            startTimeDay3: null, finishTimeDay3: null, durationDay3Ms: null,
+                            startTimeDay4: null, finishTimeDay4: null, durationDay4Ms: null,
+                            startTimeDay5: null, finishTimeDay5: null, durationDay5Ms: null,
+                            startTimeDay6: null, finishTimeDay6: null, durationDay6Ms: null,
                             releasedToNextStage: false,
                             isReassigned: false,
                             isLocked: false,
@@ -2034,20 +2107,20 @@ document.addEventListener('DOMContentLoaded', () => {
                         lastModifiedTimestamp: serverTimestamp,
                         isReassigned: true,
                         originalProjectId: null,
-                        startTimeDay1: null,
-                        finishTimeDay1: null,
-                        durationDay1Ms: null,
-                        startTimeDay2: null,
-                        finishTimeDay2: null,
-                        durationDay2Ms: null,
-                        startTimeDay3: null,
-                        finishTimeDay3: null,
-                        durationDay3Ms: null,
+                        startTimeDay1: null, finishTimeDay1: null, durationDay1Ms: null,
+                        startTimeDay2: null, finishTimeDay2: null, durationDay2Ms: null,
+                        startTimeDay3: null, finishTimeDay3: null, durationDay3Ms: null,
+                        startTimeDay4: null, finishTimeDay4: null, durationDay4Ms: null,
+                        startTimeDay5: null, finishTimeDay5: null, durationDay5Ms: null,
+                        startTimeDay6: null, finishTimeDay6: null, durationDay6Ms: null,
                         releasedToNextStage: false,
                         isLocked: false,
                         breakDurationMinutesDay1: 0,
                         breakDurationMinutesDay2: 0,
                         breakDurationMinutesDay3: 0,
+                        breakDurationMinutesDay4: 0,
+                        breakDurationMinutesDay5: 0,
+                        breakDurationMinutesDay6: 0,
                         additionalMinutesManual: 0,
                     };
                     delete newProjectData.id;
@@ -2256,6 +2329,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         localStorage.removeItem('showTitleColumn');
                         localStorage.removeItem('showDay2Column');
                         localStorage.removeItem('showDay3Column');
+                        localStorage.removeItem('showDay4Column');
+                        localStorage.removeItem('showDay5Column');
+                        localStorage.removeItem('showDay6Column');
                         alert("Local application data has been cleared. The page will now reload.");
                         window.location.reload();
                     } catch (e) {
@@ -2305,8 +2381,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     snapshot.forEach(doc => {
                         const p = doc.data();
-                        const totalWorkMs = (p.durationDay1Ms || 0) + (p.durationDay2Ms || 0) + (p.durationDay3Ms || 0);
-                        const breakMs = ((p.breakDurationMinutesDay1 || 0) + (p.breakDurationMinutesDay2 || 0) + (p.breakDurationMinutesDay3 || 0)) * 60000;
+                        const totalWorkMs = (p.durationDay1Ms || 0) + (p.durationDay2Ms || 0) + (p.durationDay3Ms || 0) +
+                                          (p.durationDay4Ms || 0) + (p.durationDay5Ms || 0) + (p.durationDay6Ms || 0);
+                        const breakMs = ((p.breakDurationMinutesDay1 || 0) + (p.breakDurationMinutesDay2 || 0) + (p.breakDurationMinutesDay3 || 0) +
+                                         (p.breakDurationMinutesDay4 || 0) + (p.breakDurationMinutesDay5 || 0) + (p.breakDurationMinutesDay6 || 0)) * 60000;
                         const additionalMs = (p.additionalMinutesManual || 0) * 60000;
                         const adjustedNetMs = Math.max(0, totalWorkMs - breakMs) + additionalMs;
 
@@ -2989,15 +3067,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         alert("No project data to export.");
                         return;
                     }
-
-                    const headers = [
-                        "Fix Cat", "Project Name", "Area/Task", "GSD", "Assigned To", "Status",
-                        "Day 1 Start", "Day 1 Finish", "Day 1 Break",
-                        "Day 2 Start", "Day 2 Finish", "Day 2 Break",
-                        "Day 3 Start", "Day 3 Finish", "Day 3 Break",
-                        "Total (min)", "Tech Notes",
-                        "Creation Date", "Last Modified"
-                    ];
+                     const headers = this.config.CSV_HEADERS_FOR_IMPORT;
 
                     const rows = [headers.join(',')];
 
@@ -3005,10 +3075,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         const formatTimeCsv = (ts) => ts?.toDate ? `"${ts.toDate().toISOString()}"` : "";
                         const formatNotesCsv = (notes) => notes ? `"${notes.replace(/"/g, '""')}"` : "";
 
-                        const totalDurationMs = (project.durationDay1Ms || 0) + (project.durationDay2Ms || 0) + (project.durationDay3Ms || 0);
-                        const totalBreakMs = ((project.breakDurationMinutesDay1 || 0) +
-                            (project.breakDurationMinutesDay2 || 0) +
-                            (project.breakDurationMinutesDay3 || 0)) * 60000;
+                         const totalDurationMs = (project.durationDay1Ms || 0) + (project.durationDay2Ms || 0) + (project.durationDay3Ms || 0) +
+                                          (project.durationDay4Ms || 0) + (project.durationDay5Ms || 0) + (project.durationDay6Ms || 0);
+                        const totalBreakMs = ((project.breakDurationMinutesDay1 || 0) + (project.breakDurationMinutesDay2 || 0) + (project.breakDurationMinutesDay3 || 0) +
+                                             (project.breakDurationMinutesDay4 || 0) + (project.breakDurationMinutesDay5 || 0) + (project.breakDurationMinutesDay6 || 0)) * 60000;
                         const additionalMs = (project.additionalMinutesManual || 0) * 60000;
                         const finalAdjustedDurationMs = Math.max(0, totalDurationMs - totalBreakMs) + additionalMs;
                         const totalMinutes = this.methods.formatMillisToMinutes.call(this, finalAdjustedDurationMs);
@@ -3030,6 +3100,15 @@ document.addEventListener('DOMContentLoaded', () => {
                             formatTimeCsv(project.startTimeDay3),
                             formatTimeCsv(project.finishTimeDay3),
                             project.breakDurationMinutesDay3 || "0",
+                            formatTimeCsv(project.startTimeDay4),
+                            formatTimeCsv(project.finishTimeDay4),
+                            project.breakDurationMinutesDay4 || "0",
+                            formatTimeCsv(project.startTimeDay5),
+                            formatTimeCsv(project.finishTimeDay5),
+                            project.breakDurationMinutesDay5 || "0",
+                            formatTimeCsv(project.startTimeDay6),
+                            formatTimeCsv(project.finishTimeDay6),
+                            project.breakDurationMinutesDay6 || "0",
                             totalMinutes,
                             formatNotesCsv(project.techNotes),
                             formatTimeCsv(project.creationTimestamp),
@@ -3103,7 +3182,8 @@ document.addEventListener('DOMContentLoaded', () => {
                             }
 
                             const newProjectRef = this.db.collection("projects").doc();
-                            batch.set(newProjectRef, {
+
+                            const fullProjectData = {
                                 batchId: currentBatchId,
                                 creationTimestamp: serverTimestamp,
                                 lastModifiedTimestamp: serverTimestamp,
@@ -3111,9 +3191,6 @@ document.addEventListener('DOMContentLoaded', () => {
                                 releasedToNextStage: false,
                                 isReassigned: false,
                                 originalProjectId: null,
-                                breakDurationMinutesDay1: projectData.breakDurationMinutesDay1 || 0,
-                                breakDurationMinutesDay2: projectData.breakDurationMinutesDay2 || 0,
-                                breakDurationMinutesDay3: projectData.breakDurationMinutesDay3 || 0,
                                 additionalMinutesManual: projectData.additionalMinutesManual || 0,
                                 fixCategory: projectData.fixCategory || "Fix1",
                                 baseProjectName: projectData.baseProjectName || "IMPORTED_PROJ",
@@ -3122,16 +3199,16 @@ document.addEventListener('DOMContentLoaded', () => {
                                 assignedTo: projectData.assignedTo || "",
                                 status: projectData.status || "Available",
                                 techNotes: projectData.techNotes || "",
-                                startTimeDay1: projectData.startTimeDay1 || null,
-                                finishTimeDay1: projectData.finishTimeDay1 || null,
-                                durationDay1Ms: this.methods.calculateDurationMs(projectData.startTimeDay1, projectData.finishTimeDay1),
-                                startTimeDay2: projectData.startTimeDay2 || null,
-                                finishTimeDay2: projectData.finishTimeDay2 || null,
-                                durationDay2Ms: this.methods.calculateDurationMs(projectData.startTimeDay2, projectData.finishTimeDay2),
-                                startTimeDay3: projectData.startTimeDay3 || null,
-                                finishTimeDay3: projectData.finishTimeDay3 || null,
-                                durationDay3Ms: this.methods.calculateDurationMs(projectData.startTimeDay3, projectData.finishTimeDay3),
-                            });
+                            };
+                            
+                             for(let i=1; i<=6; i++){
+                                fullProjectData[`breakDurationMinutesDay${i}`] = projectData[`breakDurationMinutesDay${i}`] || 0;
+                                fullProjectData[`startTimeDay${i}`] = projectData[`startTimeDay${i}`] || null;
+                                fullProjectData[`finishTimeDay${i}`] = projectData[`finishTimeDay${i}`] || null;
+                                fullProjectData[`durationDay${i}Ms`] = this.methods.calculateDurationMs(projectData[`startTimeDay${i}`], projectData[`finishTimeDay${i}`]);
+                            }
+
+                            batch.set(newProjectRef, fullProjectData);
                             importedCount++;
                         });
 
@@ -3212,7 +3289,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         } else if (fieldName === 'status') {
                             let cleanedStatus = (value || "").replace(/\s/g, '').toLowerCase();
 
-                            if (cleanedStatus.includes('startedavailable')) {
+                             if (cleanedStatus.includes('startedavailable')) {
                                 cleanedStatus = 'Available';
                             } else if (cleanedStatus.includes('inprogressday1')) cleanedStatus = 'InProgressDay1';
                             else if (cleanedStatus.includes('day1ended_awaitingnext')) cleanedStatus = 'Day1Ended_AwaitingNext';
@@ -3220,6 +3297,11 @@ document.addEventListener('DOMContentLoaded', () => {
                             else if (cleanedStatus.includes('day2ended_awaitingnext')) cleanedStatus = 'Day2Ended_AwaitingNext';
                             else if (cleanedStatus.includes('inprogressday3')) cleanedStatus = 'InProgressDay3';
                             else if (cleanedStatus.includes('day3ended_awaitingnext')) cleanedStatus = 'Day3Ended_AwaitingNext';
+                            else if (cleanedStatus.includes('inprogressday4')) cleanedStatus = 'InProgressDay4';
+                            else if (cleanedStatus.includes('day4ended_awaitingnext')) cleanedStatus = 'Day4Ended_AwaitingNext';
+                            else if (cleanedStatus.includes('inprogressday5')) cleanedStatus = 'InProgressDay5';
+                            else if (cleanedStatus.includes('day5ended_awaitingnext')) cleanedStatus = 'Day5Ended_AwaitingNext';
+                            else if (cleanedStatus.includes('inprogressday6')) cleanedStatus = 'InProgressDay6';
                             else if (cleanedStatus.includes('completed')) cleanedStatus = 'Completed';
                             else if (cleanedStatus.includes('reassigned_techabsent')) cleanedStatus = 'Reassigned_TechAbsent';
                             else cleanedStatus = 'Available';
