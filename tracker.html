@@ -358,7 +358,7 @@
         align-items: center;
         justify-content: flex-start;
         }
-        .btn { padding: 4px 8px; border: none; border-radius: 3px; cursor: pointer; font-size: 0.8em; transition: background-color 0.3s ease; margin: 2px; min-width: 60px; text-align: center; vertical-align: middle;}
+        .btn { padding: 4px 8px; border: none; border-radius: 3px; cursor: pointer; font-size: 0.8em; transition: background-color: 0.3s ease; margin: 2px; min-width: 60px; text-align: center; vertical-align: middle;}
         .btn-lg { padding: 7px 12px; font-size: 0.9em; }
         .btn-group-toggle { min-width: 25px; padding: 2px 6px; font-size: 0.9em; margin-left: 10px; background-color: #7f8c8d; color:white; }
         .btn-group-toggle:hover { background-color: #95a5a6;}
@@ -383,7 +383,7 @@
         #tlDashboardModal .modal-content { max-width: 750px; max-height: 85vh; overflow-y: auto;}
         #settingsModal .modal-content { max-width: 700px; max-height: 85vh; overflow-y: auto;} /* MODIFIED: Increased width for new layout */
         #importCsvModal .modal-content { max-width: 500px; } /* Added for Import CSV Modal */
-        #leaveSchedulerModal .modal-content { max-width: 950px; }
+        #leaveSchedulerModal .modal-content { max-width: 1100px; }
         .close-btn { color: #aaa; float: right; font-size: 28px; font-weight: bold; } .close-btn:hover, .close-btn:focus { color: black; text-decoration: none; cursor: pointer; }
         #newProjectForm label { display: block; margin-top: 8px; font-weight: bold; font-size: 0.85em;}
         #newProjectForm input[type="text"], #newProjectForm input[type="number"], #newProjectForm select, .form-control { width: calc(100% - 18px); padding: 7px; margin-top: 3px; border: 1px solid #ddd; border-radius: 3px; box-sizing: border-box; font-size: 0.85em; }
@@ -585,22 +585,46 @@
         /* === END: NEW STYLES FOR TEAM CHAT === */
         
         /* === START: NEW STYLES FOR LEAVE SCHEDULER === */
-        #leaveSchedulerLayout {
-            display: grid;
-            grid-template-columns: 300px 1fr;
-            gap: 20px;
-            height: 60vh;
+       .leave-scheduler-tabs {
+            display: flex;
+            border-bottom: 1px solid #ccc;
+            margin-bottom: 15px;
         }
+        .leave-tab-button {
+            padding: 10px 20px;
+            cursor: pointer;
+            border: none;
+            background-color: transparent;
+            font-size: 1em;
+            border-bottom: 3px solid transparent;
+            margin-bottom: -1px;
+        }
+        .leave-tab-button.active {
+            border-bottom: 3px solid #007bff;
+            font-weight: bold;
+        }
+        .leave-tab-content {
+            display: none;
+        }
+        .leave-tab-content.active {
+            display: block;
+        }
+
         #leaveRequestFormContainer {
-            border-right: 1px solid #eee;
-            padding-right: 20px;
+            max-width: 500px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f9f9f9;
+            border-radius: 8px;
         }
+
         #leaveRequestForm label {
             font-weight: bold;
             font-size: 0.9em;
             margin-top: 10px;
             display: block;
         }
+
         #leaveRequestForm input, #leaveRequestForm select, #leaveRequestForm textarea {
             width: 100%;
             padding: 8px;
@@ -609,37 +633,53 @@
             border-radius: 4px;
             box-sizing: border-box;
         }
+
         #leaveRequestForm textarea {
             resize: vertical;
             height: 80px;
         }
-        #leaveCalendarContainer {
-            display: flex;
-            flex-direction: column;
-        }
-        #leaveCalendar {
-            flex-grow: 1;
-        }
-        #pendingRequestsContainer {
+        
+         #pendingRequestsContainer {
             margin-top: 20px;
             border-top: 1px solid #eee;
             padding-top: 15px;
         }
         .pending-request-item {
             padding: 10px;
-            background-color: #f9f9f9;
+            background-color: #fff;
+            border: 1px solid #ddd;
             border-radius: 5px;
             margin-bottom: 8px;
-            display: flex;
-            justify-content: space-between;
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 15px;
             align-items: center;
         }
         .pending-request-item .details {
             font-size: 0.9em;
         }
+         .pending-request-item .details p {
+            margin: 2px 0;
+        }
         .pending-request-item .actions .btn {
             margin-left: 5px;
         }
+        #allLeaveRequestsTable {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+         #allLeaveRequestsTable th, #allLeaveRequestsTable td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+         #allLeaveRequestsTable th {
+            background-color: #f2f2f2;
+        }
+        .leave-status-pending { color: #f39c12; font-weight: bold; }
+        .leave-status-approved { color: #2ecc71; font-weight: bold; }
+        .leave-status-denied { color: #e74c3c; font-weight: bold; }
 
         /* === END: NEW STYLES FOR LEAVE SCHEDULER === */
 
@@ -689,7 +729,7 @@
                 <button id="openAddNewProjectBtn" class="btn btn-success btn-lg">➕ Add New Tracker</button>
                 <button id="openTlDashboardBtn" class="btn btn-primary btn-lg">👑 Project Settings</button>
                 <button id="openSettingsBtn" class="btn btn-info btn-lg" style="display:none;">⚙️ User Settings</button>
-                <button id="openLeaveSchedulerBtn" class="btn btn-info btn-lg">🗓️ Leave Scheduler</button>
+                 <button id="openLeaveSchedulerBtn" class="btn btn-info btn-lg">🗓️ Leave Scheduler</button>
                 <button id="openTlSummaryBtn" class="btn btn-info btn-lg">📝 TL Summary</button>
                 <button id="openTeamChatBtn" class="btn btn-secondary btn-lg" style="position: relative;">
                     💬 Team Chat
@@ -774,12 +814,21 @@
             </div>
              <div id="leaveSchedulerModal" class="modal">
                 <div class="modal-content">
-                    <span class="close-btn" id="closeLeaveSchedulerBtn">&times;</span>
+                     <span class="close-btn" id="closeLeaveSchedulerBtn">&times;</span>
                     <h2>🗓️ Leave Scheduler</h2>
-                    <div id="leaveSchedulerLayout">
+                    <div class="leave-scheduler-tabs">
+                        <button class="leave-tab-button active" data-tab="calendar">Calendar View</button>
+                        <button class="leave-tab-button" data-tab="request">Request Leave</button>
+                        <button class="leave-tab-button" data-tab="all">All Requests</button>
+                    </div>
+
+                    <div id="tab-calendar" class="leave-tab-content active">
+                        <div id="leaveCalendar"></div>
+                    </div>
+
+                    <div id="tab-request" class="leave-tab-content">
                         <div id="leaveRequestFormContainer">
-                            <h4>Request Leave</h4>
-                            <form id="leaveRequestForm">
+                             <form id="leaveRequestForm">
                                 <label for="leaveTechId">Tech ID</label>
                                 <select id="leaveTechId" required></select>
 
@@ -802,13 +851,29 @@
 
                                 <button type="submit" class="btn btn-primary" style="margin-top: 15px; width: 100%;">Submit Request</button>
                             </form>
-                             <div id="pendingRequestsContainer">
-                                <h4>Pending Requests</h4>
-                                <div id="pendingRequestsList"></div>
-                            </div>
                         </div>
-                        <div id="leaveCalendarContainer">
-                            <div id="leaveCalendar"></div>
+                    </div>
+
+                    <div id="tab-all" class="leave-tab-content">
+                        <div id="admin-leave-section" style="display:none;">
+                            <h4>Pending Requests</h4>
+                            <div id="pendingRequestsList" class="table-scroll-wrapper" style="max-height: 200px;"></div>
+                        </div>
+                        <h4>All Leave Requests</h4>
+                        <div class="table-scroll-wrapper" style="max-height: 400px;">
+                            <table id="allLeaveRequestsTable">
+                                <thead>
+                                    <tr>
+                                        <th>Tech ID</th>
+                                        <th>Type</th>
+                                        <th>Start Date</th>
+                                        <th>End Date</th>
+                                        <th>Reason</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="allLeaveRequestsBody"></tbody>
+                            </table>
                         </div>
                     </div>
                 </div>
