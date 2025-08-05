@@ -269,6 +269,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     leaveRequestForm: document.getElementById('leaveRequestForm'),
                     leaveCalendar: document.getElementById('leaveCalendar'),
                     pendingRequestsList: document.getElementById('pendingRequestsList'),
+                    adminLeaveSection: document.getElementById('admin-leave-section'),
+                    allLeaveRequestsBody: document.getElementById('allLeaveRequestsBody'),
                 };
             },
 
@@ -485,6 +487,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (event.target == self.elements.teamChatModal) self.elements.teamChatModal.style.display = 'none';
                     if (event.target == self.elements.leaveSchedulerModal) self.elements.leaveSchedulerModal.style.display = 'none';
                 };
+                 document.querySelectorAll('.leave-tab-button').forEach(button => {
+                    button.addEventListener('click', (e) => {
+                        const tab = e.target.dataset.tab;
+                        document.querySelectorAll('.leave-tab-button').forEach(btn => btn.classList.remove('active'));
+                        e.target.classList.add('active');
+
+                        document.querySelectorAll('.leave-tab-content').forEach(content => content.classList.remove('active'));
+                        document.getElementById(`tab-${tab}`).classList.add('active');
+                    });
+                });
             },
 
 
@@ -3365,6 +3377,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 this.methods.populateLeaveTechIdDropdown.call(this);
                 this.methods.renderLeaveCalendar.call(this);
                 this.methods.renderPendingRequests.call(this);
+                this.methods.renderAllLeaveRequestsTable.call(this);
+
+                 // Admin-only features
+                const isAdmin = true; // Replace with actual admin check logic
+                this.elements.adminLeaveSection.style.display = isAdmin ? 'block' : 'none';
             },
             
             listenForLeaveData() {
@@ -3375,6 +3392,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (this.elements.leaveSchedulerModal.style.display === 'block') {
                             this.methods.renderLeaveCalendar.call(this);
                             this.methods.renderPendingRequests.call(this);
+                             this.methods.renderAllLeaveRequestsTable.call(this);
                         }
                     }, error => console.error("Error listening for leave data:", error));
             },
@@ -3382,7 +3400,7 @@ document.addEventListener('DOMContentLoaded', () => {
             populateLeaveTechIdDropdown() {
                 const select = document.getElementById('leaveTechId');
                 select.innerHTML = '';
-                this.state.users.forEach(user => {
+                this.state.users.sort((a,b) => a.name.localeCompare(b.name)).forEach(user => {
                     const option = document.createElement('option');
                     option.value = user.techId;
                     option.textContent = `${user.name} (${user.techId})`;
@@ -3431,36 +3449,36 @@ document.addEventListener('DOMContentLoaded', () => {
             },
             
             renderLeaveCalendar() {
-                const approvedLeaves = this.state.leaveRequests.filter(req => req.status === 'approved');
-                const events = approvedLeaves.map(leave => ({
-                    title: `${leave.techId}: ${leave.leaveType}`,
-                    start: leave.startDate,
-                    end: leave.endDate,
-                    allDay: true
-                }));
-
                 const calendarEl = this.elements.leaveCalendar;
+                if (!calendarEl || typeof VanillaCalendar === 'undefined') return;
                 calendarEl.innerHTML = ''; // Clear previous calendar instance
                 
+                const approvedLeaves = this.state.leaveRequests.filter(req => req.status === 'approved');
+                const popups = approvedLeaves.reduce((acc, leave) => {
+                    let currentDate = new Date(leave.startDate);
+                    const endDate = new Date(leave.endDate);
+
+                    while(currentDate <= endDate){
+                         const dateStr = currentDate.toISOString().slice(0,10);
+                        if (!acc[dateStr]) {
+                             acc[dateStr] = { modifier: 'bg-red-500 text-white', html: '' };
+                        }
+                        acc[dateStr].html += `<div><b>${leave.techId}</b> - <i>${leave.leaveType}</i></div>`;
+                        currentDate.setDate(currentDate.getDate() + 1);
+                    }
+                    return acc;
+                }, {});
+
                 const calendar = new VanillaCalendar(calendarEl, {
-                    settings: {
+                     settings: {
                         range: {
-                            disablePast: true,
+                            disablePast: false,
                         },
                          selection: {
                             day: false,
                         },
                     },
-                    popups: this.state.leaveRequests.reduce((acc, leave) => {
-                        const date = leave.startDate;
-                        if (!acc[date]) {
-                          acc[date] = {
-                            modifier: 'bg-red-500 text-white',
-                            html: `<b>${leave.techId}</b> - <i>${leave.leaveType}</i>`,
-                          };
-                        }
-                        return acc;
-                      }, {}),
+                    popups: popups
                 });
                 calendar.init();
             },
@@ -3480,7 +3498,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     item.className = 'pending-request-item';
                     item.innerHTML = `
                         <div class="details">
-                            <strong>${req.techId}</strong>: ${req.startDate} to ${req.endDate}
+                           <p><strong>${req.techId}</strong> - ${req.leaveType}</p>
+                           <p><strong>Dates:</strong> ${req.startDate} to ${req.endDate}</p>
+                           <p><strong>Reason:</strong> ${req.reason}</p>
                         </div>
                         <div class="actions">
                             <button class="btn btn-success btn-sm" data-id="${req.id}" data-action="approved">Approve</button>
@@ -3494,8 +3514,36 @@ document.addEventListener('DOMContentLoaded', () => {
                     btn.addEventListener('click', (e) => {
                         const id = e.target.dataset.id;
                         const action = e.target.dataset.action;
-                        this.methods.updateLeaveStatus.call(this, id, action);
+                        
+                        const pin = prompt(`Enter admin PIN to ${action} this request:`);
+                        if(pin === this.config.pins.TL_DASHBOARD_PIN){
+                             this.methods.updateLeaveStatus.call(this, id, action);
+                        } else if(pin) {
+                            alert("Incorrect PIN.");
+                        }
                     });
+                });
+            },
+
+             renderAllLeaveRequestsTable() {
+                const tableBody = this.elements.allLeaveRequestsBody;
+                tableBody.innerHTML = '';
+
+                if(this.state.leaveRequests.length === 0){
+                    tableBody.innerHTML = '<tr><td colspan="6" style="text-align:center;">No leave requests found.</td></tr>';
+                    return;
+                }
+
+                this.state.leaveRequests.sort((a, b) => new Date(b.startDate) - new Date(a.startDate)).forEach(req => {
+                    const row = tableBody.insertRow();
+                    row.innerHTML = `
+                        <td>${req.techId}</td>
+                        <td>${req.leaveType}</td>
+                        <td>${req.startDate}</td>
+                        <td>${req.endDate}</td>
+                        <td>${req.reason}</td>
+                        <td><span class="leave-status-${req.status}">${req.status}</span></td>
+                    `;
                 });
             },
             
