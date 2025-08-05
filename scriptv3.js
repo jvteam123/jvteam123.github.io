@@ -411,7 +411,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 
                 if (self.elements.leaveRequestForm) {
-                    self.elements.leaveRequestForm.addEventListener('submit', self.methods.handleLeaveRequestSubmit.bind(self));
+                    self.elements.leaveRequestForm.addEventListener('submit', self.methods..bind(self));
                 }
 
                 if (self.elements.userManagementForm) {
@@ -3409,7 +3409,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 select.value = this.state.currentUserTechId;
             },
 
-            async handleLeaveRequestSubmit(event) {
+           async handleLeaveRequestSubmit(event) {
                 event.preventDefault();
                 const techId = document.getElementById('leaveTechId').value;
                 const startDate = document.getElementById('leaveStartDate').value;
@@ -3438,13 +3438,13 @@ document.addEventListener('DOMContentLoaded', () => {
                         status: 'pending', // pending, approved, denied
                         requestedAt: firebase.firestore.FieldValue.serverTimestamp()
                     });
+                    this.methods.hideLoading.call(this); // Moved from finally
                     alert("Leave request submitted successfully!");
                     this.elements.leaveRequestForm.reset();
                 } catch (error) {
+                    this.methods.hideLoading.call(this); // Also hide on error
                     console.error("Error submitting leave request:", error);
                     alert("Failed to submit leave request: " + error.message);
-                } finally {
-                    this.methods.hideLoading.call(this);
                 }
             },
             
