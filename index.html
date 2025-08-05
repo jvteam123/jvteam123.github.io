@@ -8,6 +8,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vanilla-calendar-pro/build/vanilla-calendar.min.css">
     <style>
         /* ====================================================== */
         /* START: NEW LOGIN UI STYLES                             */
@@ -382,6 +383,7 @@
         #tlDashboardModal .modal-content { max-width: 750px; max-height: 85vh; overflow-y: auto;}
         #settingsModal .modal-content { max-width: 700px; max-height: 85vh; overflow-y: auto;} /* MODIFIED: Increased width for new layout */
         #importCsvModal .modal-content { max-width: 500px; } /* Added for Import CSV Modal */
+        #leaveSchedulerModal .modal-content { max-width: 950px; }
         .close-btn { color: #aaa; float: right; font-size: 28px; font-weight: bold; } .close-btn:hover, .close-btn:focus { color: black; text-decoration: none; cursor: pointer; }
         #newProjectForm label { display: block; margin-top: 8px; font-weight: bold; font-size: 0.85em;}
         #newProjectForm input[type="text"], #newProjectForm input[type="number"], #newProjectForm select, .form-control { width: calc(100% - 18px); padding: 7px; margin-top: 3px; border: 1px solid #ddd; border-radius: 3px; box-sizing: border-box; font-size: 0.85em; }
@@ -581,6 +583,65 @@
             justify-content: space-between;
         }
         /* === END: NEW STYLES FOR TEAM CHAT === */
+        
+        /* === START: NEW STYLES FOR LEAVE SCHEDULER === */
+        #leaveSchedulerLayout {
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            gap: 20px;
+            height: 60vh;
+        }
+        #leaveRequestFormContainer {
+            border-right: 1px solid #eee;
+            padding-right: 20px;
+        }
+        #leaveRequestForm label {
+            font-weight: bold;
+            font-size: 0.9em;
+            margin-top: 10px;
+            display: block;
+        }
+        #leaveRequestForm input, #leaveRequestForm select, #leaveRequestForm textarea {
+            width: 100%;
+            padding: 8px;
+            margin-top: 4px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        #leaveRequestForm textarea {
+            resize: vertical;
+            height: 80px;
+        }
+        #leaveCalendarContainer {
+            display: flex;
+            flex-direction: column;
+        }
+        #leaveCalendar {
+            flex-grow: 1;
+        }
+        #pendingRequestsContainer {
+            margin-top: 20px;
+            border-top: 1px solid #eee;
+            padding-top: 15px;
+        }
+        .pending-request-item {
+            padding: 10px;
+            background-color: #f9f9f9;
+            border-radius: 5px;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .pending-request-item .details {
+            font-size: 0.9em;
+        }
+        .pending-request-item .actions .btn {
+            margin-left: 5px;
+        }
+
+        /* === END: NEW STYLES FOR LEAVE SCHEDULER === */
 
     </style>
     <link rel="icon" type="image/png" href="icon.png">
@@ -628,6 +689,7 @@
                 <button id="openAddNewProjectBtn" class="btn btn-success btn-lg">➕ Add New Tracker</button>
                 <button id="openTlDashboardBtn" class="btn btn-primary btn-lg">👑 Project Settings</button>
                 <button id="openSettingsBtn" class="btn btn-info btn-lg" style="display:none;">⚙️ User Settings</button>
+                <button id="openLeaveSchedulerBtn" class="btn btn-info btn-lg">🗓️ Leave Scheduler</button>
                 <button id="openTlSummaryBtn" class="btn btn-info btn-lg">📝 TL Summary</button>
                 <button id="openTeamChatBtn" class="btn btn-secondary btn-lg" style="position: relative;">
                     💬 Team Chat
@@ -708,6 +770,47 @@
                         <tbody id="userManagementTableBody">
                             </tbody>
                     </table>
+                </div>
+            </div>
+             <div id="leaveSchedulerModal" class="modal">
+                <div class="modal-content">
+                    <span class="close-btn" id="closeLeaveSchedulerBtn">&times;</span>
+                    <h2>🗓️ Leave Scheduler</h2>
+                    <div id="leaveSchedulerLayout">
+                        <div id="leaveRequestFormContainer">
+                            <h4>Request Leave</h4>
+                            <form id="leaveRequestForm">
+                                <label for="leaveTechId">Tech ID</label>
+                                <select id="leaveTechId" required></select>
+
+                                <label for="leaveStartDate">Start Date</label>
+                                <input type="date" id="leaveStartDate" required>
+
+                                <label for="leaveEndDate">End Date</label>
+                                <input type="date" id="leaveEndDate" required>
+
+                                <label for="leaveType">Leave Type</label>
+                                <select id="leaveType" required>
+                                    <option value="Vacation">Vacation</option>
+                                    <option value="Sick Leave">Sick Leave</option>
+                                    <option value="Personal">Personal</option>
+                                    <option value="Other">Other</option>
+                                </select>
+
+                                <label for="leaveReason">Reason</label>
+                                <textarea id="leaveReason" rows="3" required></textarea>
+
+                                <button type="submit" class="btn btn-primary" style="margin-top: 15px; width: 100%;">Submit Request</button>
+                            </form>
+                             <div id="pendingRequestsContainer">
+                                <h4>Pending Requests</h4>
+                                <div id="pendingRequestsList"></div>
+                            </div>
+                        </div>
+                        <div id="leaveCalendarContainer">
+                            <div id="leaveCalendar"></div>
+                        </div>
+                    </div>
                 </div>
             </div>
             <div id="tlSummaryModal" class="modal">
@@ -827,6 +930,7 @@
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vanilla-calendar-pro/build/vanilla-calendar.min.js"></script>
     <script src="scriptv3.js"></script>
 </body>
 </html>
