@@ -411,7 +411,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 
                 if (self.elements.leaveRequestForm) {
-                    self.elements.leaveRequestForm.addEventListener('submit', self.methods..bind(self));
+                    self.elements.leaveRequestForm.addEventListener('submit', self.methods.handleLeaveRequestSubmit.bind(self));
                 }
 
                 if (self.elements.userManagementForm) {
@@ -3409,7 +3409,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 select.value = this.state.currentUserTechId;
             },
 
-           async handleLeaveRequestSubmit(event) {
+            async handleLeaveRequestSubmit(event) {
                 event.preventDefault();
                 const techId = document.getElementById('leaveTechId').value;
                 const startDate = document.getElementById('leaveStartDate').value;
@@ -3438,13 +3438,13 @@ document.addEventListener('DOMContentLoaded', () => {
                         status: 'pending', // pending, approved, denied
                         requestedAt: firebase.firestore.FieldValue.serverTimestamp()
                     });
-                    this.methods.hideLoading.call(this); // Moved from finally
                     alert("Leave request submitted successfully!");
                     this.elements.leaveRequestForm.reset();
                 } catch (error) {
-                    this.methods.hideLoading.call(this); // Also hide on error
                     console.error("Error submitting leave request:", error);
                     alert("Failed to submit leave request: " + error.message);
+                } finally {
+                    this.methods.hideLoading.call(this);
                 }
             },
             
@@ -3530,7 +3530,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 tableBody.innerHTML = '';
 
                 if(this.state.leaveRequests.length === 0){
-                    tableBody.innerHTML = '<tr><td colspan="7" style="text-align:center;">No leave requests found.</td></tr>'; // Increased colspan
+                    tableBody.innerHTML = '<tr><td colspan="6" style="text-align:center;">No leave requests found.</td></tr>';
                     return;
                 }
 
@@ -3543,34 +3543,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         <td>${req.endDate}</td>
                         <td>${req.reason}</td>
                         <td><span class="leave-status-${req.status}">${req.status}</span></td>
-                        <td>
-                            <button class="btn btn-danger btn-sm" data-id="${req.id}">Delete</button>
-                        </td>
                     `;
-                     row.querySelector('button').addEventListener('click', (e) => {
-                        this.methods.handleDeleteLeaveRequest.call(this, e.target.dataset.id);
-                    });
                 });
-            },
-
-            async handleDeleteLeaveRequest(id) {
-                if (confirm("Are you sure you want to permanently delete this leave request?")) {
-                    const pin = prompt("Enter admin PIN to confirm deletion:");
-                    if (pin === this.config.pins.TL_DASHBOARD_PIN) {
-                        this.methods.showLoading.call(this, "Deleting leave request...");
-                        try {
-                            await this.db.collection(this.config.firestorePaths.LEAVE_REQUESTS).doc(id).delete();
-                            alert("Request deleted successfully.");
-                        } catch (error) {
-                            console.error("Error deleting leave request:", error);
-                            alert("Failed to delete request: " + error.message);
-                        } finally {
-                            this.methods.hideLoading.call(this);
-                        }
-                    } else if (pin) {
-                        alert("Incorrect PIN. Deletion cancelled.");
-                    }
-                }
             },
             
             async updateLeaveStatus(id, status) {
