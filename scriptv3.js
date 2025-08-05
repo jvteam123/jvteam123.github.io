@@ -7,9 +7,12 @@
  * global variables, improves performance, and ensures correct
  * timezone handling.
  *
- * @version 4.0.0
+ * @version 4.1.0
  * @author Gemini AI Refactor & Bug-Fix
  * @changeLog
+ * - ADDED: A new "Leave Scheduler" feature with a calendar view, request form, and admin approval/denial functionality.
+ * - ADDED: `leave_requests` collection in Firestore to manage leave data.
+ * - INTEGRATED: Vanilla Calendar Pro for displaying leave schedules.
  * - ADDED: Optional tracking for Day 4, Day 5, and Day 6.
  * - ADDED: Checkboxes to show/hide Day 4, 5, and 6 columns, hidden by default.
  * - UPDATED: All relevant functions (rendering, calculations, state management, CSV handling) to support up to 6 days.
@@ -43,7 +46,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 NOTIFICATIONS: "notifications",
                 CHAT: "chat",
                 TYPING_STATUS: "typing_status",
-                APP_CONFIG: "app_config"
+                APP_CONFIG: "app_config",
+                LEAVE_REQUESTS: "leave_requests"
             },
             chat: {
                 MAX_MESSAGES: 30
@@ -112,12 +116,14 @@ document.addEventListener('DOMContentLoaded', () => {
         chatListenerUnsubscribe: null,
         typingListenerUnsubscribe: null,
         appConfigListenerUnsubscribe: null, // Listener for app settings
+        leaveDataListenerUnsubscribe: null,
 
         // --- 3. APPLICATION STATE ---
         state: {
             projects: [],
             users: [],
             chatMessages: [],
+            leaveRequests: [],
             hasUnreadMessages: false,
             isInitialChatLoad: true,
             typingUsers: [],
@@ -255,6 +261,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     startVoiceCallBtn: document.getElementById('startVoiceCallBtn'),
                     typingIndicator: document.getElementById('typingIndicator'),
                     chatAudioNotification: document.getElementById('chatAudioNotification'),
+
+                     // Leave Scheduler DOM elements
+                    openLeaveSchedulerBtn: document.getElementById('openLeaveSchedulerBtn'),
+                    leaveSchedulerModal: document.getElementById('leaveSchedulerModal'),
+                    closeLeaveSchedulerBtn: document.getElementById('closeLeaveSchedulerBtn'),
+                    leaveRequestForm: document.getElementById('leaveRequestForm'),
+                    leaveCalendar: document.getElementById('leaveCalendar'),
+                    pendingRequestsList: document.getElementById('pendingRequestsList'),
                 };
             },
 
@@ -310,6 +324,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     self.elements.tlSummaryModal.style.display = 'block';
                     self.methods.generateTlSummaryData.call(self);
                 });
+                
+                attachClick(self.elements.openLeaveSchedulerBtn, () => {
+                    self.elements.leaveSchedulerModal.style.display = 'block';
+                    self.methods.initLeaveScheduler.call(self);
+                });
+
 
                 // Team Chat event listeners
                 attachClick(self.elements.openTeamChatBtn, () => {
@@ -375,6 +395,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 attachClick(self.elements.closeTlSummaryBtn, () => {
                     self.elements.tlSummaryModal.style.display = 'none';
                 });
+                 attachClick(self.elements.closeLeaveSchedulerBtn, () => {
+                    self.elements.leaveSchedulerModal.style.display = 'none';
+                });
 
                 attachClick(self.elements.clearDataBtn, self.methods.handleClearData.bind(self));
                 attachClick(self.elements.nextPageBtn, self.methods.handleNextPage.bind(self));
@@ -383,6 +406,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (self.elements.newProjectForm) {
                     self.elements.newProjectForm.addEventListener('submit', self.methods.handleAddProjectSubmit.bind(self));
+                }
+                
+                if (self.elements.leaveRequestForm) {
+                    self.elements.leaveRequestForm.addEventListener('submit', self.methods.handleLeaveRequestSubmit.bind(self));
                 }
 
                 if (self.elements.userManagementForm) {
@@ -456,6 +483,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (event.target == self.elements.tlSummaryModal) self.elements.tlSummaryModal.style.display = 'none';
                     if (event.target == self.elements.importCsvModal) self.elements.importCsvModal.style.display = 'none';
                     if (event.target == self.elements.teamChatModal) self.elements.teamChatModal.style.display = 'none';
+                    if (event.target == self.elements.leaveSchedulerModal) self.elements.leaveSchedulerModal.style.display = 'none';
                 };
             },
 
@@ -523,6 +551,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     this.methods.listenForNotifications.call(this);
                     this.methods.listenForChatMessages.call(this);
                     this.methods.listenForTypingStatus.call(this);
+                    this.methods.listenForLeaveData.call(this);
                 }
             },
 
@@ -544,6 +573,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (this.chatListenerUnsubscribe) this.chatListenerUnsubscribe();
                 if (this.typingListenerUnsubscribe) this.typingListenerUnsubscribe();
                 if (this.appConfigListenerUnsubscribe) this.appConfigListenerUnsubscribe();
+                 if (this.leaveDataListenerUnsubscribe) this.leaveDataListenerUnsubscribe();
                 
                 this.state.isAppInitialized = false;
             },
@@ -3327,6 +3357,158 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
                 return projects;
+            },
+
+             // --- LEAVE SCHEDULER METHODS ---
+
+            initLeaveScheduler() {
+                this.methods.populateLeaveTechIdDropdown.call(this);
+                this.methods.renderLeaveCalendar.call(this);
+                this.methods.renderPendingRequests.call(this);
+            },
+            
+            listenForLeaveData() {
+                if (this.leaveDataListenerUnsubscribe) this.leaveDataListenerUnsubscribe();
+                this.leaveDataListenerUnsubscribe = this.db.collection(this.config.firestorePaths.LEAVE_REQUESTS)
+                    .onSnapshot(snapshot => {
+                        this.state.leaveRequests = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                        if (this.elements.leaveSchedulerModal.style.display === 'block') {
+                            this.methods.renderLeaveCalendar.call(this);
+                            this.methods.renderPendingRequests.call(this);
+                        }
+                    }, error => console.error("Error listening for leave data:", error));
+            },
+
+            populateLeaveTechIdDropdown() {
+                const select = document.getElementById('leaveTechId');
+                select.innerHTML = '';
+                this.state.users.forEach(user => {
+                    const option = document.createElement('option');
+                    option.value = user.techId;
+                    option.textContent = `${user.name} (${user.techId})`;
+                    select.appendChild(option);
+                });
+                select.value = this.state.currentUserTechId;
+            },
+
+            async handleLeaveRequestSubmit(event) {
+                event.preventDefault();
+                const techId = document.getElementById('leaveTechId').value;
+                const startDate = document.getElementById('leaveStartDate').value;
+                const endDate = document.getElementById('leaveEndDate').value;
+                const leaveType = document.getElementById('leaveType').value;
+                const reason = document.getElementById('leaveReason').value;
+
+                if (!techId || !startDate || !endDate || !leaveType || !reason) {
+                    alert("Please fill out all fields.");
+                    return;
+                }
+
+                if (new Date(startDate) > new Date(endDate)) {
+                    alert("Start date cannot be after the end date.");
+                    return;
+                }
+
+                this.methods.showLoading.call(this, "Submitting leave request...");
+                try {
+                    await this.db.collection(this.config.firestorePaths.LEAVE_REQUESTS).add({
+                        techId,
+                        startDate,
+                        endDate,
+                        leaveType,
+                        reason,
+                        status: 'pending', // pending, approved, denied
+                        requestedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                    alert("Leave request submitted successfully!");
+                    this.elements.leaveRequestForm.reset();
+                } catch (error) {
+                    console.error("Error submitting leave request:", error);
+                    alert("Failed to submit leave request: " + error.message);
+                } finally {
+                    this.methods.hideLoading.call(this);
+                }
+            },
+            
+            renderLeaveCalendar() {
+                const approvedLeaves = this.state.leaveRequests.filter(req => req.status === 'approved');
+                const events = approvedLeaves.map(leave => ({
+                    title: `${leave.techId}: ${leave.leaveType}`,
+                    start: leave.startDate,
+                    end: leave.endDate,
+                    allDay: true
+                }));
+
+                const calendarEl = this.elements.leaveCalendar;
+                calendarEl.innerHTML = ''; // Clear previous calendar instance
+                
+                const calendar = new VanillaCalendar(calendarEl, {
+                    settings: {
+                        range: {
+                            disablePast: true,
+                        },
+                         selection: {
+                            day: false,
+                        },
+                    },
+                    popups: this.state.leaveRequests.reduce((acc, leave) => {
+                        const date = leave.startDate;
+                        if (!acc[date]) {
+                          acc[date] = {
+                            modifier: 'bg-red-500 text-white',
+                            html: `<b>${leave.techId}</b> - <i>${leave.leaveType}</i>`,
+                          };
+                        }
+                        return acc;
+                      }, {}),
+                });
+                calendar.init();
+            },
+
+             renderPendingRequests() {
+                const pendingList = this.elements.pendingRequestsList;
+                pendingList.innerHTML = '';
+                const pending = this.state.leaveRequests.filter(req => req.status === 'pending');
+
+                if (pending.length === 0) {
+                    pendingList.innerHTML = '<p>No pending requests.</p>';
+                    return;
+                }
+
+                pending.forEach(req => {
+                    const item = document.createElement('div');
+                    item.className = 'pending-request-item';
+                    item.innerHTML = `
+                        <div class="details">
+                            <strong>${req.techId}</strong>: ${req.startDate} to ${req.endDate}
+                        </div>
+                        <div class="actions">
+                            <button class="btn btn-success btn-sm" data-id="${req.id}" data-action="approved">Approve</button>
+                            <button class="btn btn-danger btn-sm" data-id="${req.id}" data-action="denied">Deny</button>
+                        </div>
+                    `;
+                    pendingList.appendChild(item);
+                });
+
+                pendingList.querySelectorAll('.btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        const id = e.target.dataset.id;
+                        const action = e.target.dataset.action;
+                        this.methods.updateLeaveStatus.call(this, id, action);
+                    });
+                });
+            },
+            
+            async updateLeaveStatus(id, status) {
+                this.methods.showLoading.call(this, "Updating leave status...");
+                try {
+                    await this.db.collection(this.config.firestorePaths.LEAVE_REQUESTS).doc(id).update({ status });
+                } catch (error) {
+                    console.error("Error updating leave status:", error);
+                    alert("Failed to update status: " + error.message);
+                } finally {
+                    this.methods.hideLoading.call(this);
+                }
             },
         }
     };
