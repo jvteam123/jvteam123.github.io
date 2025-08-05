@@ -3530,7 +3530,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 tableBody.innerHTML = '';
 
                 if(this.state.leaveRequests.length === 0){
-                    tableBody.innerHTML = '<tr><td colspan="6" style="text-align:center;">No leave requests found.</td></tr>';
+                    tableBody.innerHTML = '<tr><td colspan="7" style="text-align:center;">No leave requests found.</td></tr>'; // Increased colspan
                     return;
                 }
 
@@ -3543,8 +3543,34 @@ document.addEventListener('DOMContentLoaded', () => {
                         <td>${req.endDate}</td>
                         <td>${req.reason}</td>
                         <td><span class="leave-status-${req.status}">${req.status}</span></td>
+                        <td>
+                            <button class="btn btn-danger btn-sm" data-id="${req.id}">Delete</button>
+                        </td>
                     `;
+                     row.querySelector('button').addEventListener('click', (e) => {
+                        this.methods.handleDeleteLeaveRequest.call(this, e.target.dataset.id);
+                    });
                 });
+            },
+
+            async handleDeleteLeaveRequest(id) {
+                if (confirm("Are you sure you want to permanently delete this leave request?")) {
+                    const pin = prompt("Enter admin PIN to confirm deletion:");
+                    if (pin === this.config.pins.TL_DASHBOARD_PIN) {
+                        this.methods.showLoading.call(this, "Deleting leave request...");
+                        try {
+                            await this.db.collection(this.config.firestorePaths.LEAVE_REQUESTS).doc(id).delete();
+                            alert("Request deleted successfully.");
+                        } catch (error) {
+                            console.error("Error deleting leave request:", error);
+                            alert("Failed to delete request: " + error.message);
+                        } finally {
+                            this.methods.hideLoading.call(this);
+                        }
+                    } else if (pin) {
+                        alert("Incorrect PIN. Deletion cancelled.");
+                    }
+                }
             },
             
             async updateLeaveStatus(id, status) {
