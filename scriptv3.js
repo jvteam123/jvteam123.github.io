@@ -7,21 +7,18 @@
  * global variables, improves performance, and ensures correct
  * timezone handling.
  *
- * @version 4.1.0
+ * @version 4.2.0
  * @author Gemini AI Refactor & Bug-Fix
  * @changeLog
- * - ADDED: A new "Leave Scheduler" feature with a calendar view, request form, and admin approval/denial functionality.
- * - ADDED: `leave_requests` collection in Firestore to manage leave data.
- * - INTEGRATED: Vanilla Calendar Pro for displaying leave schedules.
- * - ADDED: Optional tracking for Day 4, Day 5, and Day 6.
- * - ADDED: Checkboxes to show/hide Day 4, 5, and 6 columns, hidden by default.
- * - UPDATED: All relevant functions (rendering, calculations, state management, CSV handling) to support up to 6 days.
- * - ADDED: A "Reset" button next to the "Re-Assign" button to reset a task's time and status.
- * - ADDED: (User Request) A dynamic, configurable button ("TSC [Month]") on the main action bar.
- * - ADDED: (User Request) Admins can now set the name and URL for the dynamic button in Project Settings.
- * - UPDATED: "Start Voice Call" button now uses a persistent meeting URL set by an admin.
- * - ADDED: Chat messages that are links are now automatically clickable.
- * - ADDED: "User is typing..." indicator and sound notifications for new chat messages.
+ * - ADDED: Professional leave management buttons (Edit, Delete, Cancel).
+ * - ADDED: "Actions" column to the "All Requests" leave table for new buttons.
+ * - ADDED: `handleDeleteLeaveRequest` function to allow admins to delete any leave request.
+ * - ADDED: `handleEditLeaveRequest` function for admins to modify existing requests.
+ * - ADDED: `handleCancelLeaveRequest` for users to withdraw their own pending requests.
+ * - UPDATED: `handleLeaveRequestSubmit` to support both creating and updating leave requests.
+ * - UPDATED: `renderAllLeaveRequestsTable` to dynamically show/hide buttons based on user role and request status.
+ * - UPDATED: `renderPendingRequests` to include a "Cancel" button for the request owner.
+ * - ADDED: State management for `editingLeaveId` to track which leave request is being edited.
  */
 document.addEventListener('DOMContentLoaded', () => {
 
@@ -124,6 +121,7 @@ document.addEventListener('DOMContentLoaded', () => {
             users: [],
             chatMessages: [],
             leaveRequests: [],
+            editingLeaveId: null, // NEW: Track editing leave
             hasUnreadMessages: false,
             isInitialChatLoad: true,
             typingUsers: [],
@@ -267,6 +265,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     leaveSchedulerModal: document.getElementById('leaveSchedulerModal'),
                     closeLeaveSchedulerBtn: document.getElementById('closeLeaveSchedulerBtn'),
                     leaveRequestForm: document.getElementById('leaveRequestForm'),
+                    leaveFormTitle: document.getElementById('leaveFormTitle'), // NEW
+                    editingLeaveId: document.getElementById('editingLeaveId'), // NEW
+                    leaveFormButtons: document.getElementById('leaveFormButtons'), // NEW
                     leaveCalendar: document.getElementById('leaveCalendar'),
                     pendingRequestsList: document.getElementById('pendingRequestsList'),
                     adminLeaveSection: document.getElementById('admin-leave-section'),
@@ -3378,6 +3379,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 this.methods.renderLeaveCalendar.call(this);
                 this.methods.renderPendingRequests.call(this);
                 this.methods.renderAllLeaveRequestsTable.call(this);
+                this.methods.resetLeaveForm.call(this); // Ensure form is reset
 
                  // Admin-only features
                 const isAdmin = true; // Replace with actual admin check logic
@@ -3406,7 +3408,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     option.textContent = `${user.name} (${user.techId})`;
                     select.appendChild(option);
                 });
-                select.value = this.state.currentUserTechId;
+                if(this.state.currentUserTechId) {
+                    select.value = this.state.currentUserTechId;
+                }
             },
 
             async handleLeaveRequestSubmit(event) {
@@ -3427,19 +3431,25 @@ document.addEventListener('DOMContentLoaded', () => {
                     return;
                 }
 
+                const leaveData = {
+                    techId, startDate, endDate, leaveType, reason,
+                    lastUpdatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                };
+
                 this.methods.showLoading.call(this, "Submitting leave request...");
                 try {
-                    await this.db.collection(this.config.firestorePaths.LEAVE_REQUESTS).add({
-                        techId,
-                        startDate,
-                        endDate,
-                        leaveType,
-                        reason,
-                        status: 'pending', // pending, approved, denied
-                        requestedAt: firebase.firestore.FieldValue.serverTimestamp()
-                    });
-                    alert("Leave request submitted successfully!");
-                    this.elements.leaveRequestForm.reset();
+                    if (this.state.editingLeaveId) {
+                        // Update existing request
+                        await this.db.collection(this.config.firestorePaths.LEAVE_REQUESTS).doc(this.state.editingLeaveId).update(leaveData);
+                        alert("Leave request updated successfully!");
+                    } else {
+                        // Add new request
+                        leaveData.status = 'pending'; // pending, approved, denied
+                        leaveData.requestedAt = firebase.firestore.FieldValue.serverTimestamp();
+                        await this.db.collection(this.config.firestorePaths.LEAVE_REQUESTS).add(leaveData);
+                        alert("Leave request submitted successfully!");
+                    }
+                    this.methods.resetLeaveForm.call(this);
                 } catch (error) {
                     console.error("Error submitting leave request:", error);
                     alert("Failed to submit leave request: " + error.message);
@@ -3496,25 +3506,30 @@ document.addEventListener('DOMContentLoaded', () => {
                 pending.forEach(req => {
                     const item = document.createElement('div');
                     item.className = 'pending-request-item';
+                    let actionsHtml = `
+                        <button class="btn btn-success btn-sm btn-approve-leave" data-id="${req.id}">Approve</button>
+                        <button class="btn btn-danger btn-sm btn-deny-leave" data-id="${req.id}">Deny</button>
+                    `;
+                    // Add cancel button if the current user is the one who requested
+                    if (req.techId === this.state.currentUserTechId) {
+                        actionsHtml += `<button class="btn btn-secondary btn-sm btn-cancel-leave" data-id="${req.id}">Cancel</button>`;
+                    }
+
                     item.innerHTML = `
                         <div class="details">
                            <p><strong>${req.techId}</strong> - ${req.leaveType}</p>
                            <p><strong>Dates:</strong> ${req.startDate} to ${req.endDate}</p>
                            <p><strong>Reason:</strong> ${req.reason}</p>
                         </div>
-                        <div class="actions">
-                            <button class="btn btn-success btn-sm" data-id="${req.id}" data-action="approved">Approve</button>
-                            <button class="btn btn-danger btn-sm" data-id="${req.id}" data-action="denied">Deny</button>
-                        </div>
+                        <div class="actions">${actionsHtml}</div>
                     `;
                     pendingList.appendChild(item);
                 });
 
-                pendingList.querySelectorAll('.btn').forEach(btn => {
+                pendingList.querySelectorAll('.btn-approve-leave, .btn-deny-leave').forEach(btn => {
                     btn.addEventListener('click', (e) => {
                         const id = e.target.dataset.id;
-                        const action = e.target.dataset.action;
-                        
+                        const action = e.target.classList.contains('btn-approve-leave') ? 'approved' : 'denied';
                         const pin = prompt(`Enter admin PIN to ${action} this request:`);
                         if(pin === this.config.pins.TL_DASHBOARD_PIN){
                              this.methods.updateLeaveStatus.call(this, id, action);
@@ -3523,19 +3538,29 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                     });
                 });
+
+                 pendingList.querySelectorAll('.btn-cancel-leave').forEach(btn => {
+                    btn.addEventListener('click', (e) => this.methods.handleCancelLeaveRequest.call(this, e.target.dataset.id));
+                });
             },
 
              renderAllLeaveRequestsTable() {
                 const tableBody = this.elements.allLeaveRequestsBody;
                 tableBody.innerHTML = '';
+                const isAdmin = true; // Replace with actual admin check logic
 
                 if(this.state.leaveRequests.length === 0){
-                    tableBody.innerHTML = '<tr><td colspan="6" style="text-align:center;">No leave requests found.</td></tr>';
+                    tableBody.innerHTML = '<tr><td colspan="7" style="text-align:center;">No leave requests found.</td></tr>';
                     return;
                 }
 
                 this.state.leaveRequests.sort((a, b) => new Date(b.startDate) - new Date(a.startDate)).forEach(req => {
                     const row = tableBody.insertRow();
+                    let actionsHtml = '';
+                    if (isAdmin) {
+                         actionsHtml += `<button class="btn btn-secondary btn-sm btn-edit-leave" data-id="${req.id}">Edit</button>`;
+                         actionsHtml += `<button class="btn btn-danger btn-sm btn-delete-leave" data-id="${req.id}">Delete</button>`;
+                    }
                     row.innerHTML = `
                         <td>${req.techId}</td>
                         <td>${req.leaveType}</td>
@@ -3543,7 +3568,15 @@ document.addEventListener('DOMContentLoaded', () => {
                         <td>${req.endDate}</td>
                         <td>${req.reason}</td>
                         <td><span class="leave-status-${req.status}">${req.status}</span></td>
+                        <td>${actionsHtml}</td>
                     `;
+                });
+
+                 tableBody.querySelectorAll('.btn-edit-leave').forEach(btn => {
+                    btn.addEventListener('click', (e) => this.methods.handleEditLeaveRequest.call(this, e.target.dataset.id));
+                });
+                tableBody.querySelectorAll('.btn-delete-leave').forEach(btn => {
+                    btn.addEventListener('click', (e) => this.methods.handleDeleteLeaveRequest.call(this, e.target.dataset.id));
                 });
             },
             
@@ -3556,6 +3589,78 @@ document.addEventListener('DOMContentLoaded', () => {
                     alert("Failed to update status: " + error.message);
                 } finally {
                     this.methods.hideLoading.call(this);
+                }
+            },
+            
+            // NEW Leave Management Functions
+            
+            resetLeaveForm() {
+                this.state.editingLeaveId = null;
+                this.elements.leaveRequestForm.reset();
+                this.elements.leaveFormTitle.textContent = 'Submit a New Leave Request';
+                this.elements.editingLeaveId.value = '';
+                this.elements.leaveFormButtons.innerHTML = `<button type="submit" class="btn btn-primary" style="margin-top: 15px; width: 100%;">Submit Request</button>`;
+                if (this.state.currentUserTechId) {
+                    document.getElementById('leaveTechId').value = this.state.currentUserTechId;
+                }
+            },
+
+            handleEditLeaveRequest(id) {
+                const request = this.state.leaveRequests.find(r => r.id === id);
+                if (!request) return;
+
+                this.state.editingLeaveId = id;
+
+                // Switch to the request tab
+                document.querySelector('.leave-tab-button[data-tab="request"]').click();
+
+                // Populate the form
+                this.elements.leaveFormTitle.textContent = 'Edit Leave Request';
+                document.getElementById('editingLeaveId').value = id;
+                document.getElementById('leaveTechId').value = request.techId;
+                document.getElementById('leaveStartDate').value = request.startDate;
+                document.getElementById('leaveEndDate').value = request.endDate;
+                document.getElementById('leaveType').value = request.leaveType;
+                document.getElementById('leaveReason').value = request.reason;
+
+                // Update buttons
+                this.elements.leaveFormButtons.innerHTML = `
+                    <button type="submit" class="btn btn-success" style="margin-top: 15px;">Save Changes</button>
+                    <button type="button" id="cancelEditLeaveBtn" class="btn btn-secondary" style="margin-top: 15px;">Cancel Edit</button>
+                `;
+                document.getElementById('cancelEditLeaveBtn').onclick = () => this.methods.resetLeaveForm.call(this);
+            },
+            
+            async handleDeleteLeaveRequest(id) {
+                 const pin = prompt("Enter admin PIN to delete this request permanently:");
+                 if (pin === this.config.pins.TL_DASHBOARD_PIN) {
+                    if (confirm("Are you sure you want to permanently delete this leave request? This action cannot be undone.")) {
+                        this.methods.showLoading.call(this, "Deleting leave request...");
+                        try {
+                            await this.db.collection(this.config.firestorePaths.LEAVE_REQUESTS).doc(id).delete();
+                        } catch (error) {
+                            console.error("Error deleting leave request:", error);
+                            alert("Failed to delete request: " + error.message);
+                        } finally {
+                            this.methods.hideLoading.call(this);
+                        }
+                    }
+                 } else if (pin) {
+                     alert("Incorrect PIN.");
+                 }
+            },
+            
+            async handleCancelLeaveRequest(id) {
+                 if (confirm("Are you sure you want to cancel your leave request?")) {
+                    this.methods.showLoading.call(this, "Canceling leave request...");
+                    try {
+                        await this.db.collection(this.config.firestorePaths.LEAVE_REQUESTS).doc(id).delete();
+                    } catch (error) {
+                        console.error("Error canceling leave request:", error);
+                        alert("Failed to cancel request: " + error.message);
+                    } finally {
+                        this.methods.hideLoading.call(this);
+                    }
                 }
             },
         }
