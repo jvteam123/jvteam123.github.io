@@ -408,8 +408,7 @@
         #projectTable tbody tr:not(.fix-group-header):not(.batch-header-row):hover { background-color: #d0e0f0 !important; }
         .status { padding: 2px 5px; border-radius: 3px; color: white; font-weight: bold; text-align: center; display: inline-block; font-size:0.95em; }
         .status-available { background-color: #3498db; }
-        .status-inprogressday1, .status-day1ended_awaitingnext, .status-inprogressday2, .status-day2ended_awaitingnext, .status-day3ended_awaitingnext, .status-inprogressday4, .status-day4ended_awaitingnext, .status-inprogressday5, .status-day5ended_awaitingnext, .status-inprogressday6, .status-day6ended_awaitingnext { background-color: #f39c12; }
-        .status-inprogressday3 { background-color: #e9630e; }
+        .status-inprogressday1, .status-day1ended_awaitingnext, .status-inprogressday2, .status-day2ended_awaitingnext, .status-inprogressday3, .status-day3ended_awaitingnext, .status-inprogressday4, .status-day4ended_awaitingnext, .status-inprogressday5, .status-day5ended_awaitingnext, .status-inprogressday6, .status-day6ended_awaitingnext { background-color: #f39c12; }
         .status-completed { background-color: #2ecc71; }
         .status-reassigned_techabsent { background-color: #B0BEC5; color: #263238; }
         #tlDashboardContent { margin-top:15px; }
@@ -829,6 +828,8 @@
                     <div id="tab-request" class="leave-tab-content">
                         <div id="leaveRequestFormContainer">
                              <form id="leaveRequestForm">
+                                <h3 id="leaveFormTitle">Submit a New Leave Request</h3>
+                                <input type="hidden" id="editingLeaveId">
                                 <label for="leaveTechId">Tech ID</label>
                                 <select id="leaveTechId" required></select>
 
@@ -849,7 +850,9 @@
                                 <label for="leaveReason">Reason</label>
                                 <textarea id="leaveReason" rows="3" required></textarea>
 
-                                <button type="submit" class="btn btn-primary" style="margin-top: 15px; width: 100%;">Submit Request</button>
+                                <div id="leaveFormButtons">
+                                    <button type="submit" class="btn btn-primary" style="margin-top: 15px; width: 100%;">Submit Request</button>
+                                </div>
                             </form>
                         </div>
                     </div>
@@ -870,6 +873,7 @@
                                         <th>End Date</th>
                                         <th>Reason</th>
                                         <th>Status</th>
+                                        <th>Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody id="allLeaveRequestsBody"></tbody>
