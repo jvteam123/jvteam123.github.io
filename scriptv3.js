@@ -7,9 +7,13 @@
  * global variables, improves performance, and ensures correct
  * timezone handling.
  *
- * @version 4.4.0
+ * @version 4.5.0
  * @author Gemini AI Refactor & Bug-Fix
  * @changeLog
+ * - UPDATED: Replaced the 'View' dispute alert with a professional modal for better readability and manual copying of details.
+ * - ADDED: `injectDisputeModalHTML` function to dynamically add the new modal's HTML structure to the page.
+ * - ADDED: `showDisputeDetailsModal` function to populate and display the new view modal.
+ * - UPDATED: `handleViewDispute` to call the new modal function instead of an alert.
  * - ADDED: Pagination to the dispute table, displaying 15 disputes per page.
  * - ADDED: `state.disputePagination` to manage the pagination state for disputes.
  * - ADDED: `renderDisputePagination` function to create and manage pagination controls.
@@ -17,20 +21,6 @@
  * - UPDATED: `renderDisputes` function to slice the disputes array and display only the current page's items.
  * - FIXED: Dispute form submission now correctly captures all fields, preventing "undefined" values in the dispute list.
  * - FIXED: Dispute modal's "Project Name" dropdown now shows all projects instead of just the filtered ones.
- * - ADDED: Dispute reporting system with a dedicated modal and form.
- * - ADDED: Firestore collection for storing and retrieving disputes.
- * - ADDED: Real-time listener for the disputes table.
- * - ADDED: Dynamic population of "Project Name" and "Tech ID" dropdowns in the dispute form.
- * - ADDED: Functionality for "View", "Copy", "Mark Done", and "Delete" actions on dispute entries.
- * - ADDED: Professional leave management buttons (Edit, Delete, Cancel).
- * - ADDED: "Actions" column to the "All Requests" leave table for new buttons.
- * - ADDED: `handleDeleteLeaveRequest` function to allow admins to delete any leave request.
- * - ADDED: `handleEditLeaveRequest` function for admins to modify existing requests.
- * - ADDED: `handleCancelLeaveRequest` for users to withdraw their own pending requests.
- * - UPDATED: `handleLeaveRequestSubmit` to support both creating and updating leave requests.
- * - UPDATED: `renderAllLeaveRequestsTable` to dynamically show/hide buttons based on user role and request status.
- * - UPDATED: `renderPendingRequests` to include a "Cancel" button for the request owner.
- * - ADDED: State management for `editingLeaveId` to track which leave request is being edited.
  */
 document.addEventListener('DOMContentLoaded', () => {
 
@@ -186,6 +176,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.log("Firebase initialized successfully!");
 
                 this.methods.injectChatModalHTML.call(this);
+                this.methods.injectDisputeModalHTML.call(this); // Inject new modal
                 this.methods.setupDOMReferences.call(this);
                 this.methods.injectNotificationStyles.call(this);
                 this.methods.loadColumnVisibilityState.call(this);
@@ -306,6 +297,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     prevDisputePageBtn: document.getElementById('prevDisputePageBtn'),
                     nextDisputePageBtn: document.getElementById('nextDisputePageBtn'),
                     disputePageInfo: document.getElementById('disputePageInfo'),
+                    disputeDetailsModal: document.getElementById('disputeDetailsModal'),
+                    disputeDetailsContent: document.getElementById('disputeDetailsContent'),
+                    closeDisputeDetailsBtn: document.getElementById('closeDisputeDetailsBtn'),
                 };
             },
 
@@ -443,6 +437,9 @@ document.addEventListener('DOMContentLoaded', () => {
                  attachClick(self.elements.closeDisputeBtn, () => {
                     self.elements.disputeModal.style.display = 'none';
                 });
+                attachClick(self.elements.closeDisputeDetailsBtn, () => {
+                    self.elements.disputeDetailsModal.style.display = 'none';
+                });
 
                 attachClick(self.elements.clearDataBtn, self.methods.handleClearData.bind(self));
                 attachClick(self.elements.nextPageBtn, self.methods.handleNextPage.bind(self));
@@ -544,6 +541,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (event.target == self.elements.teamChatModal) self.elements.teamChatModal.style.display = 'none';
                     if (event.target == self.elements.leaveSchedulerModal) self.elements.leaveSchedulerModal.style.display = 'none';
                     if (event.target == self.elements.disputeModal) self.elements.disputeModal.style.display = 'none';
+                    if (event.target == self.elements.disputeDetailsModal) self.elements.disputeDetailsModal.style.display = 'none';
                 };
                  document.querySelectorAll('.leave-tab-button').forEach(button => {
                     button.addEventListener('click', (e) => {
@@ -3725,6 +3723,58 @@ document.addEventListener('DOMContentLoaded', () => {
             
              // --- DISPUTE METHODS ---
             
+            injectDisputeModalHTML() {
+                const disputeModalHTML = `
+                    <div class="modal" id="disputeDetailsModal" style="display: none;">
+                        <div class="modal-content" style="max-width: 600px;">
+                            <div class="modal-header">
+                                <h2>Dispute Details</h2>
+                                <span class="close-btn" id="closeDisputeDetailsBtn">&times;</span>
+                            </div>
+                            <div id="disputeDetailsContent" class="dispute-details-container"></div>
+                        </div>
+                    </div>
+                `;
+                document.body.insertAdjacentHTML('beforeend', disputeModalHTML);
+
+                const style = document.createElement('style');
+                style.innerHTML = `
+                    .dispute-details-container {
+                        padding-top: 15px;
+                        font-size: 0.9em;
+                        line-height: 1.6;
+                    }
+                    .dispute-details-container .detail-row {
+                        display: grid;
+                        grid-template-columns: 120px 1fr;
+                        gap: 10px;
+                        padding: 8px 0;
+                        border-bottom: 1px solid #eee;
+                    }
+                    .dispute-details-container .detail-row:last-child {
+                        border-bottom: none;
+                    }
+                    .dispute-details-container .detail-label {
+                        font-weight: bold;
+                        color: #555;
+                    }
+                    .dispute-details-container .detail-value {
+                        word-break: break-word;
+                    }
+                    .dispute-details-container .detail-reason {
+                        grid-column: 1 / -1;
+                        padding-top: 10px;
+                    }
+                     .dispute-details-container .detail-reason .detail-value {
+                        white-space: pre-wrap;
+                        background-color: #f9f9f9;
+                        padding: 10px;
+                        border-radius: 4px;
+                    }
+                `;
+                document.head.appendChild(style);
+            },
+
             listenForDisputes() {
                 if (this.disputeListenerUnsubscribe) this.disputeListenerUnsubscribe();
                 this.disputeListenerUnsubscribe = this.db.collection(this.config.firestorePaths.DISPUTES)
@@ -3831,11 +3881,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
             renderDisputePagination() {
                 const { currentPage, totalPages } = this.state.disputePagination;
-                if (totalPages > 0) {
+                if (totalPages > 1) {
                     this.elements.disputePageInfo.textContent = `Page ${currentPage} of ${totalPages}`;
                     this.elements.disputePaginationControls.style.display = 'block';
                 } else {
-                    this.elements.disputePageInfo.textContent = "No disputes found";
                     this.elements.disputePaginationControls.style.display = 'none';
                 }
                 this.elements.prevDisputePageBtn.disabled = currentPage <= 1;
@@ -3873,16 +3922,35 @@ document.addEventListener('DOMContentLoaded', () => {
             },
             
             handleViewDispute(id) {
-                const dispute = this.state.disputes.find(d => d.id === id);
-                if (!dispute) return;
-                
-                const details = Object.entries(dispute)
-                    .filter(([key]) => key !== 'id' && key !== 'createdAt')
-                    .map(([key, value]) => `${key.charAt(0).toUpperCase() + key.slice(1)}: ${value}`)
-                    .join('\n');
-                alert("Dispute Details:\n\n" + details);
+                this.methods.showDisputeDetailsModal.call(this, id);
             },
             
+            showDisputeDetailsModal(id) {
+                const dispute = this.state.disputes.find(d => d.id === id);
+                if (!dispute) return;
+
+                const content = this.elements.disputeDetailsContent;
+                content.innerHTML = `
+                    <div class="detail-row"><span class="detail-label">Block ID:</span><span class="detail-value">${dispute.blockId}</span></div>
+                    <div class="detail-row"><span class="detail-label">Project:</span><span class="detail-value">${dispute.projectName}</span></div>
+                    <div class="detail-row"><span class="detail-label">Partial:</span><span class="detail-value">${dispute.partial}</span></div>
+                    <div class="detail-row"><span class="detail-label">Phase:</span><span class="detail-value">${dispute.phase}</span></div>
+                    <div class="detail-row"><span class="detail-label">UID:</span><span class="detail-value">${dispute.uid}</span></div>
+                    <div class="detail-row"><span class="detail-label">Tech ID:</span><span class="detail-value">${dispute.techId} (${dispute.techName})</span></div>
+                    <div class="detail-row"><span class="detail-label">Team:</span><span class="detail-value">${dispute.team}</span></div>
+                    <div class="detail-row"><span class="detail-label">Type:</span><span class="detail-value">${dispute.type}</span></div>
+                    <div class="detail-row"><span class="detail-label">Category:</span><span class="detail-value">${dispute.category}</span></div>
+                    <div class="detail-row"><span class="detail-label">Warning:</span><span class="detail-value">${dispute.warning}</span></div>
+                    <div class="detail-row"><span class="detail-label">RQA TechID:</span><span class="detail-value">${dispute.rqaTechId || 'N/A'}</span></div>
+                    <div class="detail-row detail-reason">
+                        <span class="detail-label">Detailed Reason:</span>
+                        <div class="detail-value">${dispute.reason}</div>
+                    </div>
+                `;
+
+                this.elements.disputeDetailsModal.style.display = 'block';
+            },
+
             handleCopyDispute(id) {
                  const dispute = this.state.disputes.find(d => d.id === id);
                  if (!dispute) return;
