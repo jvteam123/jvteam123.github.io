@@ -3795,7 +3795,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <td>${d.techId}</td>
                         <td>${d.team}</td>
                         <td>${d.type}</td>
-                        <td>${d.status}</td>
+                        <td><span class="dispute-status-${d.status.toLowerCase()}">${d.status}</span></td>
                         <td>
                             <button class="btn btn-info btn-sm btn-view-dispute" data-id="${d.id}">View</button>
                             <button class="btn btn-secondary btn-sm btn-copy-dispute" data-id="${d.id}">Copy</button>
