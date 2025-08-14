@@ -7,9 +7,14 @@
  * global variables, improves performance, and ensures correct
  * timezone handling.
  *
- * @version 4.2.0
+ * @version 4.3.0
  * @author Gemini AI Refactor & Bug-Fix
  * @changeLog
+ * - ADDED: Dispute reporting system with a dedicated modal and form.
+ * - ADDED: Firestore collection for storing and retrieving disputes.
+ * - ADDED: Real-time listener for the disputes table.
+ * - ADDED: Dynamic population of "Project Name" and "Tech ID" dropdowns in the dispute form.
+ * - ADDED: Functionality for "View", "Copy", "Mark Done", and "Delete" actions on dispute entries.
  * - ADDED: Professional leave management buttons (Edit, Delete, Cancel).
  * - ADDED: "Actions" column to the "All Requests" leave table for new buttons.
  * - ADDED: `handleDeleteLeaveRequest` function to allow admins to delete any leave request.
@@ -44,7 +49,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 CHAT: "chat",
                 TYPING_STATUS: "typing_status",
                 APP_CONFIG: "app_config",
-                LEAVE_REQUESTS: "leave_requests"
+                LEAVE_REQUESTS: "leave_requests",
+                DISPUTES: "disputes" // ADDED: Firestore path for disputes
             },
             chat: {
                 MAX_MESSAGES: 30
@@ -114,6 +120,7 @@ document.addEventListener('DOMContentLoaded', () => {
         typingListenerUnsubscribe: null,
         appConfigListenerUnsubscribe: null, // Listener for app settings
         leaveDataListenerUnsubscribe: null,
+        disputeListenerUnsubscribe: null, // ADDED: Listener for disputes
 
         // --- 3. APPLICATION STATE ---
         state: {
@@ -121,6 +128,7 @@ document.addEventListener('DOMContentLoaded', () => {
             users: [],
             chatMessages: [],
             leaveRequests: [],
+            disputes: [], // ADDED: State for disputes
             editingLeaveId: null, // NEW: Track editing leave
             hasUnreadMessages: false,
             isInitialChatLoad: true,
@@ -272,6 +280,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     pendingRequestsList: document.getElementById('pendingRequestsList'),
                     adminLeaveSection: document.getElementById('admin-leave-section'),
                     allLeaveRequestsBody: document.getElementById('allLeaveRequestsBody'),
+                    
+                     // Dispute Modal DOM Elements
+                    openDisputeBtn: document.getElementById('openDisputeBtn'),
+                    disputeModal: document.getElementById('disputeModal'),
+                    closeDisputeBtn: document.getElementById('closeDisputeBtn'),
+                    disputeForm: document.getElementById('disputeForm'),
+                    disputeTableBody: document.getElementById('disputeTableBody'),
+                    disputeProjectName: document.getElementById('disputeProjectName'),
+                    disputeTechId: document.getElementById('disputeTechId'),
+                    disputeTechName: document.getElementById('disputeTechName'),
                 };
             },
 
@@ -331,6 +349,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 attachClick(self.elements.openLeaveSchedulerBtn, () => {
                     self.elements.leaveSchedulerModal.style.display = 'block';
                     self.methods.initLeaveScheduler.call(self);
+                });
+                
+                attachClick(self.elements.openDisputeBtn, () => {
+                    self.elements.disputeModal.style.display = 'block';
+                    self.methods.openDisputeModal.call(self);
                 });
 
 
@@ -401,6 +424,9 @@ document.addEventListener('DOMContentLoaded', () => {
                  attachClick(self.elements.closeLeaveSchedulerBtn, () => {
                     self.elements.leaveSchedulerModal.style.display = 'none';
                 });
+                 attachClick(self.elements.closeDisputeBtn, () => {
+                    self.elements.disputeModal.style.display = 'none';
+                });
 
                 attachClick(self.elements.clearDataBtn, self.methods.handleClearData.bind(self));
                 attachClick(self.elements.nextPageBtn, self.methods.handleNextPage.bind(self));
@@ -417,6 +443,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (self.elements.userManagementForm) {
                     self.elements.userManagementForm.addEventListener('submit', self.methods.handleUserFormSubmit.bind(self));
+                }
+                 if (self.elements.disputeForm) {
+                    self.elements.disputeForm.addEventListener('submit', self.methods.handleDisputeFormSubmit.bind(self));
+                }
+                 if (self.elements.disputeTechId) {
+                    self.elements.disputeTechId.onchange = (e) => {
+                        const selectedUser = self.state.users.find(u => u.techId === e.target.value);
+                        self.elements.disputeTechName.value = selectedUser ? selectedUser.name : '';
+                    };
+                }
+                 if (self.elements.disputeTableBody) {
+                    self.elements.disputeTableBody.addEventListener('click', self.methods.handleDisputeTableActions.bind(self));
                 }
 
                 attachClick(self.elements.importUsersBtn, () => self.elements.userCsvInput.click());
@@ -487,6 +525,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (event.target == self.elements.importCsvModal) self.elements.importCsvModal.style.display = 'none';
                     if (event.target == self.elements.teamChatModal) self.elements.teamChatModal.style.display = 'none';
                     if (event.target == self.elements.leaveSchedulerModal) self.elements.leaveSchedulerModal.style.display = 'none';
+                    if (event.target == self.elements.disputeModal) self.elements.disputeModal.style.display = 'none';
                 };
                  document.querySelectorAll('.leave-tab-button').forEach(button => {
                     button.addEventListener('click', (e) => {
@@ -565,6 +604,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     this.methods.listenForChatMessages.call(this);
                     this.methods.listenForTypingStatus.call(this);
                     this.methods.listenForLeaveData.call(this);
+                    this.methods.listenForDisputes.call(this); // ADDED: Start listening for disputes
                 }
             },
 
@@ -587,6 +627,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (this.typingListenerUnsubscribe) this.typingListenerUnsubscribe();
                 if (this.appConfigListenerUnsubscribe) this.appConfigListenerUnsubscribe();
                  if (this.leaveDataListenerUnsubscribe) this.leaveDataListenerUnsubscribe();
+                 if (this.disputeListenerUnsubscribe) this.disputeListenerUnsubscribe(); // ADDED
                 
                 this.state.isAppInitialized = false;
             },
@@ -3660,6 +3701,157 @@ document.addEventListener('DOMContentLoaded', () => {
                         alert("Failed to cancel request: " + error.message);
                     } finally {
                         this.methods.hideLoading.call(this);
+                    }
+                }
+            },
+            
+             // --- DISPUTE METHODS ---
+            
+            listenForDisputes() {
+                if (this.disputeListenerUnsubscribe) this.disputeListenerUnsubscribe();
+                this.disputeListenerUnsubscribe = this.db.collection(this.config.firestorePaths.DISPUTES)
+                    .orderBy("createdAt", "desc")
+                    .onSnapshot(snapshot => {
+                        this.state.disputes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                        this.methods.renderDisputes.call(this);
+                    }, error => console.error("Error listening for disputes:", error));
+            },
+            
+            openDisputeModal() {
+                // Populate project names
+                const uniqueProjectNames = [...new Set(this.state.projects.map(p => p.baseProjectName))];
+                this.elements.disputeProjectName.innerHTML = '<option value="">Select Project</option>' + uniqueProjectNames.map(name => `<option value="${name}">${name}</option>`).join('');
+                
+                // Populate tech IDs
+                this.elements.disputeTechId.innerHTML = '<option value="">Select Tech ID</option>' + this.state.users.map(user => `<option value="${user.techId}" data-name="${user.name}">${user.techId}</option>`).join('');
+                
+                this.elements.disputeForm.reset();
+                 this.elements.disputeTechName.value = '';
+            },
+            
+            async handleDisputeFormSubmit(event) {
+                event.preventDefault();
+                const formData = new FormData(this.elements.disputeForm);
+                const disputeData = Object.fromEntries(formData.entries());
+                
+                disputeData.status = 'Pending';
+                disputeData.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+                disputeData.techName = this.state.users.find(u => u.techId === disputeData.techId)?.name || '';
+
+                this.methods.showLoading.call(this, "Saving dispute...");
+                try {
+                    await this.db.collection(this.config.firestorePaths.DISPUTES).add(disputeData);
+                    this.elements.disputeForm.reset();
+                     this.elements.disputeTechName.value = '';
+                } catch(error) {
+                    console.error("Error saving dispute:", error);
+                    alert("Failed to save dispute: " + error.message);
+                } finally {
+                    this.methods.hideLoading.call(this);
+                }
+            },
+            
+            renderDisputes() {
+                const tableBody = this.elements.disputeTableBody;
+                tableBody.innerHTML = '';
+                if(this.state.disputes.length === 0) {
+                     tableBody.innerHTML = '<tr><td colspan="8" style="text-align:center;">No disputes filed yet.</td></tr>';
+                     return;
+                }
+                this.state.disputes.forEach(d => {
+                    const row = tableBody.insertRow();
+                    row.innerHTML = `
+                        <td>${d.blockId}</td>
+                        <td>${d.projectName}</td>
+                        <td>${d.phase}</td>
+                        <td>${d.techId}</td>
+                        <td>${d.team}</td>
+                        <td>${d.type}</td>
+                        <td>${d.status}</td>
+                        <td>
+                            <button class="btn btn-info btn-sm btn-view-dispute" data-id="${d.id}">View</button>
+                            <button class="btn btn-secondary btn-sm btn-copy-dispute" data-id="${d.id}">Copy</button>
+                            <button class="btn btn-success btn-sm btn-mark-dispute-done" data-id="${d.id}" ${d.status === 'Done' ? 'disabled' : ''}>Done</button>
+                            <button class="btn btn-danger btn-sm btn-delete-dispute" data-id="${d.id}">Delete</button>
+                        </td>
+                    `;
+                });
+            },
+
+            handleDisputeTableActions(event) {
+                const button = event.target;
+                const id = button.dataset.id;
+                if (!id) return;
+
+                if (button.classList.contains('btn-view-dispute')) {
+                    this.methods.handleViewDispute.call(this, id);
+                } else if (button.classList.contains('btn-copy-dispute')) {
+                    this.methods.handleCopyDispute.call(this, id);
+                } else if (button.classList.contains('btn-mark-dispute-done')) {
+                     this.methods.handleMarkDisputeDone.call(this, id);
+                } else if (button.classList.contains('btn-delete-dispute')) {
+                    this.methods.handleDeleteDispute.call(this, id);
+                }
+            },
+            
+            handleViewDispute(id) {
+                const dispute = this.state.disputes.find(d => d.id === id);
+                if (!dispute) return;
+                
+                const details = Object.entries(dispute)
+                    .filter(([key]) => key !== 'id' && key !== 'createdAt')
+                    .map(([key, value]) => `${key.charAt(0).toUpperCase() + key.slice(1)}: ${value}`)
+                    .join('\n');
+                alert("Dispute Details:\n\n" + details);
+            },
+            
+            handleCopyDispute(id) {
+                 const dispute = this.state.disputes.find(d => d.id === id);
+                 if (!dispute) return;
+                 
+                const textToCopy = `
+Block ID: ${dispute.blockId}
+Project Name: ${dispute.projectName}
+Partial: ${dispute.partial}
+Phase: ${dispute.phase}
+UID: ${dispute.uid}
+Tech ID: ${dispute.techId}
+Tech Name: ${dispute.techName}
+Team: ${dispute.team}
+Type: ${dispute.type}
+Category: ${dispute.category}
+Warning: ${dispute.warning}
+RQA TechID: ${dispute.rqaTechId}
+Reason: ${dispute.reason}
+Status: ${dispute.status}
+                `.trim();
+                
+                navigator.clipboard.writeText(textToCopy).then(() => {
+                    alert("Dispute details copied to clipboard.");
+                }).catch(err => {
+                    console.error("Failed to copy dispute details: ", err);
+                    alert("Could not copy details.");
+                });
+            },
+            
+             async handleMarkDisputeDone(id) {
+                 if (confirm("Are you sure you want to mark this dispute as 'Done'?")) {
+                    try {
+                        await this.db.collection(this.config.firestorePaths.DISPUTES).doc(id).update({ status: 'Done' });
+                    } catch (error) {
+                        console.error("Error marking dispute as done:", error);
+                        alert("Failed to update dispute status.");
+                    }
+                 }
+            },
+            
+            async handleDeleteDispute(id) {
+                if(confirm("Are you sure you want to delete this dispute? This action is permanent.")) {
+                    try {
+                        await this.db.collection(this.config.firestorePaths.DISPUTES).doc(id).delete();
+                    } catch(error) {
+                        console.error("Error deleting dispute:", error);
+                        alert("Failed to delete dispute.");
                     }
                 }
             },
