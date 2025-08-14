@@ -384,14 +384,15 @@
         #settingsModal .modal-content { max-width: 700px; max-height: 85vh; overflow-y: auto;} /* MODIFIED: Increased width for new layout */
         #importCsvModal .modal-content { max-width: 500px; } /* Added for Import CSV Modal */
         #leaveSchedulerModal .modal-content { max-width: 1100px; }
+        #disputeModal .modal-content { max-width: 900px; }
         .close-btn { color: #aaa; float: right; font-size: 28px; font-weight: bold; } .close-btn:hover, .close-btn:focus { color: black; text-decoration: none; cursor: pointer; }
-        #newProjectForm label { display: block; margin-top: 8px; font-weight: bold; font-size: 0.85em;}
-        #newProjectForm input[type="text"], #newProjectForm input[type="number"], #newProjectForm select, .form-control { width: calc(100% - 18px); padding: 7px; margin-top: 3px; border: 1px solid #ddd; border-radius: 3px; box-sizing: border-box; font-size: 0.85em; }
-        #newProjectForm button[type="submit"] { margin-top: 12px; }
+        #newProjectForm label, #disputeForm label { display: block; margin-top: 8px; font-weight: bold; font-size: 0.85em;}
+        #newProjectForm input[type="text"], #newProjectForm input[type="number"], #newProjectForm select, .form-control, #disputeForm input, #disputeForm select, #disputeForm textarea { width: calc(100% - 18px); padding: 7px; margin-top: 3px; border: 1px solid #ddd; border-radius: 3px; box-sizing: border-box; font-size: 0.85em; }
+        #newProjectForm button[type="submit"], #disputeForm button[type="submit"] { margin-top: 12px; }
         .form-group { margin-bottom: 1rem; }
-        #projectTable { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 0.8em; }
-        #projectTable th, #projectTable td { border: 1px solid #ddd; padding: 3px 5px; text-align: left; vertical-align: middle; white-space: nowrap; }
-        #projectTable thead th { background-color: #34495e; color: white; font-weight: bold; position: sticky; top: 0; z-index: 10;}
+        #projectTable, #disputeTable { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 0.8em; }
+        #projectTable th, #projectTable td, #disputeTable th, #disputeTable td { border: 1px solid #ddd; padding: 3px 5px; text-align: left; vertical-align: middle; white-space: nowrap; }
+        #projectTable thead th, #disputeTable thead th { background-color: #34495e; color: white; font-weight: bold; position: sticky; top: 0; z-index: 10;}
         #projectTable td.wrap-text { white-space: normal; }
         #projectTable select.assigned-to-select,
         #projectTable select.break-select,
@@ -734,6 +735,7 @@
                     💬 Team Chat
                     <span id="chatNotificationBadge" class="chat-notification-badge" style="display: none;"></span>
                 </button>
+                <button id="openDisputeBtn" class="btn btn-danger btn-lg">Dispute</button>
                 <button id="tscLinkBtn" class="btn btn-warning btn-lg" style="display: none;"></button>
                 <button id="exportCsvBtn" class="btn btn-info btn-lg" style="margin-left: 10px;">📊 Export to CSV</button>
                 <button id="openImportCsvBtn" class="btn btn-secondary btn-lg" style="margin-left: 10px;">📥 Import CSV</button> 
@@ -901,6 +903,126 @@
                     <input type="file" id="csvFileInput" accept=".csv" style="margin-bottom: 15px;">
                     <button id="processCsvBtn" class="btn btn-primary" disabled>Process CSV</button>
                     <div id="csvImportStatus" style="margin-top: 10px; font-size: 0.9em; color: #555;"></div>
+                </div>
+            </div>
+            <div id="disputeModal" class="modal">
+                <div class="modal-content">
+                    <span class="close-btn" id="closeDisputeBtn">&times;</span>
+                    <h2>File a Dispute</h2>
+                    <form id="disputeForm">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                            <div>
+                                <label for="disputeBlockId">Block ID:</label>
+                                <input type="text" id="disputeBlockId" required>
+
+                                <label for="disputeProjectName">Project Name:</label>
+                                <select id="disputeProjectName" required></select>
+
+                                <label for="disputePartial">Partial:</label>
+                                <select id="disputePartial" required>
+                                    <option value="">Select Partial</option>
+                                    <option value="Partial 1">Partial 1</option>
+                                    <option value="Partial 2">Partial 2</option>
+                                    <option value="Partial 3">Partial 3</option>
+                                    <option value="Partial 4">Partial 4</option>
+                                    <option value="Partial 5">Partial 5</option>
+                                    <option value="Partial 6">Partial 6</option>
+                                    <option value="Partial 7">Partial 7</option>
+                                    <option value="Partial 8">Partial 8</option>
+                                    <option value="Partial 9">Partial 9</option>
+                                    <option value="Partial 10">Partial 10</option>
+                                </select>
+
+                                <label for="disputePhase">Phase:</label>
+                                <select id="disputePhase" required>
+                                    <option value="">Select Phase</option>
+                                    <option value="Fix2">Fix2</option>
+                                    <option value="Fix3">Fix3</option>
+                                    <option value="Fix4">Fix4</option>
+                                    <option value="Fix5">Fix5</option>
+                                </select>
+
+                                <label for="disputeUid">UID (Initial FP's UID):</label>
+                                <input type="text" id="disputeUid" required>
+                            </div>
+                            <div>
+                                <label for="disputeTechId">Tech ID:</label>
+                                <select id="disputeTechId" required></select>
+
+                                <label for="disputeTechName">Tech Name:</label>
+                                <input type="text" id="disputeTechName" readonly>
+
+                                <label for="disputeTeam">Team:</label>
+                                <select id="disputeTeam" required>
+                                    <option value="">Select Team</option>
+                                    <option value="Team 123">Team 123</option>
+                                    <option value="Team 114">Team 114</option>
+                                    <option value="Team 64">Team 64</option>
+                                </select>
+
+                                <label for="disputeType">Type:</label>
+                                <select id="disputeType" required>
+                                    <option value="">Select Type</option>
+                                    <option value="Incorrect">Incorrect</option>
+                                    <option value="Skip">Skip</option>
+                                    <option value="Change">Change</option>
+                                </select>
+
+                                <label for="disputeCategory">Category:</label>
+                                <select id="disputeCategory" required>
+                                    <option value="">Select Category</option>
+                                    <option value="1">1</option>
+                                    <option value="2">2</option>
+                                    <option value="3">3</option>
+                                    <option value="4">4</option>
+                                    <option value="5">5</option>
+                                    <option value="6">6</option>
+                                    <option value="7">7</option>
+                                    <option value="8">8</option>
+                                    <option value="9">9</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <label for="disputeWarning">Warning:</label>
+                        <select id="disputeWarning" name="warning">
+                            <option value="N/A" selected>N/A</option>
+                            <option value="A">A</option>
+                            <option value="B">B</option>
+                            <option value="C">C</option>
+                            <option value="D">D</option>
+                            <option value="E">E</option>
+                            <option value="F">F</option>
+                            <option value="G">G</option>
+                        </select>
+
+                        <label for="disputeRqaTechId">RQA TechID:</label>
+                        <input type="text" id="disputeRqaTechId">
+
+                        <label for="disputeReason">Detailed Reason for Dispute:</label>
+                        <textarea id="disputeReason" rows="4" required></textarea>
+
+                        <button type="submit" class="btn btn-success">Save Dispute</button>
+                    </form>
+                    <hr>
+                    <h3>Disputes List</h3>
+                    <div class="table-scroll-wrapper">
+                        <table id="disputeTable">
+                            <thead>
+                                <tr>
+                                    <th>Block ID</th>
+                                    <th>Project Name</th>
+                                    <th>Phase</th>
+                                    <th>Tech ID</th>
+                                    <th>Team</th>
+                                    <th>Type</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="disputeTableBody"></tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
             <h3>Project Overview</h3>
