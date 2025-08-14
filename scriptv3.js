@@ -7,9 +7,14 @@
  * global variables, improves performance, and ensures correct
  * timezone handling.
  *
- * @version 4.3.2
+ * @version 4.4.0
  * @author Gemini AI Refactor & Bug-Fix
  * @changeLog
+ * - ADDED: Pagination to the dispute table, displaying 15 disputes per page.
+ * - ADDED: `state.disputePagination` to manage the pagination state for disputes.
+ * - ADDED: `renderDisputePagination` function to create and manage pagination controls.
+ * - ADDED: Event listeners for next and previous dispute page buttons.
+ * - UPDATED: `renderDisputes` function to slice the disputes array and display only the current page's items.
  * - FIXED: Dispute form submission now correctly captures all fields, preventing "undefined" values in the dispute list.
  * - FIXED: Dispute modal's "Project Name" dropdown now shows all projects instead of just the filtered ones.
  * - ADDED: Dispute reporting system with a dedicated modal and form.
@@ -155,6 +160,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 sortOrderForPaging: 'newest',
                 monthForPaging: ''
             },
+            disputePagination: {
+                currentPage: 1,
+                disputesPerPage: 15,
+                totalPages: 0
+            },
         },
 
         // --- 4. DOM ELEMENT REFERENCES ---
@@ -292,6 +302,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     disputeProjectName: document.getElementById('disputeProjectName'),
                     disputeTechId: document.getElementById('disputeTechId'),
                     disputeTechName: document.getElementById('disputeTechName'),
+                    disputePaginationControls: document.getElementById('disputePaginationControls'),
+                    prevDisputePageBtn: document.getElementById('prevDisputePageBtn'),
+                    nextDisputePageBtn: document.getElementById('nextDisputePageBtn'),
+                    disputePageInfo: document.getElementById('disputePageInfo'),
                 };
             },
 
@@ -433,6 +447,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 attachClick(self.elements.clearDataBtn, self.methods.handleClearData.bind(self));
                 attachClick(self.elements.nextPageBtn, self.methods.handleNextPage.bind(self));
                 attachClick(self.elements.prevPageBtn, self.methods.handlePrevPage.bind(self));
+                attachClick(self.elements.nextDisputePageBtn, self.methods.handleNextDisputePage.bind(self));
+                attachClick(self.elements.prevDisputePageBtn, self.methods.handlePrevDisputePage.bind(self));
 
 
                 if (self.elements.newProjectForm) {
@@ -3782,28 +3798,62 @@ document.addEventListener('DOMContentLoaded', () => {
             renderDisputes() {
                 const tableBody = this.elements.disputeTableBody;
                 tableBody.innerHTML = '';
-                if(this.state.disputes.length === 0) {
+                this.state.disputePagination.totalPages = Math.ceil(this.state.disputes.length / this.state.disputePagination.disputesPerPage);
+
+                const startIndex = (this.state.disputePagination.currentPage - 1) * this.state.disputePagination.disputesPerPage;
+                const endIndex = startIndex + this.state.disputePagination.disputesPerPage;
+                const disputesToRender = this.state.disputes.slice(startIndex, endIndex);
+
+                if(disputesToRender.length === 0) {
                      tableBody.innerHTML = '<tr><td colspan="8" style="text-align:center;">No disputes filed yet.</td></tr>';
-                     return;
+                } else {
+                    disputesToRender.forEach(d => {
+                        const row = tableBody.insertRow();
+                        row.innerHTML = `
+                            <td>${d.blockId}</td>
+                            <td>${d.projectName}</td>
+                            <td>${d.phase}</td>
+                            <td>${d.techId}</td>
+                            <td>${d.team}</td>
+                            <td>${d.type}</td>
+                            <td><span class="dispute-status-${d.status.toLowerCase()}">${d.status}</span></td>
+                            <td>
+                                <button class="btn btn-info btn-sm btn-view-dispute" data-id="${d.id}">View</button>
+                                <button class="btn btn-secondary btn-sm btn-copy-dispute" data-id="${d.id}">Copy</button>
+                                <button class="btn btn-success btn-sm btn-mark-dispute-done" data-id="${d.id}" ${d.status === 'Done' ? 'disabled' : ''}>Done</button>
+                                <button class="btn btn-danger btn-sm btn-delete-dispute" data-id="${d.id}">Delete</button>
+                            </td>
+                        `;
+                    });
                 }
-                this.state.disputes.forEach(d => {
-                    const row = tableBody.insertRow();
-                    row.innerHTML = `
-                        <td>${d.blockId}</td>
-                        <td>${d.projectName}</td>
-                        <td>${d.phase}</td>
-                        <td>${d.techId}</td>
-                        <td>${d.team}</td>
-                        <td>${d.type}</td>
-                        <td><span class="dispute-status-${d.status.toLowerCase()}">${d.status}</span></td>
-                        <td>
-                            <button class="btn btn-info btn-sm btn-view-dispute" data-id="${d.id}">View</button>
-                            <button class="btn btn-secondary btn-sm btn-copy-dispute" data-id="${d.id}">Copy</button>
-                            <button class="btn btn-success btn-sm btn-mark-dispute-done" data-id="${d.id}" ${d.status === 'Done' ? 'disabled' : ''}>Done</button>
-                            <button class="btn btn-danger btn-sm btn-delete-dispute" data-id="${d.id}">Delete</button>
-                        </td>
-                    `;
-                });
+                this.methods.renderDisputePagination.call(this);
+            },
+
+            renderDisputePagination() {
+                const { currentPage, totalPages } = this.state.disputePagination;
+                if (totalPages > 0) {
+                    this.elements.disputePageInfo.textContent = `Page ${currentPage} of ${totalPages}`;
+                    this.elements.disputePaginationControls.style.display = 'block';
+                } else {
+                    this.elements.disputePageInfo.textContent = "No disputes found";
+                    this.elements.disputePaginationControls.style.display = 'none';
+                }
+                this.elements.prevDisputePageBtn.disabled = currentPage <= 1;
+                this.elements.nextDisputePageBtn.disabled = currentPage >= totalPages;
+            },
+
+            handleNextDisputePage() {
+                if (this.state.disputePagination.currentPage < this.state.disputePagination.totalPages) {
+                    this.state.disputePagination.currentPage++;
+                    this.methods.renderDisputes.call(this);
+                }
+            },
+
+            handlePrevDisputePage() {
+                if (this.state.disputePagination.currentPage > 1) {
+                    this.state.disputePagination.currentPage--;
+                    this.methods.renderDisputes.call(this);
+                }
             },
 
             handleDisputeTableActions(event) {
