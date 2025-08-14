@@ -7,9 +7,11 @@
  * global variables, improves performance, and ensures correct
  * timezone handling.
  *
- * @version 4.3.0
+ * @version 4.3.2
  * @author Gemini AI Refactor & Bug-Fix
  * @changeLog
+ * - FIXED: Dispute form submission now correctly captures all fields, preventing "undefined" values in the dispute list.
+ * - FIXED: Dispute modal's "Project Name" dropdown now shows all projects instead of just the filtered ones.
  * - ADDED: Dispute reporting system with a dedicated modal and form.
  * - ADDED: Firestore collection for storing and retrieving disputes.
  * - ADDED: Real-time listener for the disputes table.
@@ -3717,32 +3719,58 @@ document.addEventListener('DOMContentLoaded', () => {
                     }, error => console.error("Error listening for disputes:", error));
             },
             
-            openDisputeModal() {
-                // Populate project names
-                const uniqueProjectNames = [...new Set(this.state.projects.map(p => p.baseProjectName))];
-                this.elements.disputeProjectName.innerHTML = '<option value="">Select Project</option>' + uniqueProjectNames.map(name => `<option value="${name}">${name}</option>`).join('');
-                
+            async openDisputeModal() {
+                // Populate project names by fetching all unique names from the database
+                try {
+                    const projectsSnapshot = await this.db.collection("projects").get();
+                    const uniqueProjectNames = new Set();
+                    projectsSnapshot.forEach(doc => {
+                        const data = doc.data();
+                        if (data.baseProjectName) {
+                            uniqueProjectNames.add(data.baseProjectName);
+                        }
+                    });
+                    this.elements.disputeProjectName.innerHTML = '<option value="">Select Project</option>' + [...uniqueProjectNames].sort().map(name => `<option value="${name}">${name}</option>`).join('');
+                } catch (error) {
+                    console.error("Error fetching project names for dispute form:", error);
+                    this.elements.disputeProjectName.innerHTML = '<option value="">Error loading projects</option>';
+                }
+
                 // Populate tech IDs
                 this.elements.disputeTechId.innerHTML = '<option value="">Select Tech ID</option>' + this.state.users.map(user => `<option value="${user.techId}" data-name="${user.name}">${user.techId}</option>`).join('');
                 
                 this.elements.disputeForm.reset();
-                 this.elements.disputeTechName.value = '';
+                this.elements.disputeTechName.value = '';
             },
             
             async handleDisputeFormSubmit(event) {
                 event.preventDefault();
-                const formData = new FormData(this.elements.disputeForm);
-                const disputeData = Object.fromEntries(formData.entries());
                 
-                disputeData.status = 'Pending';
-                disputeData.createdAt = firebase.firestore.FieldValue.serverTimestamp();
-                disputeData.techName = this.state.users.find(u => u.techId === disputeData.techId)?.name || '';
+                const getElValue = (id) => document.getElementById(id)?.value || '';
+
+                const disputeData = {
+                    blockId: getElValue('disputeBlockId'),
+                    projectName: getElValue('disputeProjectName'),
+                    partial: getElValue('disputePartial'),
+                    phase: getElValue('disputePhase'),
+                    uid: getElValue('disputeUid'),
+                    techId: getElValue('disputeTechId'),
+                    techName: getElValue('disputeTechName'),
+                    team: getElValue('disputeTeam'),
+                    type: getElValue('disputeType'),
+                    category: getElValue('disputeCategory'),
+                    warning: getElValue('disputeWarning'),
+                    rqaTechId: getElValue('disputeRqaTechId'),
+                    reason: getElValue('disputeReason'),
+                    status: 'Pending',
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                };
 
                 this.methods.showLoading.call(this, "Saving dispute...");
                 try {
                     await this.db.collection(this.config.firestorePaths.DISPUTES).add(disputeData);
                     this.elements.disputeForm.reset();
-                     this.elements.disputeTechName.value = '';
+                    this.elements.disputeTechName.value = '';
                 } catch(error) {
                     console.error("Error saving dispute:", error);
                     alert("Failed to save dispute: " + error.message);
