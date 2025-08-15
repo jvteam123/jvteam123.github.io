@@ -58,6 +58,13 @@
             box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
             transform: scale(0.95);
             transition: transform 0.3s ease;
+            display: flex;
+            flex-direction: column;
+        }
+        #modal-body {
+            max-height: 70vh;
+            overflow-y: auto;
+            padding-right: 1rem; /* For scrollbar spacing */
         }
         .modal-overlay:not(.hidden) .modal-content {
             transform: scale(1);
@@ -371,7 +378,7 @@
         
         async function loadTeamSettings() {
             try {
-                const teamDocRef = doc(db, "settings", "teams");
+                const teamDocRef = doc(db, "public_settings", "teams");
                 const docSnap = await getDoc(teamDocRef);
                 teamSettings = docSnap.exists() ? docSnap.data() : {};
             } catch (error) {
@@ -385,7 +392,7 @@
         async function saveTeamSettings(settings) {
             if (!isAdmin) return;
             try {
-                await setDoc(doc(db, "settings", "teams"), settings);
+                await setDoc(doc(db, "public_settings", "teams"), settings);
                 alert("Team settings saved successfully.");
                 teamSettings = settings;
                 populateTeamFilters();
@@ -1023,7 +1030,6 @@
                             const roundMatch = colName.match(/\d+/);
                             if (roundMatch) {
                                 const round = roundMatch[0];
-                                // Check corresponding rv_label for "I" to determine if it's an incorrect/refix task
                                 const rvLabelColName = `rv${round}_label`;
                                 const rvLabelIndex = headerMap[rvLabelColName];
                                 let isIncorrect = false;
@@ -1036,14 +1042,17 @@
                                 }
 
                                 if (isIncorrect) {
-                                    // This is a refix/incorrect task, regardless of round number.
+                                    const rvCatColName = `rv${round}_cat`;
+                                    const rvCatIndex = headerMap[rvCatColName];
+                                    const refixCategory = (rvCatIndex !== undefined && values[rvCatIndex]?.trim()) ? values[rvCatIndex].trim() : 'N/A';
+
                                     techStats[techId].refixTasks += 1;
                                     techStats[techId].refixDetails.push({
                                         round: `RV${round}`,
-                                        project: currentProjectName
+                                        project: currentProjectName,
+                                        category: refixCategory
                                     });
                                 } else {
-                                    // This is a primary fix task. Only fix1_id counts as a primary fix task and gets points.
                                     if (colName === 'fix1_id') {
                                         techStats[techId].fixTasks += 1;
                                         let totalRowFixPoints = 0;
@@ -1327,7 +1336,7 @@
                 : `<p class="text-xs text-gray-500 italic mt-1 pl-4">No warnings recorded.</p>`;
 
             let refixDetailHtml = tech.refixDetails.length > 0
-                ? `<ul class="list-disc list-inside text-xs text-gray-700 mt-1 space-y-0.5">${tech.refixDetails.map(r => `<li>Task: <span class="font-mono font-semibold">${r.round}</span> (Project: ${r.project})</li>`).join('')}</ul>`
+                ? `<ul class="list-disc list-inside text-xs text-gray-700 mt-1 space-y-0.5">${tech.refixDetails.map(r => `<li>Task: <span class="font-mono font-semibold">${r.round}</span> <span class="font-semibold text-red-600">(Cat: ${r.category})</span> (Project: ${r.project})</li>`).join('')}</ul>`
                 : `<p class="text-xs text-gray-500 italic mt-1 pl-4">No refixes recorded.</p>`;
 
             const bodyHtml = `<div class="space-y-4 text-sm">
