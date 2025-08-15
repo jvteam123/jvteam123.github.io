@@ -7,20 +7,17 @@
  * global variables, improves performance, and ensures correct
  * timezone handling.
  *
- * @version 4.5.1
+ * @version 4.6.0
  * @author Gemini AI Refactor & Bug-Fix
  * @changeLog
+ * - ADDED: Notification badges for new disputes and new leave requests on their respective buttons.
+ * - ADDED: Logic to track "last viewed" timestamps in localStorage for disputes and leave requests.
+ * - ADDED: State variables `newDisputesCount` and `newLeaveRequestsCount` to hold notification counts.
+ * - UPDATED: Firestore listeners for disputes and leave data to compare item creation times against the "last viewed" timestamp.
+ * - UPDATED: Event listeners for opening dispute and leave modals to reset counts and update the "last viewed" timestamp.
+ * - ADDED: `updateDisputeBadge` and `updateLeaveBadge` functions to control the visibility and content of the notification badges.
  * - FIXED: Restored and correctly implemented pagination for the dispute table.
- * - UPDATED: Replaced the 'View' dispute alert with a professional modal for better readability and manual copying of details.
- * - ADDED: `injectDisputeModalHTML` function to dynamically add the new modal's HTML structure to the page.
- * - ADDED: `showDisputeDetailsModal` function to populate and display the new view modal.
- * - UPDATED: `handleViewDispute` to call the new modal function instead of an alert.
- * - ADDED: `state.disputePagination` to manage the pagination state for disputes.
- * - ADDED: `renderDisputePagination` function to create and manage pagination controls.
- * - ADDED: Event listeners for next and previous dispute page buttons.
- * - UPDATED: `renderDisputes` function to slice the disputes array and display only the current page's items.
- * - FIXED: Dispute form submission now correctly captures all fields, preventing "undefined" values in the dispute list.
- * - FIXED: Dispute modal's "Project Name" dropdown now shows all projects instead of just the filtered ones.
+ * - UPDATED: Replaced the 'View' dispute alert with a professional modal for better readability.
  */
 document.addEventListener('DOMContentLoaded', () => {
 
@@ -128,6 +125,10 @@ document.addEventListener('DOMContentLoaded', () => {
             disputes: [], // ADDED: State for disputes
             editingLeaveId: null, // NEW: Track editing leave
             hasUnreadMessages: false,
+            newDisputesCount: 0,
+            newLeaveRequestsCount: 0,
+            lastDisputeViewTimestamp: 0,
+            lastLeaveViewTimestamp: 0,
             isInitialChatLoad: true,
             typingUsers: [],
             typingTimeout: null,
@@ -283,6 +284,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     pendingRequestsList: document.getElementById('pendingRequestsList'),
                     adminLeaveSection: document.getElementById('admin-leave-section'),
                     allLeaveRequestsBody: document.getElementById('allLeaveRequestsBody'),
+                    leaveNotificationBadge: document.getElementById('leaveNotificationBadge'),
                     
                      // Dispute Modal DOM Elements
                     openDisputeBtn: document.getElementById('openDisputeBtn'),
@@ -300,6 +302,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     disputeDetailsModal: document.getElementById('disputeDetailsModal'),
                     disputeDetailsContent: document.getElementById('disputeDetailsContent'),
                     closeDisputeDetailsBtn: document.getElementById('closeDisputeDetailsBtn'),
+                    disputeNotificationBadge: document.getElementById('disputeNotificationBadge'),
                 };
             },
 
@@ -359,11 +362,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 attachClick(self.elements.openLeaveSchedulerBtn, () => {
                     self.elements.leaveSchedulerModal.style.display = 'block';
                     self.methods.initLeaveScheduler.call(self);
+                    self.state.newLeaveRequestsCount = 0;
+                    self.methods.updateLeaveBadge.call(self);
+                    self.state.lastLeaveViewTimestamp = Date.now();
+                    localStorage.setItem('lastLeaveViewTimestamp', self.state.lastLeaveViewTimestamp);
                 });
                 
                 attachClick(self.elements.openDisputeBtn, () => {
                     self.elements.disputeModal.style.display = 'block';
                     self.methods.openDisputeModal.call(self);
+                    self.state.newDisputesCount = 0;
+                    self.methods.updateDisputeBadge.call(self);
+                    self.state.lastDisputeViewTimestamp = Date.now();
+                    localStorage.setItem('lastDisputeViewTimestamp', self.state.lastDisputeViewTimestamp);
                 });
 
 
@@ -579,6 +590,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 this.auth.onAuthStateChanged(async (user) => {
                     if (user) {
                         this.methods.showLoading.call(this, "Checking authorization...");
+                        this.state.lastDisputeViewTimestamp = parseInt(localStorage.getItem('lastDisputeViewTimestamp') || '0', 10);
+                        this.state.lastLeaveViewTimestamp = parseInt(localStorage.getItem('lastLeaveViewTimestamp') || '0', 10);
                         await this.methods.fetchUsers.call(this);
                         const userEmailLower = user.email ? user.email.toLowerCase() : "";
                         const authorizedUser = this.state.users.find(u => u.email.toLowerCase() === userEmailLower);
@@ -2422,16 +2435,7 @@ document.addEventListener('DOMContentLoaded', () => {
             handleClearData() {
                 if (confirm("Are you sure you want to clear all locally stored application data? This will reset your filters and view preferences but will not affect any data on the server.")) {
                     try {
-                        localStorage.removeItem('currentSelectedBatchId');
-                        localStorage.removeItem('currentSelectedMonth');
-                        localStorage.removeItem('projectTrackerGroupVisibility');
-                        localStorage.removeItem('currentSortBy');
-                        localStorage.removeItem('showTitleColumn');
-                        localStorage.removeItem('showDay2Column');
-                        localStorage.removeItem('showDay3Column');
-                        localStorage.removeItem('showDay4Column');
-                        localStorage.removeItem('showDay5Column');
-                        localStorage.removeItem('showDay6Column');
+                        localStorage.clear();
                         alert("Local application data has been cleared. The page will now reload.");
                         window.location.reload();
                     } catch (e) {
@@ -3448,12 +3452,37 @@ document.addEventListener('DOMContentLoaded', () => {
                 this.leaveDataListenerUnsubscribe = this.db.collection(this.config.firestorePaths.LEAVE_REQUESTS)
                     .onSnapshot(snapshot => {
                         this.state.leaveRequests = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                        
+                        // Check for new leave requests
+                        this.state.newLeaveRequestsCount = 0;
+                        this.state.leaveRequests.forEach(req => {
+                            if (req.requestedAt && req.requestedAt.toMillis() > this.state.lastLeaveViewTimestamp) {
+                                this.state.newLeaveRequestsCount++;
+                            }
+                        });
+                        this.methods.updateLeaveBadge.call(this);
+
                         if (this.elements.leaveSchedulerModal.style.display === 'block') {
                             this.methods.renderLeaveCalendar.call(this);
                             this.methods.renderPendingRequests.call(this);
                              this.methods.renderAllLeaveRequestsTable.call(this);
                         }
                     }, error => console.error("Error listening for leave data:", error));
+            },
+
+            updateLeaveBadge() {
+                const badge = this.elements.leaveNotificationBadge;
+                if (badge) {
+                    if (this.state.newLeaveRequestsCount > 0) {
+                        badge.textContent = this.state.newLeaveRequestsCount;
+                        badge.style.display = 'flex';
+                        badge.style.alignItems = 'center';
+                        badge.style.justifyContent = 'center';
+                        badge.style.fontSize = '10px';
+                    } else {
+                        badge.style.display = 'none';
+                    }
+                }
             },
 
             populateLeaveTechIdDropdown() {
@@ -3781,8 +3810,33 @@ document.addEventListener('DOMContentLoaded', () => {
                     .orderBy("createdAt", "desc")
                     .onSnapshot(snapshot => {
                         this.state.disputes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                        
+                        // Check for new disputes
+                        this.state.newDisputesCount = 0;
+                        this.state.disputes.forEach(d => {
+                            if (d.createdAt && d.createdAt.toMillis() > this.state.lastDisputeViewTimestamp) {
+                                this.state.newDisputesCount++;
+                            }
+                        });
+                        this.methods.updateDisputeBadge.call(this);
+
                         this.methods.renderDisputes.call(this);
                     }, error => console.error("Error listening for disputes:", error));
+            },
+
+            updateDisputeBadge() {
+                const badge = this.elements.disputeNotificationBadge;
+                if (badge) {
+                    if (this.state.newDisputesCount > 0) {
+                        badge.textContent = this.state.newDisputesCount;
+                        badge.style.display = 'flex';
+                        badge.style.alignItems = 'center';
+                        badge.style.justifyContent = 'center';
+                        badge.style.fontSize = '10px';
+                    } else {
+                        badge.style.display = 'none';
+                    }
+                }
             },
             
             async openDisputeModal() {
