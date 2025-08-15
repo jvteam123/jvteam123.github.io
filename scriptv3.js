@@ -7,20 +7,16 @@
  * global variables, improves performance, and ensures correct
  * timezone handling.
  *
- * @version 4.6.1
+ * @version 4.7.0
  * @author Gemini AI Refactor & Bug-Fix
  * @changeLog
+ * - OPTIMIZED: Replaced real-time listeners (onSnapshot) with manual fetches (getDocs) for projects, disputes, and leave requests to dramatically reduce Firestore read operations and stay within free quota limits.
+ * - OPTIMIZED: Notification badge counts for disputes and leave requests now use efficient .count() queries instead of downloading entire collections, further saving reads.
+ * - OPTIMIZED: The dispute modal now reuses the main project list for its dropdown, avoiding a separate database query.
+ * - UPDATED: Data for disputes and leave requests is now fetched on-demand when the respective modals are opened.
+ * - ADDED: Notification badges for new disputes and new leave requests on their respective buttons.
  * - FIXED: Restored and correctly implemented pagination for the dispute table.
- * - UPDATED: Replaced the 'View' dispute alert with a professional modal for better readability and manual copying of details.
- * - ADDED: `injectDisputeModalHTML` function to dynamically add the new modal's HTML structure to the page.
- * - ADDED: `showDisputeDetailsModal` function to populate and display the new view modal.
- * - UPDATED: `handleViewDispute` to call the new modal function instead of an alert.
- * - ADDED: `state.disputePagination` to manage the pagination state for disputes.
- * - ADDED: `renderDisputePagination` function to create and manage pagination controls.
- * - ADDED: Event listeners for next and previous dispute page buttons.
- * - UPDATED: `renderDisputes` function to slice the disputes array and display only the current page's items.
- * - FIXED: Dispute form submission now correctly captures all fields, preventing "undefined" values in the dispute list.
- * - FIXED: Dispute modal's "Project Name" dropdown now shows all projects instead of just the filtered ones.
+ * - UPDATED: Replaced the 'View' dispute alert with a professional modal for better readability.
  */
 document.addEventListener('DOMContentLoaded', () => {
 
@@ -28,13 +24,13 @@ document.addEventListener('DOMContentLoaded', () => {
         // --- 1. CONFIGURATION AND CONSTANTS ---
         config: {
             firebase: {
-                apiKey: "AIzaSyDQ1M23VXN0_s_e9TfEbOx8N8ZS5nt3zDs",
-                authDomain: "project-tracker-pro-728b1.firebaseapp.com",
-                projectId: "project-tracker-pro-728b1",
-                storageBucket: "project-tracker-pro-728b1.firebasestorage.app",
-                messagingSenderId: "646972784592",
-                appId: "1:646972784592:web:7257567b03bccd6f41c3d5",
-                measurementId: "G-KDSX6JRSP8"
+                apiKey: "AIzaSyC2WPqGuXr9huIXblMWc6JQwO3p_xJHkZY",
+                authDomain: "team114-ebca3.firebaseapp.com",
+                projectId: "team114-ebca3",
+                storageBucket: "team114-ebca3.firebasestorage.app",
+                messagingSenderId: "24454468220",
+                appId: "1:24454468220:web:d9f7748975bbf32974aff9",
+                measurementId: "G-0XP2VX9K9F"
 
             },
             pins: {
@@ -47,7 +43,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 TYPING_STATUS: "typing_status",
                 APP_CONFIG: "app_config",
                 LEAVE_REQUESTS: "leave_requests",
-                DISPUTES: "disputes" // ADDED: Firestore path for disputes
+                DISPUTES: "disputes"
             },
             chat: {
                 MAX_MESSAGES: 30
@@ -64,7 +60,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     "default": "#FFFFFF"
                 }
             },
-            NUM_TABLE_COLUMNS: 28, // Increased from 19 to 28 to account for 9 new columns (3 for each new day) + progress bar
+            NUM_TABLE_COLUMNS: 28, 
             CSV_HEADERS_FOR_IMPORT: [
                 "Fix Cat", "Project Name", "Area/Task", "GSD", "Assigned To", "Status",
                 "Day 1 Start", "Day 1 Finish", "Day 1 Break",
@@ -111,22 +107,18 @@ document.addEventListener('DOMContentLoaded', () => {
         app: null,
         db: null,
         auth: null,
-        firestoreListenerUnsubscribe: null,
-        notificationListenerUnsubscribe: null,
         chatListenerUnsubscribe: null,
         typingListenerUnsubscribe: null,
-        appConfigListenerUnsubscribe: null, // Listener for app settings
-        leaveDataListenerUnsubscribe: null,
-        disputeListenerUnsubscribe: null, // ADDED: Listener for disputes
-
+        appConfigListenerUnsubscribe: null,
+        
         // --- 3. APPLICATION STATE ---
         state: {
             projects: [],
             users: [],
             chatMessages: [],
             leaveRequests: [],
-            disputes: [], // ADDED: State for disputes
-            editingLeaveId: null, // NEW: Track editing leave
+            disputes: [], 
+            editingLeaveId: null,
             hasUnreadMessages: false,
             newDisputesCount: 0,
             newLeaveRequestsCount: 0,
@@ -139,7 +131,7 @@ document.addEventListener('DOMContentLoaded', () => {
             isAppInitialized: false,
             editingUser: null,
             currentUserTechId: null,
-            appConfig: {}, // To store fetched app settings
+            appConfig: {}, 
             filters: {
                 batchId: localStorage.getItem('currentSelectedBatchId') || "",
                 fixCategory: "",
@@ -180,7 +172,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.log("Firebase initialized successfully!");
 
                 this.methods.injectChatModalHTML.call(this);
-                this.methods.injectDisputeModalHTML.call(this); // Inject new modal
+                this.methods.injectDisputeModalHTML.call(this);
                 this.methods.setupDOMReferences.call(this);
                 this.methods.injectNotificationStyles.call(this);
                 this.methods.loadColumnVisibilityState.call(this);
@@ -250,7 +242,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     toggleDay4Checkbox: document.getElementById('toggleDay4Checkbox'),
                     toggleDay5Checkbox: document.getElementById('toggleDay5Checkbox'),
                     toggleDay6Checkbox: document.getElementById('toggleDay6Checkbox'),
-                    tscLinkBtn: document.getElementById('tscLinkBtn'), // Dynamic TSC button
+                    tscLinkBtn: document.getElementById('tscLinkBtn'),
 
                     // User Management DOM elements
                     userManagementForm: document.getElementById('userManagementForm'),
@@ -280,9 +272,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     leaveSchedulerModal: document.getElementById('leaveSchedulerModal'),
                     closeLeaveSchedulerBtn: document.getElementById('closeLeaveSchedulerBtn'),
                     leaveRequestForm: document.getElementById('leaveRequestForm'),
-                    leaveFormTitle: document.getElementById('leaveFormTitle'), // NEW
-                    editingLeaveId: document.getElementById('editingLeaveId'), // NEW
-                    leaveFormButtons: document.getElementById('leaveFormButtons'), // NEW
+                    leaveFormTitle: document.getElementById('leaveFormTitle'),
+                    editingLeaveId: document.getElementById('editingLeaveId'),
+                    leaveFormButtons: document.getElementById('leaveFormButtons'),
                     leaveCalendar: document.getElementById('leaveCalendar'),
                     pendingRequestsList: document.getElementById('pendingRequestsList'),
                     adminLeaveSection: document.getElementById('admin-leave-section'),
@@ -364,7 +356,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 attachClick(self.elements.openLeaveSchedulerBtn, () => {
                     self.elements.leaveSchedulerModal.style.display = 'block';
-                    self.methods.initLeaveScheduler.call(self);
+                    self.methods.fetchLeaveData.call(self);
                     self.state.newLeaveRequestsCount = 0;
                     self.methods.updateLeaveBadge.call(self);
                     self.state.lastLeaveViewTimestamp = Date.now();
@@ -373,7 +365,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 attachClick(self.elements.openDisputeBtn, () => {
                     self.elements.disputeModal.style.display = 'block';
-                    self.methods.openDisputeModal.call(self);
+                    self.methods.fetchDisputes.call(self);
                     self.state.newDisputesCount = 0;
                     self.methods.updateDisputeBadge.call(self);
                     self.state.lastDisputeViewTimestamp = Date.now();
@@ -635,8 +627,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     this.methods.listenForNotifications.call(this);
                     this.methods.listenForChatMessages.call(this);
                     this.methods.listenForTypingStatus.call(this);
-                    this.methods.listenForLeaveData.call(this);
-                    this.methods.listenForDisputes.call(this); // ADDED: Start listening for disputes
+                    this.methods.checkForNewDisputes.call(this);
+                    this.methods.checkForNewLeaveRequests.call(this);
                 }
             },
 
@@ -653,13 +645,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (this.elements.openSettingsBtn) this.elements.openSettingsBtn.style.display = 'none';
                 this.state.currentUserTechId = null;
 
-                if (this.firestoreListenerUnsubscribe) this.firestoreListenerUnsubscribe();
-                if (this.notificationListenerUnsubscribe) this.notificationListenerUnsubscribe();
                 if (this.chatListenerUnsubscribe) this.chatListenerUnsubscribe();
                 if (this.typingListenerUnsubscribe) this.typingListenerUnsubscribe();
                 if (this.appConfigListenerUnsubscribe) this.appConfigListenerUnsubscribe();
-                 if (this.leaveDataListenerUnsubscribe) this.leaveDataListenerUnsubscribe();
-                 if (this.disputeListenerUnsubscribe) this.disputeListenerUnsubscribe(); // ADDED
                 
                 this.state.isAppInitialized = false;
             },
@@ -699,12 +687,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     this.methods.hideLoading.call(this);
                     return;
                 }
-                if (this.firestoreListenerUnsubscribe) this.firestoreListenerUnsubscribe();
 
                 this.methods.loadGroupVisibilityState.call(this);
                 await this.methods.populateMonthFilter.call(this);
-                await this.methods.populateProjectNameFilter.call(this);
-
+                
                 const sortDirection = this.state.filters.sortBy === 'oldest' ? 'asc' : 'desc';
                 const shouldPaginate = !this.state.filters.batchId && !this.state.filters.fixCategory;
 
@@ -771,14 +757,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 projectsQuery = projectsQuery.orderBy("creationTimestamp", sortDirection);
-
-                this.firestoreListenerUnsubscribe = projectsQuery.onSnapshot(snapshot => {
+                
+                try {
+                    const snapshot = await projectsQuery.get();
                     let newProjects = [];
                     snapshot.forEach(doc => {
-                        if (doc.exists) newProjects.push({
-                            id: doc.id,
-                            ...doc.data()
-                        });
+                        if (doc.exists) newProjects.push({ id: doc.id, ...doc.data() });
                     });
 
                     if (shouldPaginate) {
@@ -786,23 +770,25 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
 
                     this.state.projects = newProjects.map(p => ({
-                        breakDurationMinutesDay1: 0,
-                        breakDurationMinutesDay2: 0,
-                        breakDurationMinutesDay3: 0,
-                        breakDurationMinutesDay4: 0,
-                        breakDurationMinutesDay5: 0,
-                        breakDurationMinutesDay6: 0,
-                        additionalMinutesManual: 0,
+                        ...p,
+                        breakDurationMinutesDay1: p.breakDurationMinutesDay1 || 0,
+                        breakDurationMinutesDay2: p.breakDurationMinutesDay2 || 0,
+                        breakDurationMinutesDay3: p.breakDurationMinutesDay3 || 0,
+                        breakDurationMinutesDay4: p.breakDurationMinutesDay4 || 0,
+                        breakDurationMinutesDay5: p.breakDurationMinutesDay5 || 0,
+                        breakDurationMinutesDay6: p.breakDurationMinutesDay6 || 0,
+                        additionalMinutesManual: p.additionalMinutesManual || 0,
                         isLocked: p.isLocked || false,
-                        ...p
                     }));
+
+                    await this.methods.populateProjectNameFilter.call(this);
                     this.methods.refreshAllViews.call(this);
-                }, error => {
+                } catch (error) {
                     console.error("Error fetching projects:", error);
                     this.state.projects = [];
                     this.methods.refreshAllViews.call(this);
                     alert("Error loading projects: " + error.message);
-                });
+                }
             },
 
             async populateMonthFilter() {
@@ -833,7 +819,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         this.elements.monthFilter.value = this.state.filters.month;
                     } else {
                         this.elements.monthFilter.value = "";
-                        this.elements.monthFilter.value = "";
                         localStorage.setItem('currentSelectedMonth', "");
                     }
                 } catch (error) {
@@ -842,40 +827,22 @@ document.addEventListener('DOMContentLoaded', () => {
             },
 
             async populateProjectNameFilter() {
-                let query = this.db.collection("projects");
-                if (this.state.filters.month) {
-                    const [year, month] = this.state.filters.month.split('-');
-                    const startDate = new Date(parseInt(year), parseInt(month) - 1, 1);
-                    const endDate = new Date(parseInt(year), parseInt(month), 0, 23, 59, 59, 999);
-                    query = query.where("creationTimestamp", ">=", startDate).where("creationTimestamp", "<=", endDate);
-                }
+                const uniqueNames = new Set(this.state.projects.map(p => p.baseProjectName));
+                const sortedNames = Array.from(uniqueNames).sort();
+                this.elements.batchIdSelect.innerHTML = '<option value="">All Projects</option>';
+                sortedNames.forEach(name => {
+                    const option = document.createElement('option');
+                    option.value = name;
+                    option.textContent = name;
+                    this.elements.batchIdSelect.appendChild(option);
+                });
 
-                try {
-                    const snapshot = await query.get();
-                    const uniqueNames = new Set();
-                    snapshot.forEach(doc => {
-                        if (doc.data().baseProjectName) uniqueNames.add(doc.data().baseProjectName);
-                    });
-                    const sortedNames = Array.from(uniqueNames).sort();
-
-                    this.elements.batchIdSelect.innerHTML = '<option value="">All Projects</option>';
-                    sortedNames.forEach(name => {
-                        const option = document.createElement('option');
-                        option.value = name;
-                        option.textContent = name;
-                        this.elements.batchIdSelect.appendChild(option);
-                    });
-
-                    if (this.state.filters.batchId && sortedNames.includes(this.state.filters.batchId)) {
-                        this.elements.batchIdSelect.value = this.state.filters.batchId;
-                    } else {
-                        this.elements.batchIdSelect.value = "";
-                        this.state.filters.batchId = "";
-                        localStorage.setItem('currentSelectedBatchId', "");
-                    }
-                } catch (error) {
-                    console.error("Error populating project name filter:", error);
-                    this.elements.batchIdSelect.innerHTML = '<option value="" disabled selected>Error</option>';
+                if (this.state.filters.batchId && sortedNames.includes(this.state.filters.batchId)) {
+                    this.elements.batchIdSelect.value = this.state.filters.batchId;
+                } else {
+                    this.elements.batchIdSelect.value = "";
+                    this.state.filters.batchId = "";
+                    localStorage.setItem('currentSelectedBatchId', "");
                 }
             },
 
@@ -1143,6 +1110,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
 
                     await projectRef.update(updates);
+                    this.methods.initializeFirebaseAndLoadData.call(this); // Refresh data after update
                 } catch (error) {
                     console.error(`Error updating project for action ${action}:`, error);
                     alert("Error updating project status: " + error.message);
@@ -2249,6 +2217,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     try {
                         await batch.commit();
+                        this.methods.initializeFirebaseAndLoadData.call(this);
                     } catch (error) {
                         console.error("Error in re-assignment:", error);
                         alert("Error during re-assignment: " + error.message);
@@ -2705,17 +2674,14 @@ document.addEventListener('DOMContentLoaded', () => {
             },
 
             listenForNotifications() {
+                // This function is kept for real-time pop-up notifications, 
+                // which are a separate feature from the badge counts.
                 if (!this.db) {
                     console.error("Firestore not initialized for notifications.");
                     return;
                 }
-                if (this.notificationListenerUnsubscribe) {
-                    this.notificationListenerUnsubscribe();
-                }
-
-                const self = this;
-
-                this.notificationListenerUnsubscribe = this.db.collection(this.config.firestorePaths.NOTIFICATIONS)
+               
+                this.db.collection(this.config.firestorePaths.NOTIFICATIONS)
                     .orderBy("timestamp", "desc")
                     .limit(1)
                     .onSnapshot(
@@ -2725,7 +2691,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                     const notification = change.doc.data();
                                     const fiveSecondsAgo = firebase.firestore.Timestamp.now().toMillis() - 5000;
                                     if (notification.timestamp && notification.timestamp.toMillis() > fiveSecondsAgo) {
-                                        self.methods.showNotificationModal.call(self, notification);
+                                        this.methods.showNotificationModal.call(this, notification);
                                     }
                                 }
                             });
@@ -3443,34 +3409,28 @@ document.addEventListener('DOMContentLoaded', () => {
                 this.methods.renderLeaveCalendar.call(this);
                 this.methods.renderPendingRequests.call(this);
                 this.methods.renderAllLeaveRequestsTable.call(this);
-                this.methods.resetLeaveForm.call(this); // Ensure form is reset
+                this.methods.resetLeaveForm.call(this);
 
-                 // Admin-only features
                 const isAdmin = true; // Replace with actual admin check logic
                 this.elements.adminLeaveSection.style.display = isAdmin ? 'block' : 'none';
             },
-            
-            listenForLeaveData() {
-                if (this.leaveDataListenerUnsubscribe) this.leaveDataListenerUnsubscribe();
-                this.leaveDataListenerUnsubscribe = this.db.collection(this.config.firestorePaths.LEAVE_REQUESTS)
-                    .onSnapshot(snapshot => {
-                        this.state.leaveRequests = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                        
-                        // Check for new leave requests
-                        this.state.newLeaveRequestsCount = 0;
-                        this.state.leaveRequests.forEach(req => {
-                            if (req.requestedAt && req.requestedAt.toMillis() > this.state.lastLeaveViewTimestamp) {
-                                this.state.newLeaveRequestsCount++;
-                            }
-                        });
-                        this.methods.updateLeaveBadge.call(this);
 
-                        if (this.elements.leaveSchedulerModal.style.display === 'block') {
-                            this.methods.renderLeaveCalendar.call(this);
-                            this.methods.renderPendingRequests.call(this);
-                             this.methods.renderAllLeaveRequestsTable.call(this);
-                        }
-                    }, error => console.error("Error listening for leave data:", error));
+            async checkForNewLeaveRequests() {
+                const lastViewed = firebase.firestore.Timestamp.fromMillis(this.state.lastLeaveViewTimestamp);
+                const query = this.db.collection(this.config.firestorePaths.LEAVE_REQUESTS).where("requestedAt", ">", lastViewed);
+                const snapshot = await query.count().get();
+                this.state.newLeaveRequestsCount = snapshot.data().count;
+                this.methods.updateLeaveBadge.call(this);
+            },
+            
+            async fetchLeaveData() {
+                try {
+                    const snapshot = await this.db.collection(this.config.firestorePaths.LEAVE_REQUESTS).get();
+                    this.state.leaveRequests = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    this.methods.initLeaveScheduler.call(this);
+                } catch(error) {
+                     console.error("Error fetching leave data:", error)
+                }
             },
 
             updateLeaveBadge() {
@@ -3482,6 +3442,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         badge.style.alignItems = 'center';
                         badge.style.justifyContent = 'center';
                         badge.style.fontSize = '10px';
+                        badge.style.width = '16px';
+                        badge.style.height = '16px';
+                        badge.style.top = '-5px';
+                        badge.style.right = '-5px';
                     } else {
                         badge.style.display = 'none';
                     }
@@ -3539,6 +3503,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         alert("Leave request submitted successfully!");
                     }
                     this.methods.resetLeaveForm.call(this);
+                    this.methods.fetchLeaveData.call(this); // Re-fetch after submitting
                 } catch (error) {
                     console.error("Error submitting leave request:", error);
                     alert("Failed to submit leave request: " + error.message);
@@ -3673,6 +3638,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 this.methods.showLoading.call(this, "Updating leave status...");
                 try {
                     await this.db.collection(this.config.firestorePaths.LEAVE_REQUESTS).doc(id).update({ status });
+                    this.methods.fetchLeaveData.call(this); // Re-fetch
                 } catch (error) {
                     console.error("Error updating leave status:", error);
                     alert("Failed to update status: " + error.message);
@@ -3727,6 +3693,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         this.methods.showLoading.call(this, "Deleting leave request...");
                         try {
                             await this.db.collection(this.config.firestorePaths.LEAVE_REQUESTS).doc(id).delete();
+                            this.methods.fetchLeaveData.call(this); // Re-fetch
                         } catch (error) {
                             console.error("Error deleting leave request:", error);
                             alert("Failed to delete request: " + error.message);
@@ -3744,6 +3711,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     this.methods.showLoading.call(this, "Canceling leave request...");
                     try {
                         await this.db.collection(this.config.firestorePaths.LEAVE_REQUESTS).doc(id).delete();
+                        this.methods.fetchLeaveData.call(this); // Re-fetch
                     } catch (error) {
                         console.error("Error canceling leave request:", error);
                         alert("Failed to cancel request: " + error.message);
@@ -3807,24 +3775,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.head.appendChild(style);
             },
 
-            listenForDisputes() {
-                if (this.disputeListenerUnsubscribe) this.disputeListenerUnsubscribe();
-                this.disputeListenerUnsubscribe = this.db.collection(this.config.firestorePaths.DISPUTES)
-                    .orderBy("createdAt", "desc")
-                    .onSnapshot(snapshot => {
-                        this.state.disputes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                        
-                        // Check for new disputes
-                        this.state.newDisputesCount = 0;
-                        this.state.disputes.forEach(d => {
-                            if (d.createdAt && d.createdAt.toMillis() > this.state.lastDisputeViewTimestamp) {
-                                this.state.newDisputesCount++;
-                            }
-                        });
-                        this.methods.updateDisputeBadge.call(this);
+            async checkForNewDisputes() {
+                const lastViewed = firebase.firestore.Timestamp.fromMillis(this.state.lastDisputeViewTimestamp);
+                const query = this.db.collection(this.config.firestorePaths.DISPUTES).where("createdAt", ">", lastViewed);
+                const snapshot = await query.count().get();
+                this.state.newDisputesCount = snapshot.data().count;
+                this.methods.updateDisputeBadge.call(this);
+            },
 
-                        this.methods.renderDisputes.call(this);
-                    }, error => console.error("Error listening for disputes:", error));
+            async fetchDisputes() {
+                try {
+                    const snapshot = await this.db.collection(this.config.firestorePaths.DISPUTES).orderBy("createdAt", "desc").get();
+                    this.state.disputes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    this.methods.renderDisputes.call(this);
+                } catch (error) {
+                    console.error("Error fetching disputes:", error);
+                }
             },
 
             updateDisputeBadge() {
@@ -3847,23 +3813,9 @@ document.addEventListener('DOMContentLoaded', () => {
             },
             
             async openDisputeModal() {
-                // Populate project names by fetching all unique names from the database
-                try {
-                    const projectsSnapshot = await this.db.collection("projects").get();
-                    const uniqueProjectNames = new Set();
-                    projectsSnapshot.forEach(doc => {
-                        const data = doc.data();
-                        if (data.baseProjectName) {
-                            uniqueProjectNames.add(data.baseProjectName);
-                        }
-                    });
-                    this.elements.disputeProjectName.innerHTML = '<option value="">Select Project</option>' + [...uniqueProjectNames].sort().map(name => `<option value="${name}">${name}</option>`).join('');
-                } catch (error) {
-                    console.error("Error fetching project names for dispute form:", error);
-                    this.elements.disputeProjectName.innerHTML = '<option value="">Error loading projects</option>';
-                }
+                const uniqueProjectNames = new Set(this.state.projects.map(p => p.baseProjectName));
+                this.elements.disputeProjectName.innerHTML = '<option value="">Select Project</option>' + [...uniqueProjectNames].sort().map(name => `<option value="${name}">${name}</option>`).join('');
 
-                // Populate tech IDs
                 this.elements.disputeTechId.innerHTML = '<option value="">Select Tech ID</option>' + this.state.users.map(user => `<option value="${user.techId}" data-name="${user.name}">${user.techId}</option>`).join('');
                 
                 this.elements.disputeForm.reset();
@@ -3898,6 +3850,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     await this.db.collection(this.config.firestorePaths.DISPUTES).add(disputeData);
                     this.elements.disputeForm.reset();
                     this.elements.disputeTechName.value = '';
+                    this.methods.fetchDisputes.call(this); // Re-fetch after submitting
                 } catch(error) {
                     console.error("Error saving dispute:", error);
                     alert("Failed to save dispute: " + error.message);
@@ -4045,6 +3998,7 @@ Status: ${dispute.status}
                  if (confirm("Are you sure you want to mark this dispute as 'Done'?")) {
                     try {
                         await this.db.collection(this.config.firestorePaths.DISPUTES).doc(id).update({ status: 'Done' });
+                        this.methods.fetchDisputes.call(this); // Re-fetch
                     } catch (error) {
                         console.error("Error marking dispute as done:", error);
                         alert("Failed to update dispute status.");
@@ -4056,6 +4010,7 @@ Status: ${dispute.status}
                 if(confirm("Are you sure you want to delete this dispute? This action is permanent.")) {
                     try {
                         await this.db.collection(this.config.firestorePaths.DISPUTES).doc(id).delete();
+                        this.methods.fetchDisputes.call(this); // Re-fetch
                     } catch(error) {
                         console.error("Error deleting dispute:", error);
                         alert("Failed to delete dispute.");
