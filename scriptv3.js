@@ -7,16 +7,14 @@
  * global variables, improves performance, and ensures correct
  * timezone handling.
  *
- * @version 4.7.0
+ * @version 4.7.1
  * @author Gemini AI Refactor & Bug-Fix
  * @changeLog
- * - OPTIMIZED: Replaced real-time listeners (onSnapshot) with manual fetches (getDocs) for projects, disputes, and leave requests to dramatically reduce Firestore read operations and stay within free quota limits.
- * - OPTIMIZED: Notification badge counts for disputes and leave requests now use efficient .count() queries instead of downloading entire collections, further saving reads.
- * - OPTIMIZED: The dispute modal now reuses the main project list for its dropdown, avoiding a separate database query.
+ * - FIXED: Resolved persistent "email not authorized" error by restructuring the authentication flow. The authorization check now occurs correctly inside the onAuthStateChanged listener, eliminating a race condition.
+ * - OPTIMIZED: Replaced real-time listeners (onSnapshot) with manual fetches (getDocs) for projects, disputes, and leave requests to dramatically reduce Firestore read operations.
+ * - OPTIMIZED: Notification badge counts for disputes and leave requests now use efficient .count() queries.
+ * - OPTIMIZED: The dispute modal now reuses the main project list for its dropdown.
  * - UPDATED: Data for disputes and leave requests is now fetched on-demand when the respective modals are opened.
- * - ADDED: Notification badges for new disputes and new leave requests on their respective buttons.
- * - FIXED: Restored and correctly implemented pagination for the dispute table.
- * - UPDATED: Replaced the 'View' dispute alert with a professional modal for better readability.
  */
 document.addEventListener('DOMContentLoaded', () => {
 
@@ -583,21 +581,30 @@ document.addEventListener('DOMContentLoaded', () => {
                     return;
                 }
                 this.auth.onAuthStateChanged(async (user) => {
-                    if (user) {
-                        this.methods.showLoading.call(this, "Checking authorization...");
+                    if (user && user.email) {
+                        this.methods.showLoading.call(this, "Verifying authorization...");
                         this.state.lastDisputeViewTimestamp = parseInt(localStorage.getItem('lastDisputeViewTimestamp') || '0', 10);
                         this.state.lastLeaveViewTimestamp = parseInt(localStorage.getItem('lastLeaveViewTimestamp') || '0', 10);
-                        await this.methods.fetchUsers.call(this);
-                        const userEmailLower = user.email ? user.email.toLowerCase() : "";
-                        const authorizedUser = this.state.users.find(u => u.email.toLowerCase() === userEmailLower);
-
-                        if (authorizedUser) {
-                            this.state.currentUserTechId = authorizedUser.techId;
-                            this.methods.handleAuthorizedUser.call(this, user);
-                        } else {
-                            alert("Access Denied: Your email address is not authorized for this application.");
+                        
+                        const usersRef = this.db.collection(this.config.firestorePaths.USERS);
+                        const q = usersRef.where("email", "==", user.email.toLowerCase());
+                        
+                        try {
+                            const querySnapshot = await q.get();
+                            if (querySnapshot.empty) {
+                                alert("Access Denied: Your email address is not authorized for this application.");
+                                this.auth.signOut();
+                            } else {
+                                const authorizedUser = querySnapshot.docs[0].data();
+                                this.state.currentUserTechId = authorizedUser.techId;
+                                await this.methods.handleAuthorizedUser.call(this, user);
+                            }
+                        } catch (error) {
+                            console.error("Authorization check failed:", error);
+                            alert("An error occurred during authorization. Please try again.");
                             this.auth.signOut();
                         }
+
                     } else {
                         this.methods.handleSignedOutUser.call(this);
                     }
@@ -621,7 +628,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (this.elements.openSettingsBtn) this.elements.openSettingsBtn.style.display = 'block';
 
                 if (!this.state.isAppInitialized) {
-                    this.methods.listenForAppConfigChanges.call(this); // Listen for settings first
+                    await this.methods.fetchUsers.call(this); // Fetch all users once for dropdowns
+                    this.methods.listenForAppConfigChanges.call(this); 
                     this.methods.initializeFirebaseAndLoadData.call(this);
                     this.state.isAppInitialized = true;
                     this.methods.listenForNotifications.call(this);
@@ -644,7 +652,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 this.elements.loadingAuthMessageDiv.style.display = 'block';
                 if (this.elements.openSettingsBtn) this.elements.openSettingsBtn.style.display = 'none';
                 this.state.currentUserTechId = null;
-
+                
+                // Unsubscribe from real-time listeners
                 if (this.chatListenerUnsubscribe) this.chatListenerUnsubscribe();
                 if (this.typingListenerUnsubscribe) this.typingListenerUnsubscribe();
                 if (this.appConfigListenerUnsubscribe) this.appConfigListenerUnsubscribe();
@@ -1450,6 +1459,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
                     try {
                         await projectRef.update(updates);
+                        this.methods.initializeFirebaseAndLoadData.call(this); // Refresh
                     } catch (error) {
                         console.error("Error resetting task:", error);
                         alert("Error resetting task: " + error.message);
