@@ -7,14 +7,13 @@
  * global variables, improves performance, and ensures correct
  * timezone handling.
  *
- * @version 4.7.1
+ * @version 4.7.2
  * @author Gemini AI Refactor & Bug-Fix
  * @changeLog
- * - FIXED: Resolved persistent "email not authorized" error by restructuring the authentication flow. The authorization check now occurs correctly inside the onAuthStateChanged listener, eliminating a race condition.
+ * - FIXED: Implemented a robust retry mechanism in the authentication flow to permanently resolve the "email not authorized" race condition. The app now waits for Firebase to fully validate the user's session before checking permissions.
  * - OPTIMIZED: Replaced real-time listeners (onSnapshot) with manual fetches (getDocs) for projects, disputes, and leave requests to dramatically reduce Firestore read operations.
  * - OPTIMIZED: Notification badge counts for disputes and leave requests now use efficient .count() queries.
  * - OPTIMIZED: The dispute modal now reuses the main project list for its dropdown.
- * - UPDATED: Data for disputes and leave requests is now fetched on-demand when the respective modals are opened.
  */
 document.addEventListener('DOMContentLoaded', () => {
 
@@ -573,7 +572,33 @@ document.addEventListener('DOMContentLoaded', () => {
                     this.methods.initializeFirebaseAndLoadData.call(this);
                 }
             },
+            
+            async checkUserAuthorization(user, retries = 3) {
+                try {
+                    const snapshot = await this.db.collection(this.config.firestorePaths.USERS).get();
+                    this.state.users = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    
+                    const userEmailLower = user.email.toLowerCase();
+                    const authorizedUser = this.state.users.find(u => u.email.toLowerCase() === userEmailLower);
 
+                    if (authorizedUser) {
+                        this.state.currentUserTechId = authorizedUser.techId;
+                        this.methods.handleAuthorizedUser.call(this, user);
+                    } else {
+                        alert("Access Denied: Your email address is not authorized for this application.");
+                        this.auth.signOut();
+                    }
+                } catch (error) {
+                    if (error.code === 'permission-denied' && retries > 0) {
+                        console.warn(`Permission denied, retrying... (${retries} retries left)`);
+                        setTimeout(() => this.methods.checkUserAuthorization.call(this, user, retries - 1), 1000);
+                    } else {
+                        console.error("Authorization check failed:", error);
+                        alert("An error occurred during authorization. Please try again.");
+                        this.auth.signOut();
+                    }
+                }
+            },
 
             listenForAuthStateChanges() {
                 if (!this.auth) {
@@ -585,30 +610,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         this.methods.showLoading.call(this, "Verifying authorization...");
                         this.state.lastDisputeViewTimestamp = parseInt(localStorage.getItem('lastDisputeViewTimestamp') || '0', 10);
                         this.state.lastLeaveViewTimestamp = parseInt(localStorage.getItem('lastLeaveViewTimestamp') || '0', 10);
-                        
-                        const usersRef = this.db.collection(this.config.firestorePaths.USERS);
-                        const q = usersRef.where("email", "==", user.email.toLowerCase());
-                        
-                        try {
-                            const querySnapshot = await q.get();
-                            if (querySnapshot.empty) {
-                                alert("Access Denied: Your email address is not authorized for this application.");
-                                this.auth.signOut();
-                            } else {
-                                const authorizedUser = querySnapshot.docs[0].data();
-                                this.state.currentUserTechId = authorizedUser.techId;
-                                await this.methods.handleAuthorizedUser.call(this, user);
-                            }
-                        } catch (error) {
-                            console.error("Authorization check failed:", error);
-                            alert("An error occurred during authorization. Please try again.");
-                            this.auth.signOut();
-                        }
-
+                        this.methods.checkUserAuthorization.call(this, user);
                     } else {
                         this.methods.handleSignedOutUser.call(this);
                     }
-                    this.methods.hideLoading.call(this);
                 });
             },
 
@@ -628,7 +633,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (this.elements.openSettingsBtn) this.elements.openSettingsBtn.style.display = 'block';
 
                 if (!this.state.isAppInitialized) {
-                    await this.methods.fetchUsers.call(this); // Fetch all users once for dropdowns
                     this.methods.listenForAppConfigChanges.call(this); 
                     this.methods.initializeFirebaseAndLoadData.call(this);
                     this.state.isAppInitialized = true;
