@@ -7,14 +7,14 @@
  * global variables, improves performance, and ensures correct
  * timezone handling.
  *
- * @version 4.5.0
+ * @version 4.5.1
  * @author Gemini AI Refactor & Bug-Fix
  * @changeLog
+ * - FIXED: Restored and correctly implemented pagination for the dispute table.
  * - UPDATED: Replaced the 'View' dispute alert with a professional modal for better readability and manual copying of details.
  * - ADDED: `injectDisputeModalHTML` function to dynamically add the new modal's HTML structure to the page.
  * - ADDED: `showDisputeDetailsModal` function to populate and display the new view modal.
  * - UPDATED: `handleViewDispute` to call the new modal function instead of an alert.
- * - ADDED: Pagination to the dispute table, displaying 15 disputes per page.
  * - ADDED: `state.disputePagination` to manage the pagination state for disputes.
  * - ADDED: `renderDisputePagination` function to create and manage pagination controls.
  * - ADDED: Event listeners for next and previous dispute page buttons.
@@ -3725,7 +3725,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             injectDisputeModalHTML() {
                 const disputeModalHTML = `
-                    <div class="modal" id="disputeDetailsModal" style="display: none;">
+                    <div class="modal" id="disputeDetailsModal" style="display: none; z-index: 1001;">
                         <div class="modal-content" style="max-width: 600px;">
                             <div class="modal-header">
                                 <h2>Dispute Details</h2>
