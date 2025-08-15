@@ -7,17 +7,20 @@
  * global variables, improves performance, and ensures correct
  * timezone handling.
  *
- * @version 4.6.0
+ * @version 4.6.1
  * @author Gemini AI Refactor & Bug-Fix
  * @changeLog
- * - ADDED: Notification badges for new disputes and new leave requests on their respective buttons.
- * - ADDED: Logic to track "last viewed" timestamps in localStorage for disputes and leave requests.
- * - ADDED: State variables `newDisputesCount` and `newLeaveRequestsCount` to hold notification counts.
- * - UPDATED: Firestore listeners for disputes and leave data to compare item creation times against the "last viewed" timestamp.
- * - UPDATED: Event listeners for opening dispute and leave modals to reset counts and update the "last viewed" timestamp.
- * - ADDED: `updateDisputeBadge` and `updateLeaveBadge` functions to control the visibility and content of the notification badges.
  * - FIXED: Restored and correctly implemented pagination for the dispute table.
- * - UPDATED: Replaced the 'View' dispute alert with a professional modal for better readability.
+ * - UPDATED: Replaced the 'View' dispute alert with a professional modal for better readability and manual copying of details.
+ * - ADDED: `injectDisputeModalHTML` function to dynamically add the new modal's HTML structure to the page.
+ * - ADDED: `showDisputeDetailsModal` function to populate and display the new view modal.
+ * - UPDATED: `handleViewDispute` to call the new modal function instead of an alert.
+ * - ADDED: `state.disputePagination` to manage the pagination state for disputes.
+ * - ADDED: `renderDisputePagination` function to create and manage pagination controls.
+ * - ADDED: Event listeners for next and previous dispute page buttons.
+ * - UPDATED: `renderDisputes` function to slice the disputes array and display only the current page's items.
+ * - FIXED: Dispute form submission now correctly captures all fields, preventing "undefined" values in the dispute list.
+ * - FIXED: Dispute modal's "Project Name" dropdown now shows all projects instead of just the filtered ones.
  */
 document.addEventListener('DOMContentLoaded', () => {
 
@@ -3833,6 +3836,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         badge.style.alignItems = 'center';
                         badge.style.justifyContent = 'center';
                         badge.style.fontSize = '10px';
+                        badge.style.width = '16px';
+                        badge.style.height = '16px';
+                        badge.style.top = '-5px';
+                        badge.style.right = '-5px';
                     } else {
                         badge.style.display = 'none';
                     }
