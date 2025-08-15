@@ -108,7 +108,7 @@
 <body class="bg-gray-100">
 
     <div id="update-notification" class="hidden fixed top-5 right-5 bg-green-500 text-white py-2 px-4 rounded-lg shadow-lg opacity-0 transform translate-y-2">
-        Project list updated automatically.
+        Project list updated.
     </div>
 
     <div class="w-full max-w-screen-xl mx-auto p-4 md:p-8">
@@ -131,12 +131,17 @@
                      <div class="bg-gray-50 p-6 rounded-xl border">
                         <div class="flex justify-between items-center border-b pb-3 mb-4">
                             <h2 class="text-xl font-semibold text-gray-800">Project Management</h2>
-                            <button id="reorder-projects-btn" class="hidden bg-gray-200 text-gray-700 font-bold py-1 px-3 rounded-lg hover:bg-gray-300 transition-colors text-sm">Reorder</button>
+                            <div class="flex gap-2">
+                                <button id="reorder-projects-btn" class="hidden bg-gray-200 text-gray-700 font-bold py-1 px-3 rounded-lg hover:bg-gray-300 transition-colors text-sm">Reorder</button>
+                                <button id="refresh-projects-btn" title="Refresh Project List" class="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-arrow-clockwise" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/><path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/></svg>
+                                </button>
+                            </div>
                         </div>
                         
                          <div class="flex items-center gap-2">
                             <select id="project-select" class="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all duration-300">
-                                <option value="">Loading Projects...</option>
+                                <option value="">Click Refresh to load projects...</option>
                             </select>
                              <button id="delete-project-btn" title="Delete Selected Project" class="p-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:bg-red-300 transition-colors">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>
@@ -285,7 +290,7 @@
     <script type="module">
         // --- Firebase SDK Imports ---
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
-        import { getFirestore, collection, doc, setDoc, getDoc, deleteDoc, onSnapshot, writeBatch } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
+        import { getFirestore, collection, doc, setDoc, getDoc, getDocs, deleteDoc, writeBatch } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
 
         // --- Your Firebase Configuration ---
         const firebaseConfig = {
@@ -310,7 +315,6 @@
         let lastFilterValue = "";
         let isAdmin = false;
         let isEditMode = false;
-        let unsubscribe;
         let teamSettings = {};
         let reorderSortable = null;
 
@@ -335,7 +339,7 @@
                         <div>
                             <h4 class="text-lg font-bold text-gray-900 mb-2">How to Use This Site</h4>
                             <ol class="list-decimal list-inside space-y-2">
-                                <li><strong>Automatic Loading & Sorting:</strong> The project list loads from the central database when the page opens. It is sorted with the newest projects on top. Admins can click "Reorder" to open a modal and drag-and-drop projects to create a custom order.</li>
+                                <li><strong>Load Projects:</strong> Click the "Refresh Projects" button (the circular arrow) to load the latest project list from the database. This is only needed once per session or when you want the latest data.</li>
                                 <li><strong>Admin Login:</strong> Click 'Admin Login' and use credentials ('admin'/'admin123') to enter Admin Mode.</li>
                                 <li><strong>Admin Mode:</strong> In this mode, you can create, save, delete, and reorder projects. You can also manage team assignments in the Admin Dashboard.</li>
                                 <li><strong>Filtering:</strong> Use the search bar and the team checkboxes to filter the results table.</li>
@@ -409,12 +413,13 @@
             }
         }
 
-        function listenForPublicProjectChanges() {
-            if (unsubscribe) unsubscribe();
-            
-            const projectsCol = collection(db, "public_projects");
-            let isInitialLoad = true;
-            unsubscribe = onSnapshot(projectsCol, (snapshot) => {
+        async function fetchProjectsManually() {
+            const projectSelect = document.getElementById('project-select');
+            projectSelect.innerHTML = '<option value="">Loading Projects...</option>';
+            try {
+                const projectsCol = collection(db, "public_projects");
+                const snapshot = await getDocs(projectsCol);
+
                 const loadedProjects = {};
                 snapshot.forEach((doc) => {
                     const project = doc.data();
@@ -437,16 +442,17 @@
                     project.rawData = decompressedData;
                     loadedProjects[doc.id] = project;
                 });
+
+                // Cache the fetched data
+                sessionStorage.setItem('cachedProjects', JSON.stringify(loadedProjects));
                 savedProjects = loadedProjects;
                 updateProjectDropdown();
-                if (!isInitialLoad) {
-                    showUpdateNotification();
-                }
-                isInitialLoad = false;
-            }, (error) => {
-                console.error("Error with real-time listener:", error);
-                alert("Lost connection to the project database.");
-            });
+                showUpdateNotification();
+            } catch (error) {
+                console.error("Error fetching projects:", error);
+                projectSelect.innerHTML = '<option value="">Error loading. Please Refresh.</option>';
+                alert("Could not load projects from the database. Check console for errors.");
+            }
         }
         
         async function deleteProjectFromFirestore(projectId) {
@@ -554,7 +560,18 @@
         }
 
         document.addEventListener('DOMContentLoaded', () => {
-            listenForPublicProjectChanges();
+            // Check for cached data on load
+            const cachedData = sessionStorage.getItem('cachedProjects');
+            if (cachedData) {
+                try {
+                    savedProjects = JSON.parse(cachedData);
+                    updateProjectDropdown();
+                } catch (e) {
+                    console.error("Failed to parse cached project data:", e);
+                    sessionStorage.removeItem('cachedProjects');
+                }
+            }
+            
             loadTeamSettings();
             manageButtonState();
 
@@ -615,6 +632,10 @@
 
                 if (await saveProjectToFirestore(projectData)) {
                     alert(`Project "${projectName}" saved successfully.`);
+                    // Manually update cache after saving
+                    savedProjects[id] = projectData;
+                    sessionStorage.setItem('cachedProjects', JSON.stringify(savedProjects));
+                    updateProjectDropdown();
                     isEditMode = false;
                     document.getElementById('project-select').value = id;
                     manageButtonState();
@@ -630,10 +651,19 @@
                 if (confirm(`Are you sure you want to delete the project "${projectName}"? This action cannot be undone.`)) {
                     if (await deleteProjectFromFirestore(projectId)) {
                         alert(`Project "${projectName}" has been deleted.`);
+                        // Manually remove from cache
+                        delete savedProjects[projectId];
+                        sessionStorage.setItem('cachedProjects', JSON.stringify(savedProjects));
                         document.getElementById('techData').value = '';
                         document.getElementById('project-name').value = '';
+                        updateProjectDropdown();
                     }
                 }
+            });
+            
+            document.getElementById('refresh-projects-btn').addEventListener('click', () => {
+                sessionStorage.removeItem('cachedProjects');
+                fetchProjectsManually();
             });
 
             document.getElementById('project-select').addEventListener('change', (e) => {
@@ -1385,6 +1415,8 @@
             try {
                 await batch.commit();
                 alert("Project order saved successfully!");
+                // Manually re-fetch to update cache and UI with new order
+                await fetchProjectsManually();
                 closeReorderModal();
             } catch (err) {
                 console.error("Failed to save new project order:", err);
