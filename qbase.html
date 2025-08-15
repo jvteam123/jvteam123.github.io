@@ -1020,78 +1020,85 @@
                         
                         let points = 0;
                         if (colName.startsWith('fix')) {
-                            const isRefix = colName !== 'fix1_id';
-                            if (isRefix) {
-                                const roundMatch = colName.match(/\d+/);
-                                if (roundMatch) {
-                                    const round = roundMatch[0];
-                                    const rvLabelColName = `rv${round}_label`;
-                                    const rvLabelIndex = headerMap[rvLabelColName];
-                                    
-                                    if (rvLabelIndex !== undefined) {
-                                        const rvLabelValue = values[rvLabelIndex]?.trim().toUpperCase();
-                                        if (rvLabelValue && rvLabelValue.includes('I')) {
-                                            techStats[techId].refixTasks += 1;
-                                            techStats[techId].refixDetails.push({
-                                                round: `RV${round}`,
-                                                project: currentProjectName
-                                            });
-                                        }
-                                    }
-                                }
-                            } else {
-                                techStats[techId].fixTasks += 1;
-                                let totalRowFixPoints = 0;
-                                
-                                const i3qaCatIndex = headerMap['i3qa_cat'];
-                                const i3qaLabelIndex = headerMap['i3qa_label'];
-                                if (i3qaCatIndex !== undefined && i3qaLabelIndex !== undefined) {
-                                    const i3qaLabelValue = values[i3qaLabelIndex]?.trim().toUpperCase();
-                                    if (i3qaLabelValue && i3qaLabelValue.includes('M')) {
-                                        const categoryValue = parseInt(values[i3qaCatIndex]);
-                                        if (!isNaN(categoryValue) && categoryValue >= 1 && categoryValue <= 9) {
-                                            const catPoints = categoryValues[categoryValue]?.[gsdForCalculation] || categoryValues[categoryValue]?.["3in"] || 0;
-                                            if (techStats[techId].categoryCounts[categoryValue] !== undefined) techStats[techId].categoryCounts[categoryValue]++;
-                                            if (catPoints) totalRowFixPoints += catPoints;
-                                        }
-                                    }
-                                }
-                                
-                                baseCategoryHeaders.forEach(catHeader => {
-                                    if (headerMap[catHeader] !== undefined) {
-                                        const categoryValue = parseInt(values[headerMap[catHeader]]);
-                                        if (!isNaN(categoryValue) && categoryValue >= 1 && categoryValue <= 9) {
-                                            const catPoints = categoryValues[categoryValue]?.[gsdForCalculation] || categoryValues[categoryValue]?.["3in"] || 0;
-                                            if (techStats[techId].categoryCounts[categoryValue] !== undefined) techStats[techId].categoryCounts[categoryValue]++;
-                                            if (catPoints) totalRowFixPoints += catPoints;
-                                        }
-                                    }
-                                });
+                            const roundMatch = colName.match(/\d+/);
+                            if (roundMatch) {
+                                const round = roundMatch[0];
+                                // Check corresponding rv_label for "I" to determine if it's an incorrect/refix task
+                                const rvLabelColName = `rv${round}_label`;
+                                const rvLabelIndex = headerMap[rvLabelColName];
+                                let isIncorrect = false;
 
-                                if (afp1StatIndex !== undefined && afp1CatIndex !== undefined && values[afp1StatIndex]?.trim().toUpperCase() === 'AA') {
-                                    const afp1CatValue = parseInt(values[afp1CatIndex]);
-                                    if (!isNaN(afp1CatValue) && afp1CatValue >= 1 && afp1CatValue <= 9) {
-                                        const catPoints = categoryValues[afp1CatValue]?.[gsdForCalculation] || categoryValues[afp1CatValue]?.["3in"] || 0;
-                                        if (techStats[techId].categoryCounts[afp1CatValue] !== undefined) techStats[techId].categoryCounts[afp1CatValue]++;
-                                        if (catPoints) totalRowFixPoints += catPoints;
-                                    }
-                                }
-                                
-                                if (afp2StatIndex !== undefined && afp2CatIndex !== undefined && values[afp2StatIndex]?.trim().toUpperCase() === 'AA') {
-                                    const afp2CatValue = parseInt(values[afp2CatIndex]);
-                                     if (!isNaN(afp2CatValue) && afp2CatValue >= 1 && afp2CatValue <= 9) {
-                                        const catPoints = categoryValues[afp2CatValue]?.[gsdForCalculation] || categoryValues[afp2CatValue]?.["3in"] || 0;
-                                        if (techStats[techId].categoryCounts[afp2CatValue] !== undefined) techStats[techId].categoryCounts[afp2CatValue]++;
-                                        if (catPoints) totalRowFixPoints += catPoints;
+                                if (rvLabelIndex !== undefined) {
+                                    const rvLabelValue = values[rvLabelIndex]?.trim().toUpperCase();
+                                    if (rvLabelValue && rvLabelValue.includes('I')) {
+                                        isIncorrect = true;
                                     }
                                 }
 
-                                if (isFixTaskIR && totalRowFixPoints > 0) {
-                                    totalRowFixPoints *= irModifierValue;
-                                }
+                                if (isIncorrect) {
+                                    // This is a refix/incorrect task, regardless of round number.
+                                    techStats[techId].refixTasks += 1;
+                                    techStats[techId].refixDetails.push({
+                                        round: `RV${round}`,
+                                        project: currentProjectName
+                                    });
+                                } else {
+                                    // This is a primary fix task. Only fix1_id counts as a primary fix task and gets points.
+                                    if (colName === 'fix1_id') {
+                                        techStats[techId].fixTasks += 1;
+                                        let totalRowFixPoints = 0;
+                                        
+                                        const i3qaCatIndex = headerMap['i3qa_cat'];
+                                        const i3qaLabelIndex = headerMap['i3qa_label'];
+                                        if (i3qaCatIndex !== undefined && i3qaLabelIndex !== undefined) {
+                                            const i3qaLabelValue = values[i3qaLabelIndex]?.trim().toUpperCase();
+                                            if (i3qaLabelValue && i3qaLabelValue.includes('M')) {
+                                                const categoryValue = parseInt(values[i3qaCatIndex]);
+                                                if (!isNaN(categoryValue) && categoryValue >= 1 && categoryValue <= 9) {
+                                                    const catPoints = categoryValues[categoryValue]?.[gsdForCalculation] || categoryValues[categoryValue]?.["3in"] || 0;
+                                                    if (techStats[techId].categoryCounts[categoryValue] !== undefined) techStats[techId].categoryCounts[categoryValue]++;
+                                                    if (catPoints) totalRowFixPoints += catPoints;
+                                                }
+                                            }
+                                        }
+                                        
+                                        baseCategoryHeaders.forEach(catHeader => {
+                                            if (headerMap[catHeader] !== undefined) {
+                                                const categoryValue = parseInt(values[headerMap[catHeader]]);
+                                                if (!isNaN(categoryValue) && categoryValue >= 1 && categoryValue <= 9) {
+                                                    const catPoints = categoryValues[categoryValue]?.[gsdForCalculation] || categoryValues[categoryValue]?.["3in"] || 0;
+                                                    if (techStats[techId].categoryCounts[categoryValue] !== undefined) techStats[techId].categoryCounts[categoryValue]++;
+                                                    if (catPoints) totalRowFixPoints += catPoints;
+                                                }
+                                            }
+                                        });
 
-                                techStats[techId].pointsBreakdown.fix += totalRowFixPoints;
-                                points += totalRowFixPoints;
+                                        if (afp1StatIndex !== undefined && afp1CatIndex !== undefined && values[afp1StatIndex]?.trim().toUpperCase() === 'AA') {
+                                            const afp1CatValue = parseInt(values[afp1CatIndex]);
+                                            if (!isNaN(afp1CatValue) && afp1CatValue >= 1 && afp1CatValue <= 9) {
+                                                const catPoints = categoryValues[afp1CatValue]?.[gsdForCalculation] || categoryValues[afp1CatValue]?.["3in"] || 0;
+                                                if (techStats[techId].categoryCounts[afp1CatValue] !== undefined) techStats[techId].categoryCounts[afp1CatValue]++;
+                                                if (catPoints) totalRowFixPoints += catPoints;
+                                            }
+                                        }
+                                        
+                                        if (afp2StatIndex !== undefined && afp2CatIndex !== undefined && values[afp2StatIndex]?.trim().toUpperCase() === 'AA') {
+                                            const afp2CatValue = parseInt(values[afp2CatIndex]);
+                                             if (!isNaN(afp2CatValue) && afp2CatValue >= 1 && afp2CatValue <= 9) {
+                                                const catPoints = categoryValues[afp2CatValue]?.[gsdForCalculation] || categoryValues[afp2CatValue]?.["3in"] || 0;
+                                                if (techStats[techId].categoryCounts[afp2CatValue] !== undefined) techStats[techId].categoryCounts[afp2CatValue]++;
+                                                if (catPoints) totalRowFixPoints += catPoints;
+                                            }
+                                        }
+
+                                        if (isFixTaskIR && totalRowFixPoints > 0) {
+                                            totalRowFixPoints *= irModifierValue;
+                                        }
+
+                                        techStats[techId].pointsBreakdown.fix += totalRowFixPoints;
+                                        points += totalRowFixPoints;
+                                    }
+                                }
                             }
                         } else if (colName.startsWith('qc')) {
                             points = 1 / 8;
