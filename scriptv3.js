@@ -7,9 +7,10 @@
  * global variables, improves performance, and ensures correct
  * timezone handling.
  *
- * @version 4.7.2
+ * @version 4.8.0
  * @author Gemini AI Refactor & Bug-Fix
  * @changeLog
+ * - MODIFIED: Updated data loading logic to fetch all unique project names upfront (respecting month filter) to populate the project dropdown filter completely on initial load. This improves user experience by showing all available projects in the filter without incurring additional database reads, while the main task view remains paginated for performance.
  * - FIXED: Implemented a robust retry mechanism in the authentication flow to permanently resolve the "email not authorized" race condition. The app now waits for Firebase to fully validate the user's session before checking permissions.
  * - OPTIMIZED: Replaced real-time listeners (onSnapshot) with manual fetches (getDocs) for projects, disputes, and leave requests to dramatically reduce Firestore read operations.
  * - OPTIMIZED: Notification badge counts for disputes and leave requests now use efficient .count() queries.
@@ -57,7 +58,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     "default": "#FFFFFF"
                 }
             },
-            NUM_TABLE_COLUMNS: 28, 
+            NUM_TABLE_COLUMNS: 28,
             CSV_HEADERS_FOR_IMPORT: [
                 "Fix Cat", "Project Name", "Area/Task", "GSD", "Assigned To", "Status",
                 "Day 1 Start", "Day 1 Finish", "Day 1 Break",
@@ -107,14 +108,15 @@ document.addEventListener('DOMContentLoaded', () => {
         chatListenerUnsubscribe: null,
         typingListenerUnsubscribe: null,
         appConfigListenerUnsubscribe: null,
-        
+
         // --- 3. APPLICATION STATE ---
         state: {
             projects: [],
             users: [],
             chatMessages: [],
             leaveRequests: [],
-            disputes: [], 
+            disputes: [],
+            allUniqueProjectNames: [],
             editingLeaveId: null,
             hasUnreadMessages: false,
             newDisputesCount: 0,
@@ -128,7 +130,7 @@ document.addEventListener('DOMContentLoaded', () => {
             isAppInitialized: false,
             editingUser: null,
             currentUserTechId: null,
-            appConfig: {}, 
+            appConfig: {},
             filters: {
                 batchId: localStorage.getItem('currentSelectedBatchId') || "",
                 fixCategory: "",
@@ -277,7 +279,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     adminLeaveSection: document.getElementById('admin-leave-section'),
                     allLeaveRequestsBody: document.getElementById('allLeaveRequestsBody'),
                     leaveNotificationBadge: document.getElementById('leaveNotificationBadge'),
-                    
+
                      // Dispute Modal DOM Elements
                     openDisputeBtn: document.getElementById('openDisputeBtn'),
                     disputeModal: document.getElementById('disputeModal'),
@@ -350,7 +352,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     self.elements.tlSummaryModal.style.display = 'block';
                     self.methods.generateTlSummaryData.call(self);
                 });
-                
+
                 attachClick(self.elements.openLeaveSchedulerBtn, () => {
                     self.elements.leaveSchedulerModal.style.display = 'block';
                     self.methods.fetchLeaveData.call(self);
@@ -359,7 +361,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     self.state.lastLeaveViewTimestamp = Date.now();
                     localStorage.setItem('lastLeaveViewTimestamp', self.state.lastLeaveViewTimestamp);
                 });
-                
+
                 attachClick(self.elements.openDisputeBtn, () => {
                     self.elements.disputeModal.style.display = 'block';
                     self.methods.fetchDisputes.call(self);
@@ -454,7 +456,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (self.elements.newProjectForm) {
                     self.elements.newProjectForm.addEventListener('submit', self.methods.handleAddProjectSubmit.bind(self));
                 }
-                
+
                 if (self.elements.leaveRequestForm) {
                     self.elements.leaveRequestForm.addEventListener('submit', self.methods.handleLeaveRequestSubmit.bind(self));
                 }
@@ -572,12 +574,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     this.methods.initializeFirebaseAndLoadData.call(this);
                 }
             },
-            
+
             async checkUserAuthorization(user, retries = 3) {
                 try {
                     const snapshot = await this.db.collection(this.config.firestorePaths.USERS).get();
                     this.state.users = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    
+
                     const userEmailLower = user.email.toLowerCase();
                     const authorizedUser = this.state.users.find(u => u.email.toLowerCase() === userEmailLower);
 
@@ -633,7 +635,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (this.elements.openSettingsBtn) this.elements.openSettingsBtn.style.display = 'block';
 
                 if (!this.state.isAppInitialized) {
-                    this.methods.listenForAppConfigChanges.call(this); 
+                    this.methods.listenForAppConfigChanges.call(this);
                     this.methods.initializeFirebaseAndLoadData.call(this);
                     this.state.isAppInitialized = true;
                     this.methods.listenForNotifications.call(this);
@@ -656,12 +658,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 this.elements.loadingAuthMessageDiv.style.display = 'block';
                 if (this.elements.openSettingsBtn) this.elements.openSettingsBtn.style.display = 'none';
                 this.state.currentUserTechId = null;
-                
+
                 // Unsubscribe from real-time listeners
                 if (this.chatListenerUnsubscribe) this.chatListenerUnsubscribe();
                 if (this.typingListenerUnsubscribe) this.typingListenerUnsubscribe();
                 if (this.appConfigListenerUnsubscribe) this.appConfigListenerUnsubscribe();
-                
+
                 this.state.isAppInitialized = false;
             },
 
@@ -703,8 +705,31 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 this.methods.loadGroupVisibilityState.call(this);
                 await this.methods.populateMonthFilter.call(this);
-                
+
+                // Fetch all unique project names for the dropdown filter, respecting the month filter.
+                this.methods.showLoading.call(this, "Building project list...");
                 const sortDirection = this.state.filters.sortBy === 'oldest' ? 'asc' : 'desc';
+                let nameQuery = this.db.collection("projects");
+                if (this.state.filters.month) {
+                    const [year, month] = this.state.filters.month.split('-');
+                    const startDate = new Date(parseInt(year), parseInt(month) - 1, 1);
+                    const endDate = new Date(parseInt(year), parseInt(month), 0, 23, 59, 59, 999);
+                    nameQuery = nameQuery.where("creationTimestamp", ">=", startDate).where("creationTimestamp", "<=", endDate);
+                }
+                const allTasksSnapshot = await nameQuery.orderBy("creationTimestamp", sortDirection).get();
+                const uniqueNames = new Set();
+                const sortedNames = [];
+                allTasksSnapshot.forEach(doc => {
+                    const name = doc.data().baseProjectName;
+                    if (name && !uniqueNames.has(name)) {
+                        uniqueNames.add(name);
+                        sortedNames.push(name);
+                    }
+                });
+                // Store the full list of names. This will be used by the dropdown.
+                this.state.allUniqueProjectNames = sortedNames;
+                this.state.pagination.paginatedProjectNameList = sortedNames; // Also update the list used for pagination.
+
                 const shouldPaginate = !this.state.filters.batchId && !this.state.filters.fixCategory;
 
                 let projectsQuery = this.db.collection("projects");
@@ -712,37 +737,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (shouldPaginate) {
                     this.elements.paginationControls.style.display = 'block';
 
-                    if (this.state.pagination.paginatedProjectNameList.length === 0 ||
-                        this.state.pagination.sortOrderForPaging !== this.state.filters.sortBy ||
-                        this.state.pagination.monthForPaging !== this.state.filters.month) {
-
-                        this.methods.showLoading.call(this, "Building project list for pagination...");
-
-                        let nameQuery = this.db.collection("projects");
-
-                        if (this.state.filters.month) {
-                            const [year, month] = this.state.filters.month.split('-');
-                            const startDate = new Date(parseInt(year), parseInt(month) - 1, 1);
-                            const endDate = new Date(parseInt(year), parseInt(month), 0, 23, 59, 59, 999);
-                            nameQuery = nameQuery.where("creationTimestamp", ">=", startDate).where("creationTimestamp", "<=", endDate);
-                        }
-
-                        const allTasksSnapshot = await nameQuery.orderBy("creationTimestamp", sortDirection).get();
-                        const uniqueNames = new Set();
-                        const sortedNames = [];
-                        allTasksSnapshot.forEach(doc => {
-                            const name = doc.data().baseProjectName;
-                            if (name && !uniqueNames.has(name)) {
-                                uniqueNames.add(name);
-                                sortedNames.push(name);
-                            }
-                        });
-
-                        this.state.pagination.paginatedProjectNameList = sortedNames;
-                        this.state.pagination.totalPages = Math.ceil(sortedNames.length / this.state.pagination.projectsPerPage);
-                        this.state.pagination.sortOrderForPaging = this.state.filters.sortBy;
-                        this.state.pagination.monthForPaging = this.state.filters.month;
-                    }
+                    this.state.pagination.totalPages = Math.ceil(this.state.pagination.paginatedProjectNameList.length / this.state.pagination.projectsPerPage);
+                    this.state.pagination.sortOrderForPaging = this.state.filters.sortBy;
+                    this.state.pagination.monthForPaging = this.state.filters.month;
 
                     const startIndex = (this.state.pagination.currentPage - 1) * this.state.pagination.projectsPerPage;
                     const endIndex = startIndex + this.state.pagination.projectsPerPage;
@@ -770,7 +767,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 projectsQuery = projectsQuery.orderBy("creationTimestamp", sortDirection);
-                
+
                 try {
                     const snapshot = await projectsQuery.get();
                     let newProjects = [];
@@ -840,8 +837,8 @@ document.addEventListener('DOMContentLoaded', () => {
             },
 
             async populateProjectNameFilter() {
-                const uniqueNames = new Set(this.state.projects.map(p => p.baseProjectName));
-                const sortedNames = Array.from(uniqueNames).sort();
+                // Use the comprehensive list of names that was already fetched.
+                const sortedNames = this.state.allUniqueProjectNames || [];
                 this.elements.batchIdSelect.innerHTML = '<option value="">All Projects</option>';
                 sortedNames.forEach(name => {
                     const option = document.createElement('option');
@@ -1436,12 +1433,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     alert("This task is locked and cannot be reset.");
                     return;
                 }
-        
+
                 if (confirm(`Are you sure you want to reset the task '${project.areaTask}'? This will clear all recorded times and set the status to "Available". This action cannot be undone.`)) {
                     this.methods.showLoading.call(this, "Resetting task...");
                     const projectRef = this.db.collection("projects").doc(project.id);
                     const serverTimestamp = firebase.firestore.FieldValue.serverTimestamp();
-        
+
                     const updates = {
                         status: "Available",
                         startTimeDay1: null, finishTimeDay1: null, durationDay1Ms: null,
@@ -1460,7 +1457,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         techNotes: "",
                         lastModifiedTimestamp: serverTimestamp
                     };
-        
+
                     try {
                         await projectRef.update(updates);
                         this.methods.initializeFirebaseAndLoadData.call(this); // Refresh
@@ -1519,7 +1516,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const saveState = (key, checkbox) => {
                     if (checkbox) localStorage.setItem(key, checkbox.checked);
                 };
-                
+
                 saveState('showTitleColumn', this.elements.toggleTitleCheckbox);
                 saveState('showDay2Column', this.elements.toggleDay2Checkbox);
                 saveState('showDay3Column', this.elements.toggleDay3Checkbox);
@@ -1527,7 +1524,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 saveState('showDay5Column', this.elements.toggleDay5Checkbox);
                 saveState('showDay6Column', this.elements.toggleDay6Checkbox);
             },
-            
+
             applyColumnVisibility() {
                 const toggleVisibility = (className, checkbox) => {
                     document.querySelectorAll(`#projectTable .${className}`).forEach(el => el.classList.toggle('column-hidden', !checkbox.checked));
@@ -1601,12 +1598,12 @@ document.addEventListener('DOMContentLoaded', () => {
             async renderTLDashboard() {
                 if (!this.elements.tlDashboardContentElement) return;
                 this.elements.tlDashboardContentElement.innerHTML = "";
-            
+
                 // --- General Settings Section ---
                 const settingsDiv = document.createElement('div');
                 settingsDiv.className = 'dashboard-batch-item';
                 settingsDiv.innerHTML = `<h4>⚙️ General Settings</h4>`;
-            
+
                 // Meeting Link Settings
                 const chatSettingsForm = document.createElement('div');
                 chatSettingsForm.className = 'form-group';
@@ -1618,7 +1615,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                 `;
                 settingsDiv.appendChild(chatSettingsForm);
-            
+
                 // TSC Link Settings
                 const tscSettingsForm = document.createElement('div');
                 tscSettingsForm.className = 'form-group';
@@ -1631,9 +1628,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                 `;
                 settingsDiv.appendChild(tscSettingsForm);
-            
+
                 this.elements.tlDashboardContentElement.appendChild(settingsDiv);
-            
+
                 // Fetch and display current settings
                 const configDoc = await this.db.collection(this.config.firestorePaths.APP_CONFIG).doc('settings').get();
                 if (configDoc.exists) {
@@ -1648,11 +1645,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         settingsDiv.querySelector('#tscLinkUrlInput').value = data.tscButtonUrl;
                     }
                 }
-            
+
                 // Add event listeners
                 settingsDiv.querySelector('#saveMeetingLinkBtn').onclick = this.methods.handleSaveMeetingLink.bind(this);
                 settingsDiv.querySelector('#saveTscLinkBtn').onclick = this.methods.handleSaveTscLink.bind(this);
-            
+
                 // --- Project Management Sections ---
                 const batches = await this.methods.getManageableBatches.call(this);
                 if (batches.length === 0) {
@@ -1661,7 +1658,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     this.elements.tlDashboardContentElement.appendChild(noProjectsEl);
                     return;
                 }
-            
+
                 batches.forEach(batch => {
                     if (!batch?.batchId) return;
                     const batchItemDiv = document.createElement('div');
@@ -1786,16 +1783,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     this.elements.tlDashboardContentElement.appendChild(batchItemDiv);
                 });
             },
-            
+
             async handleSaveMeetingLink() {
                 const input = document.getElementById('meetingLinkInput');
                 const newUrl = input.value.trim();
-            
+
                 if (newUrl && !newUrl.startsWith('http')) {
                     alert('Please enter a valid URL (e.g., https://meet.google.com/...).');
                     return;
                 }
-            
+
                 this.methods.showLoading.call(this, 'Saving Meeting Link...');
                 try {
                     await this.db.collection(this.config.firestorePaths.APP_CONFIG).doc('settings').set({
@@ -1809,18 +1806,18 @@ document.addEventListener('DOMContentLoaded', () => {
                     this.methods.hideLoading.call(this);
                 }
             },
-            
+
             async handleSaveTscLink() {
                 const nameInput = document.getElementById('tscLinkNameInput');
                 const urlInput = document.getElementById('tscLinkUrlInput');
                 const newName = nameInput.value.trim();
                 const newUrl = urlInput.value.trim();
-            
+
                 if (newUrl && !newUrl.startsWith('http')) {
                     alert('Please enter a valid URL for the custom link.');
                     return;
                 }
-            
+
                 this.methods.showLoading.call(this, 'Saving Custom Link...');
                 try {
                     await this.db.collection(this.config.firestorePaths.APP_CONFIG).doc('settings').set({
@@ -2688,13 +2685,13 @@ document.addEventListener('DOMContentLoaded', () => {
             },
 
             listenForNotifications() {
-                // This function is kept for real-time pop-up notifications, 
+                // This function is kept for real-time pop-up notifications,
                 // which are a separate feature from the badge counts.
                 if (!this.db) {
                     console.error("Firestore not initialized for notifications.");
                     return;
                 }
-               
+
                 this.db.collection(this.config.firestorePaths.NOTIFICATIONS)
                     .orderBy("timestamp", "desc")
                     .limit(1)
@@ -2785,7 +2782,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     this.elements.chatNotificationBadge.style.display = this.state.hasUnreadMessages ? 'block' : 'none';
                 }
             },
-            
+
             playNotificationSound() {
                 if (this.elements.chatAudioNotification) {
                     this.elements.chatAudioNotification.play().catch(error => {
@@ -2798,7 +2795,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!this.elements.chatMessagesContainer) return;
                 const container = this.elements.chatMessagesContainer;
                 const shouldScroll = container.scrollTop + container.clientHeight >= container.scrollHeight - 20;
-                
+
                 container.innerHTML = '';
 
                 this.state.chatMessages.forEach(msg => {
@@ -2815,7 +2812,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         hour: '2-digit',
                         minute: '2-digit'
                     }) : '';
-                    
+
                     const messageTextWithLinks = this.methods.linkify.call(this, msg.text);
 
                     msgDiv.innerHTML = `
@@ -2832,7 +2829,7 @@ document.addEventListener('DOMContentLoaded', () => {
                      container.scrollTop = container.scrollHeight;
                 }
             },
-            
+
             linkify(text) {
                 const urlRegex = /(\b(https?|ftp|file):\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/ig;
                 return text.replace(urlRegex, (url) => {
@@ -2865,7 +2862,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     alert("Cannot send message. Your user ID is not set.");
                     return;
                 }
-                
+
                 let processedText = this.methods.parseEmojis.call(this, messageText);
 
                 const messageData = {
@@ -2884,7 +2881,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     alert("Failed to send message: " + error.message);
                 }
             },
-            
+
             async handleStartVoiceCall() {
                 this.methods.showLoading.call(this, 'Getting meeting link...');
                 try {
@@ -2912,7 +2909,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     if (messageCount > this.config.chat.MAX_MESSAGES) {
                         const toDeleteCount = messageCount - this.config.chat.MAX_MESSAGES;
-                        const toDelete = snapshot.docs.slice(this.config.chat.MAX_MESSAGES); 
+                        const toDelete = snapshot.docs.slice(this.config.chat.MAX_MESSAGES);
 
                         const batch = this.db.batch();
                         toDelete.forEach(doc => {
@@ -2990,7 +2987,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     indicator.style.display = 'block';
                 }
             },
-            
+
             listenForAppConfigChanges() {
                 if (this.appConfigListenerUnsubscribe) this.appConfigListenerUnsubscribe();
                 const self = this;
@@ -3002,11 +2999,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                     });
             },
-            
+
             updateTscButton() {
                 const { tscButtonName, tscButtonUrl } = this.state.appConfig;
                 const btn = this.elements.tscLinkBtn;
-            
+
                 if (btn && tscButtonName && tscButtonUrl) {
                     btn.textContent = `TSC ${tscButtonName}`;
                     btn.onclick = () => window.open(tscButtonUrl, '_blank');
@@ -3287,7 +3284,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 status: projectData.status || "Available",
                                 techNotes: projectData.techNotes || "",
                             };
-                            
+
                              for(let i=1; i<=6; i++){
                                 fullProjectData[`breakDurationMinutesDay${i}`] = projectData[`breakDurationMinutesDay${i}`] || 0;
                                 fullProjectData[`startTimeDay${i}`] = projectData[`startTimeDay${i}`] || null;
@@ -3436,7 +3433,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 this.state.newLeaveRequestsCount = snapshot.data().count;
                 this.methods.updateLeaveBadge.call(this);
             },
-            
+
             async fetchLeaveData() {
                 try {
                     const snapshot = await this.db.collection(this.config.firestorePaths.LEAVE_REQUESTS).get();
@@ -3525,12 +3522,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     this.methods.hideLoading.call(this);
                 }
             },
-            
+
             renderLeaveCalendar() {
                 const calendarEl = this.elements.leaveCalendar;
                 if (!calendarEl || typeof VanillaCalendar === 'undefined') return;
                 calendarEl.innerHTML = ''; // Clear previous calendar instance
-                
+
                 const approvedLeaves = this.state.leaveRequests.filter(req => req.status === 'approved');
                 const popups = approvedLeaves.reduce((acc, leave) => {
                     let currentDate = new Date(leave.startDate);
@@ -3647,7 +3644,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     btn.addEventListener('click', (e) => this.methods.handleDeleteLeaveRequest.call(this, e.target.dataset.id));
                 });
             },
-            
+
             async updateLeaveStatus(id, status) {
                 this.methods.showLoading.call(this, "Updating leave status...");
                 try {
@@ -3660,9 +3657,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     this.methods.hideLoading.call(this);
                 }
             },
-            
+
             // NEW Leave Management Functions
-            
+
             resetLeaveForm() {
                 this.state.editingLeaveId = null;
                 this.elements.leaveRequestForm.reset();
@@ -3699,7 +3696,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 `;
                 document.getElementById('cancelEditLeaveBtn').onclick = () => this.methods.resetLeaveForm.call(this);
             },
-            
+
             async handleDeleteLeaveRequest(id) {
                  const pin = prompt("Enter admin PIN to delete this request permanently:");
                  if (pin === this.config.pins.TL_DASHBOARD_PIN) {
@@ -3719,7 +3716,7 @@ document.addEventListener('DOMContentLoaded', () => {
                      alert("Incorrect PIN.");
                  }
             },
-            
+
             async handleCancelLeaveRequest(id) {
                  if (confirm("Are you sure you want to cancel your leave request?")) {
                     this.methods.showLoading.call(this, "Canceling leave request...");
@@ -3734,9 +3731,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
             },
-            
+
              // --- DISPUTE METHODS ---
-            
+
             injectDisputeModalHTML() {
                 const disputeModalHTML = `
                     <div class="modal" id="disputeDetailsModal" style="display: none; z-index: 1001;">
@@ -3825,20 +3822,20 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
             },
-            
+
             async openDisputeModal() {
                 const uniqueProjectNames = new Set(this.state.projects.map(p => p.baseProjectName));
                 this.elements.disputeProjectName.innerHTML = '<option value="">Select Project</option>' + [...uniqueProjectNames].sort().map(name => `<option value="${name}">${name}</option>`).join('');
 
                 this.elements.disputeTechId.innerHTML = '<option value="">Select Tech ID</option>' + this.state.users.map(user => `<option value="${user.techId}" data-name="${user.name}">${user.techId}</option>`).join('');
-                
+
                 this.elements.disputeForm.reset();
                 this.elements.disputeTechName.value = '';
             },
-            
+
             async handleDisputeFormSubmit(event) {
                 event.preventDefault();
-                
+
                 const getElValue = (id) => document.getElementById(id)?.value || '';
 
                 const disputeData = {
@@ -3872,7 +3869,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     this.methods.hideLoading.call(this);
                 }
             },
-            
+
             renderDisputes() {
                 const tableBody = this.elements.disputeTableBody;
                 tableBody.innerHTML = '';
@@ -3948,11 +3945,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     this.methods.handleDeleteDispute.call(this, id);
                 }
             },
-            
+
             handleViewDispute(id) {
                 this.methods.showDisputeDetailsModal.call(this, id);
             },
-            
+
             showDisputeDetailsModal(id) {
                 const dispute = this.state.disputes.find(d => d.id === id);
                 if (!dispute) return;
@@ -3982,7 +3979,7 @@ document.addEventListener('DOMContentLoaded', () => {
             handleCopyDispute(id) {
                  const dispute = this.state.disputes.find(d => d.id === id);
                  if (!dispute) return;
-                 
+
                 const textToCopy = `
 Block ID: ${dispute.blockId}
 Project Name: ${dispute.projectName}
@@ -3999,7 +3996,7 @@ RQA TechID: ${dispute.rqaTechId}
 Reason: ${dispute.reason}
 Status: ${dispute.status}
                 `.trim();
-                
+
                 navigator.clipboard.writeText(textToCopy).then(() => {
                     alert("Dispute details copied to clipboard.");
                 }).catch(err => {
@@ -4007,7 +4004,7 @@ Status: ${dispute.status}
                     alert("Could not copy details.");
                 });
             },
-            
+
              async handleMarkDisputeDone(id) {
                  if (confirm("Are you sure you want to mark this dispute as 'Done'?")) {
                     try {
@@ -4019,7 +4016,7 @@ Status: ${dispute.status}
                     }
                  }
             },
-            
+
             async handleDeleteDispute(id) {
                 if(confirm("Are you sure you want to delete this dispute? This action is permanent.")) {
                     try {
