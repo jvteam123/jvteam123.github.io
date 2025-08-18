@@ -7,15 +7,15 @@
  * global variables, improves performance, and ensures correct
  * timezone handling.
  *
- * @version 4.9.0
+ * @version 4.9.1
  * @author Gemini AI Refactor & Bug-Fix
  * @changeLog
+ * - FIXED: The project name dropdown in the Dispute Modal now correctly populates with all available project names for the selected month, instead of only showing projects from the current page of the main view.
  * - MODIFIED: The 'Show Day' filter checkboxes (Day 2-6) now also control the visibility of their corresponding Start/End action buttons in the table, in addition to hiding the table columns. This provides a more intuitive and cleaner interface when focusing on specific days.
  * - MODIFIED: Updated data loading logic to fetch all unique project names upfront (respecting month filter) to populate the project dropdown filter completely on initial load. This improves user experience by showing all available projects in the filter without incurring additional database reads, while the main task view remains paginated for performance.
  * - FIXED: Implemented a robust retry mechanism in the authentication flow to permanently resolve the "email not authorized" race condition. The app now waits for Firebase to fully validate the user's session before checking permissions.
  * - OPTIMIZED: Replaced real-time listeners (onSnapshot) with manual fetches (getDocs) for projects, disputes, and leave requests to dramatically reduce Firestore read operations.
  * - OPTIMIZED: Notification badge counts for disputes and leave requests now use efficient .count() queries.
- * - OPTIMIZED: The dispute modal now reuses the main project list for its dropdown.
  */
 document.addEventListener('DOMContentLoaded', () => {
 
@@ -365,6 +365,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 attachClick(self.elements.openDisputeBtn, () => {
                     self.elements.disputeModal.style.display = 'block';
+                    self.methods.openDisputeModal.call(self); // Call the setup function here
                     self.methods.fetchDisputes.call(self);
                     self.state.newDisputesCount = 0;
                     self.methods.updateDisputeBadge.call(self);
@@ -1537,7 +1538,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (dayMatch) {
                         const dayNum = dayMatch[1];
                         document.querySelectorAll(`#projectTable .action-day${dayNum}`).forEach(btn => {
-                            btn.style.display = checkbox.checked ? '' : 'none';
+                            btn.style.display = checkbox.checked ? '' : 'inline-block';
                         });
                     }
                 };
@@ -3836,8 +3837,8 @@ document.addEventListener('DOMContentLoaded', () => {
             },
 
             async openDisputeModal() {
-                const uniqueProjectNames = new Set(this.state.projects.map(p => p.baseProjectName));
-                this.elements.disputeProjectName.innerHTML = '<option value="">Select Project</option>' + [...uniqueProjectNames].sort().map(name => `<option value="${name}">${name}</option>`).join('');
+                // Use the comprehensive list of all project names.
+                this.elements.disputeProjectName.innerHTML = '<option value="">Select Project</option>' + this.state.allUniqueProjectNames.map(name => `<option value="${name}">${name}</option>`).join('');
 
                 this.elements.disputeTechId.innerHTML = '<option value="">Select Tech ID</option>' + this.state.users.map(user => `<option value="${user.techId}" data-name="${user.name}">${user.techId}</option>`).join('');
 
