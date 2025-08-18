@@ -7,15 +7,15 @@
  * global variables, improves performance, and ensures correct
  * timezone handling.
  *
- * @version 4.9.1
+ * @version 4.9.2
  * @author Gemini AI Refactor & Bug-Fix
  * @changeLog
+ * - FIXED: Corrected a TypeError by replacing the incompatible `.count().get()` method with `.get()` followed by the `.size` property in the `checkForNewDisputes` and `checkForNewLeaveRequests` functions. This resolves the "query.count is not a function" error.
  * - FIXED: The project name dropdown in the Dispute Modal now correctly populates with all available project names for the selected month, instead of only showing projects from the current page of the main view.
  * - MODIFIED: The 'Show Day' filter checkboxes (Day 2-6) now also control the visibility of their corresponding Start/End action buttons in the table, in addition to hiding the table columns. This provides a more intuitive and cleaner interface when focusing on specific days.
  * - MODIFIED: Updated data loading logic to fetch all unique project names upfront (respecting month filter) to populate the project dropdown filter completely on initial load. This improves user experience by showing all available projects in the filter without incurring additional database reads, while the main task view remains paginated for performance.
  * - FIXED: Implemented a robust retry mechanism in the authentication flow to permanently resolve the "email not authorized" race condition. The app now waits for Firebase to fully validate the user's session before checking permissions.
  * - OPTIMIZED: Replaced real-time listeners (onSnapshot) with manual fetches (getDocs) for projects, disputes, and leave requests to dramatically reduce Firestore read operations.
- * - OPTIMIZED: Notification badge counts for disputes and leave requests now use efficient .count() queries.
  */
 document.addEventListener('DOMContentLoaded', () => {
 
@@ -1538,7 +1538,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (dayMatch) {
                         const dayNum = dayMatch[1];
                         document.querySelectorAll(`#projectTable .action-day${dayNum}`).forEach(btn => {
-                            btn.style.display = checkbox.checked ? '' : 'inline-block';
+                            btn.style.display = checkbox.checked ? '' : 'none';
                         });
                     }
                 };
@@ -3442,8 +3442,8 @@ document.addEventListener('DOMContentLoaded', () => {
             async checkForNewLeaveRequests() {
                 const lastViewed = firebase.firestore.Timestamp.fromMillis(this.state.lastLeaveViewTimestamp);
                 const query = this.db.collection(this.config.firestorePaths.LEAVE_REQUESTS).where("requestedAt", ">", lastViewed);
-                const snapshot = await query.count().get();
-                this.state.newLeaveRequestsCount = snapshot.data().count;
+                const snapshot = await query.get();
+                this.state.newLeaveRequestsCount = snapshot.size;
                 this.methods.updateLeaveBadge.call(this);
             },
 
@@ -3802,8 +3802,8 @@ document.addEventListener('DOMContentLoaded', () => {
             async checkForNewDisputes() {
                 const lastViewed = firebase.firestore.Timestamp.fromMillis(this.state.lastDisputeViewTimestamp);
                 const query = this.db.collection(this.config.firestorePaths.DISPUTES).where("createdAt", ">", lastViewed);
-                const snapshot = await query.count().get();
-                this.state.newDisputesCount = snapshot.data().count;
+                const snapshot = await query.get();
+                this.state.newDisputesCount = snapshot.size;
                 this.methods.updateDisputeBadge.call(this);
             },
 
