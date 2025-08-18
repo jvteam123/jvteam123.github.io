@@ -7,9 +7,10 @@
  * global variables, improves performance, and ensures correct
  * timezone handling.
  *
- * @version 4.8.0
+ * @version 4.9.0
  * @author Gemini AI Refactor & Bug-Fix
  * @changeLog
+ * - MODIFIED: The 'Show Day' filter checkboxes (Day 2-6) now also control the visibility of their corresponding Start/End action buttons in the table, in addition to hiding the table columns. This provides a more intuitive and cleaner interface when focusing on specific days.
  * - MODIFIED: Updated data loading logic to fetch all unique project names upfront (respecting month filter) to populate the project dropdown filter completely on initial load. This improves user experience by showing all available projects in the filter without incurring additional database reads, while the main task view remains paginated for performance.
  * - FIXED: Implemented a robust retry mechanism in the authentication flow to permanently resolve the "email not authorized" race condition. The app now waits for Firebase to fully validate the user's session before checking permissions.
  * - OPTIMIZED: Replaced real-time listeners (onSnapshot) with manual fetches (getDocs) for projects, disputes, and leave requests to dramatically reduce Firestore read operations.
@@ -1390,10 +1391,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     const actionButtonsDiv = document.createElement('div');
                     actionButtonsDiv.className = 'action-buttons-container';
 
-                    const createActionButton = (text, className, disabled, action) => {
+                    const createActionButton = (text, className, disabled, action, dayClass = '') => {
                         const button = document.createElement('button');
                         button.textContent = text;
-                        button.className = `btn ${className}`;
+                        button.className = `btn ${className} ${dayClass}`;
                         button.disabled = project.status === "Reassigned_TechAbsent" || disabled || project.isLocked;
                         button.onclick = () => this.methods.updateProjectState.call(this, project.id, action);
                         return button;
@@ -1401,22 +1402,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     actionButtonsDiv.appendChild(createActionButton("Start D1", "btn-day-start", project.status !== "Available", "startDay1"));
                     actionButtonsDiv.appendChild(createActionButton("End D1", "btn-day-end", project.status !== "InProgressDay1", "endDay1"));
-                    actionButtonsDiv.appendChild(createActionButton("Start D2", "btn-day-start", project.status !== "Day1Ended_AwaitingNext", "startDay2"));
-                    actionButtonsDiv.appendChild(createActionButton("End D2", "btn-day-end", project.status !== "InProgressDay2", "endDay2"));
-                    actionButtonsDiv.appendChild(createActionButton("Start D3", "btn-day-start", project.status !== "Day2Ended_AwaitingNext", "startDay3"));
-                    actionButtonsDiv.appendChild(createActionButton("End D3", "btn-day-end", project.status !== "InProgressDay3", "endDay3"));
-                    actionButtonsDiv.appendChild(createActionButton("Start D4", "btn-day-start", project.status !== "Day3Ended_AwaitingNext", "startDay4"));
-                    actionButtonsDiv.appendChild(createActionButton("End D4", "btn-day-end", project.status !== "InProgressDay4", "endDay4"));
-                    actionButtonsDiv.appendChild(createActionButton("Start D5", "btn-day-start", project.status !== "Day4Ended_AwaitingNext", "startDay5"));
-                    actionButtonsDiv.appendChild(createActionButton("End D5", "btn-day-end", project.status !== "InProgressDay5", "endDay5"));
-                    actionButtonsDiv.appendChild(createActionButton("Start D6", "btn-day-start", project.status !== "Day5Ended_AwaitingNext", "startDay6"));
-                    actionButtonsDiv.appendChild(createActionButton("End D6", "btn-day-end", project.status !== "InProgressDay6", "endDay6"));
+                    actionButtonsDiv.appendChild(createActionButton("Start D2", "btn-day-start", project.status !== "Day1Ended_AwaitingNext", "startDay2", "action-day2"));
+                    actionButtonsDiv.appendChild(createActionButton("End D2", "btn-day-end", project.status !== "InProgressDay2", "endDay2", "action-day2"));
+                    actionButtonsDiv.appendChild(createActionButton("Start D3", "btn-day-start", project.status !== "Day2Ended_AwaitingNext", "startDay3", "action-day3"));
+                    actionButtonsDiv.appendChild(createActionButton("End D3", "btn-day-end", project.status !== "InProgressDay3", "endDay3", "action-day3"));
+                    actionButtonsDiv.appendChild(createActionButton("Start D4", "btn-day-start", project.status !== "Day3Ended_AwaitingNext", "startDay4", "action-day4"));
+                    actionButtonsDiv.appendChild(createActionButton("End D4", "btn-day-end", project.status !== "InProgressDay4", "endDay4", "action-day4"));
+                    actionButtonsDiv.appendChild(createActionButton("Start D5", "btn-day-start", project.status !== "Day4Ended_AwaitingNext", "startDay5", "action-day5"));
+                    actionButtonsDiv.appendChild(createActionButton("End D5", "btn-day-end", project.status !== "InProgressDay5", "endDay5", "action-day5"));
+                    actionButtonsDiv.appendChild(createActionButton("Start D6", "btn-day-start", project.status !== "Day5Ended_AwaitingNext", "startDay6", "action-day6"));
+                    actionButtonsDiv.appendChild(createActionButton("End D6", "btn-day-end", project.status !== "InProgressDay6", "endDay6", "action-day6"));
 
                     const doneButtonDisabled = project.status === "Completed" || project.status === "Reassigned_TechAbsent" || (project.status === "Available" && !(project.durationDay1Ms || project.durationDay2Ms || project.durationDay3Ms || project.durationDay4Ms || project.durationDay5Ms || project.durationDay6Ms));
                     actionButtonsDiv.appendChild(createActionButton("Done", "btn-mark-done", doneButtonDisabled, "markDone"));
 
-
-                    const resetBtn = createActionButton("Reset", "btn-secondary", project.status === "Available" , "reset");
+                    const resetBtn = createActionButton("Reset", "btn-secondary", project.status === "Available", "reset");
                     resetBtn.onclick = () => this.methods.handleResetTask.call(this, project);
                     actionButtonsDiv.appendChild(resetBtn);
 
@@ -1527,7 +1527,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
             applyColumnVisibility() {
                 const toggleVisibility = (className, checkbox) => {
-                    document.querySelectorAll(`#projectTable .${className}`).forEach(el => el.classList.toggle('column-hidden', !checkbox.checked));
+                    // Hide/show table columns (th and td)
+                    document.querySelectorAll(`#projectTable .${className}`).forEach(el => {
+                        el.classList.toggle('column-hidden', !checkbox.checked);
+                    });
+
+                    // Hide/show corresponding action buttons
+                    const dayMatch = className.match(/day(\d)/);
+                    if (dayMatch) {
+                        const dayNum = dayMatch[1];
+                        document.querySelectorAll(`#projectTable .action-day${dayNum}`).forEach(btn => {
+                            btn.style.display = checkbox.checked ? '' : 'none';
+                        });
+                    }
                 };
 
                 toggleVisibility('column-project-name', this.elements.toggleTitleCheckbox);
