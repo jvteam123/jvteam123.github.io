@@ -371,6 +371,7 @@
             return {
                 id: '', points: 0, fixTasks: 0, refixTasks: 0, warnings: [],
                 refixDetails: [],
+                missedCategories: [],
                 categoryCounts: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0, 8: 0, 9: 0 },
                 pointsBreakdown: { fix: 0, qc: 0, i3qa: 0, rv: 0 }
             };
@@ -795,6 +796,7 @@
                             combined.refixTasks += single.refixTasks;
                             combined.warnings.push(...single.warnings);
                             combined.refixDetails.push(...single.refixDetails);
+                            combined.missedCategories.push(...single.missedCategories);
                             for (let i = 1; i <= 9; i++) combined.categoryCounts[i] += single.categoryCounts[i];
                             for (const type in single.pointsBreakdown) combined.pointsBreakdown[type] += single.pointsBreakdown[type];
                         }
@@ -1056,6 +1058,35 @@
                                     if (colName === 'fix1_id') {
                                         techStats[techId].fixTasks += 1;
                                         let totalRowFixPoints = 0;
+                                        
+                                        if (!techStats[techId].missedCategories) {
+                                            techStats[techId].missedCategories = [];
+                                        }
+
+                                        ['rv1', 'rv2', 'rv3'].forEach(rv => {
+                                            const labelIndex = headerMap[`${rv}_label`];
+                                            const catIndex = headerMap[`${rv}_cat`];
+                                            if (labelIndex !== undefined && catIndex !== undefined) {
+                                                const labelValue = values[labelIndex]?.trim().toUpperCase();
+                                                if (labelValue && labelValue.includes('M')) {
+                                                    const categoryValue = parseInt(values[catIndex]);
+                                                    if (!isNaN(categoryValue) && categoryValue >= 1 && categoryValue <= 9) {
+                                                        const catPoints = categoryValues[categoryValue]?.[gsdForCalculation] || categoryValues[categoryValue]?.["3in"] || 0;
+                                                        if (techStats[techId].categoryCounts[categoryValue] !== undefined) {
+                                                            techStats[techId].categoryCounts[categoryValue]++;
+                                                        }
+                                                        if (catPoints) {
+                                                            totalRowFixPoints += catPoints;
+                                                        }
+                                                        techStats[techId].missedCategories.push({
+                                                            round: rv.toUpperCase(),
+                                                            category: categoryValue,
+                                                            project: currentProjectName
+                                                        });
+                                                    }
+                                                }
+                                            }
+                                        });
                                         
                                         const i3qaCatIndex = headerMap['i3qa_cat'];
                                         const i3qaLabelIndex = headerMap['i3qa_label'];
@@ -1338,6 +1369,10 @@
             let refixDetailHtml = tech.refixDetails.length > 0
                 ? `<ul class="list-disc list-inside text-xs text-gray-700 mt-1 space-y-0.5">${tech.refixDetails.map(r => `<li>Task: <span class="font-mono font-semibold">${r.round}</span> <span class="font-semibold text-red-600">(Cat: ${r.category})</span> (Project: ${r.project})</li>`).join('')}</ul>`
                 : `<p class="text-xs text-gray-500 italic mt-1 pl-4">No refixes recorded.</p>`;
+            
+            let missesDetailHtml = tech.missedCategories.length > 0
+                ? `<ul class="list-disc list-inside text-xs text-gray-700 mt-1 space-y-0.5">${tech.missedCategories.map(m => `<li>Task: <span class="font-mono font-semibold">${m.round}</span> <span class="font-semibold text-orange-600">(Cat: ${m.category})</span> (Project: ${m.project})</li>`).join('')}</ul>`
+                : `<p class="text-xs text-gray-500 italic mt-1 pl-4">No misses recorded.</p>`;
 
             const bodyHtml = `<div class="space-y-4 text-sm">
                 <div class="p-3 bg-gray-50 rounded-lg border">
@@ -1345,6 +1380,8 @@
                     <div class="flex justify-between"><span class="text-gray-600">Primary Fix Tasks:</span><span class="font-bold">${tech.fixTasks}</span></div>
                     <div class="flex justify-between"><span class="text-gray-600">Refix Tasks:</span><span class="font-bold">${tech.refixTasks}</span></div>
                     ${refixDetailHtml}
+                    <div class="flex justify-between mt-2"><span class="text-gray-600">Misses (M):</span><span class="font-bold text-orange-600">${tech.missedCategories.length}</span></div>
+                    ${missesDetailHtml}
                     <div class="flex justify-between mt-2"><span class="text-gray-600">Warnings:</span><span class="font-bold text-red-600">${tech.warnings.length}</span></div>
                     ${warningsDetailHtml}
                     <details class="mt-2 text-xs">
