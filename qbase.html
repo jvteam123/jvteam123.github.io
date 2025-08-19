@@ -1016,14 +1016,13 @@
                                     techStats[techId].points += catPoints;
                                     techStats[techId].pointsBreakdown.fix += catPoints;
                                     techStats[techId].fixTasks += 1; 
+                                    techStats[techId].categoryCounts[categoryValue]++;
                                     
-                                    if(check.round.toLowerCase() !== 'i3qa'){
-                                        techStats[techId].missedCategories.push({
-                                            round: check.round.toUpperCase(),
-                                            category: categoryValue,
-                                            project: currentProjectName
-                                        });
-                                    }
+                                    techStats[techId].missedCategories.push({
+                                        round: check.round.toUpperCase(),
+                                        category: categoryValue,
+                                        project: currentProjectName
+                                    });
                                 }
                             }
                         }
