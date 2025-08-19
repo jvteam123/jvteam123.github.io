@@ -1040,6 +1040,8 @@
                                     
                                     techStats[techId].points += catPoints;
                                     techStats[techId].pointsBreakdown.fix += catPoints;
+                                    techStats[techId].fixTasks += 1; 
+                                    
                                     techStats[techId].missedCategories.push({
                                         round: check.round.toUpperCase(),
                                         category: categoryValue,
