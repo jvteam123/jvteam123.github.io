@@ -968,43 +968,34 @@
                 totalRows: lines.length,
                 comboTasks: 0
             };
-            const rv1CatIndex = headerMap['rv1_cat'];
-            const rv2CatIndex = headerMap['rv2_cat'];
-            const rv3CatIndex = headerMap['rv3_cat'];
-            const rv3TechSourceIndex = headerMap['fix4_id'];
-            const rv4CatIndex = headerMap['rv4_cat'];
-            const comboIndex = headerMap['combo?'];
 
-            const baseCategoryHeaders = ['category', 'rv1_cat', 'rv2_cat'];
             const techIdCols = headers.filter(h => h.endsWith('_id'));
             const warnCols = headers.filter(h => h.startsWith('r') && h.endsWith('_warn'));
-            
-            const afp1StatIndex = headerMap['afp1_stat'];
-            const afp1CatIndex = headerMap['afp1_cat'];
-            const afp2StatIndex = headerMap['afp2_stat'];
-            const afp2CatIndex = headerMap['afp2_cat'];
 
             lines.forEach(line => {
                 const values = line.split(delimiter);
                 const isComboIR = values[headerMap['combo?']] === 'Y';
                 
-                if (comboIndex !== undefined && values[comboIndex]?.trim().toUpperCase() === 'Y') {
+                if (headerMap['combo?'] !== undefined && values[headerMap['combo?']]?.trim().toUpperCase() === 'Y') {
                     summaryStats.comboTasks++;
                 }
 
-                const processSimpleRvCat = (index, countsObject) => {
-                    if (index !== undefined) {
-                        const catValue = values[index]?.trim();
+                const processSimpleRvCat = (catHeader, countsObject) => {
+                    const catIndex = headerMap[catHeader];
+                    if (catIndex !== undefined) {
+                        const catValue = values[catIndex]?.trim();
                         if (catValue && !isNaN(catValue) && catValue >= 1 && catValue <= 9) {
                             countsObject[catValue] = (countsObject[catValue] || 0) + 1;
                         }
                     }
                 };
 
-                processSimpleRvCat(rv1CatIndex, summaryStats.rv1CatCounts);
-                processSimpleRvCat(rv2CatIndex, summaryStats.rv2CatCounts);
-                processSimpleRvCat(rv4CatIndex, summaryStats.rv4CatCounts);
+                processSimpleRvCat('rv1_cat', summaryStats.rv1CatCounts);
+                processSimpleRvCat('rv2_cat', summaryStats.rv2CatCounts);
+                processSimpleRvCat('rv4_cat', summaryStats.rv4CatCounts);
                 
+                const rv3CatIndex = headerMap['rv3_cat'];
+                const rv3TechSourceIndex = headerMap['fix4_id'];
                 if (rv3CatIndex !== undefined && rv3TechSourceIndex !== undefined) {
                     const catValue = values[rv3CatIndex]?.trim();
                     const techId = values[rv3TechSourceIndex]?.trim();
@@ -1017,16 +1008,52 @@
                         techCounts[techId] = (techCounts[techId] || 0) + 1;
                     }
                 }
+                
+                const allTechsInRow = new Set(techIdCols.map(col => values[headerMap[col]]?.trim()).filter(Boolean));
+                allTechsInRow.forEach(techId => {
+                    if (!techStats[techId]) {
+                        techStats[techId] = createNewTechStat();
+                        techStats[techId].id = techId;
+                    }
+                });
 
+                const missChecks = [
+                    { label: 'i3qa_label', cat: 'i3qa_cat', fixId: 'fix1_id', round: 'i3qa' },
+                    { label: 'rv1_label', cat: 'rv1_cat', fixId: 'fix2_id', round: 'RV1' },
+                    { label: 'rv2_label', cat: 'rv2_cat', fixId: 'fix3_id', round: 'RV2' },
+                    { label: 'rv3_label', cat: 'rv3_cat', fixId: 'fix4_id', round: 'RV3' },
+                ];
 
+                missChecks.forEach(check => {
+                    const labelIndex = headerMap[check.label];
+                    const catIndex = headerMap[check.cat];
+                    const fixIdIndex = headerMap[check.fixId];
+
+                    if (labelIndex !== undefined && catIndex !== undefined && fixIdIndex !== undefined) {
+                        const labelValue = values[labelIndex]?.trim().toUpperCase();
+                        if (labelValue && labelValue.includes('M')) {
+                            const techId = values[fixIdIndex]?.trim();
+                            if (techId && techStats[techId]) {
+                                const categoryValue = parseInt(values[catIndex]);
+                                if (!isNaN(categoryValue) && categoryValue >= 1 && categoryValue <= 9) {
+                                    const catPoints = categoryValues[categoryValue]?.[gsdForCalculation] || categoryValues[categoryValue]?.["3in"] || 0;
+                                    
+                                    techStats[techId].points += catPoints;
+                                    techStats[techId].pointsBreakdown.fix += catPoints;
+                                    techStats[techId].missedCategories.push({
+                                        round: check.round.toUpperCase(),
+                                        category: categoryValue,
+                                        project: currentProjectName
+                                    });
+                                }
+                            }
+                        }
+                    }
+                });
+                
                 techIdCols.forEach(colName => {
                     const techId = values[headerMap[colName]]?.trim();
                     if (techId) {
-                        if (!techStats[techId]) {
-                            techStats[techId] = createNewTechStat();
-                            techStats[techId].id = techId;
-                        }
-                        
                         let points = 0;
                         if (colName.startsWith('fix')) {
                             const roundMatch = colName.match(/\d+/);
@@ -1059,50 +1086,7 @@
                                         techStats[techId].fixTasks += 1;
                                         let totalRowFixPoints = 0;
                                         
-                                        if (!techStats[techId].missedCategories) {
-                                            techStats[techId].missedCategories = [];
-                                        }
-
-                                        ['rv1', 'rv2', 'rv3'].forEach(rv => {
-                                            const labelIndex = headerMap[`${rv}_label`];
-                                            const catIndex = headerMap[`${rv}_cat`];
-                                            if (labelIndex !== undefined && catIndex !== undefined) {
-                                                const labelValue = values[labelIndex]?.trim().toUpperCase();
-                                                if (labelValue && labelValue.includes('M')) {
-                                                    const categoryValue = parseInt(values[catIndex]);
-                                                    if (!isNaN(categoryValue) && categoryValue >= 1 && categoryValue <= 9) {
-                                                        const catPoints = categoryValues[categoryValue]?.[gsdForCalculation] || categoryValues[categoryValue]?.["3in"] || 0;
-                                                        if (techStats[techId].categoryCounts[categoryValue] !== undefined) {
-                                                            techStats[techId].categoryCounts[categoryValue]++;
-                                                        }
-                                                        if (catPoints) {
-                                                            totalRowFixPoints += catPoints;
-                                                        }
-                                                        techStats[techId].missedCategories.push({
-                                                            round: rv.toUpperCase(),
-                                                            category: categoryValue,
-                                                            project: currentProjectName
-                                                        });
-                                                    }
-                                                }
-                                            }
-                                        });
-                                        
-                                        const i3qaCatIndex = headerMap['i3qa_cat'];
-                                        const i3qaLabelIndex = headerMap['i3qa_label'];
-                                        if (i3qaCatIndex !== undefined && i3qaLabelIndex !== undefined) {
-                                            const i3qaLabelValue = values[i3qaLabelIndex]?.trim().toUpperCase();
-                                            if (i3qaLabelValue && i3qaLabelValue.includes('M')) {
-                                                const categoryValue = parseInt(values[i3qaCatIndex]);
-                                                if (!isNaN(categoryValue) && categoryValue >= 1 && categoryValue <= 9) {
-                                                    const catPoints = categoryValues[categoryValue]?.[gsdForCalculation] || categoryValues[categoryValue]?.["3in"] || 0;
-                                                    if (techStats[techId].categoryCounts[categoryValue] !== undefined) techStats[techId].categoryCounts[categoryValue]++;
-                                                    if (catPoints) totalRowFixPoints += catPoints;
-                                                }
-                                            }
-                                        }
-                                        
-                                        baseCategoryHeaders.forEach(catHeader => {
+                                        ['category', 'rv1_cat', 'rv2_cat'].forEach(catHeader => {
                                             if (headerMap[catHeader] !== undefined) {
                                                 const categoryValue = parseInt(values[headerMap[catHeader]]);
                                                 if (!isNaN(categoryValue) && categoryValue >= 1 && categoryValue <= 9) {
@@ -1113,30 +1097,25 @@
                                             }
                                         });
 
-                                        if (afp1StatIndex !== undefined && afp1CatIndex !== undefined && values[afp1StatIndex]?.trim().toUpperCase() === 'AA') {
-                                            const afp1CatValue = parseInt(values[afp1CatIndex]);
-                                            if (!isNaN(afp1CatValue) && afp1CatValue >= 1 && afp1CatValue <= 9) {
-                                                const catPoints = categoryValues[afp1CatValue]?.[gsdForCalculation] || categoryValues[afp1CatValue]?.["3in"] || 0;
-                                                if (techStats[techId].categoryCounts[afp1CatValue] !== undefined) techStats[techId].categoryCounts[afp1CatValue]++;
-                                                if (catPoints) totalRowFixPoints += catPoints;
+                                        ['afp1', 'afp2'].forEach(afp => {
+                                            const statIndex = headerMap[`${afp}_stat`];
+                                            const catIndex = headerMap[`${afp}_cat`];
+                                            if (statIndex !== undefined && catIndex !== undefined && values[statIndex]?.trim().toUpperCase() === 'AA') {
+                                                const catValue = parseInt(values[catIndex]);
+                                                if (!isNaN(catValue) && catValue >= 1 && catValue <= 9) {
+                                                    const catPoints = categoryValues[catValue]?.[gsdForCalculation] || categoryValues[catValue]?.["3in"] || 0;
+                                                    if (techStats[techId].categoryCounts[catValue] !== undefined) techStats[techId].categoryCounts[catValue]++;
+                                                    if (catPoints) totalRowFixPoints += catPoints;
+                                                }
                                             }
-                                        }
-                                        
-                                        if (afp2StatIndex !== undefined && afp2CatIndex !== undefined && values[afp2StatIndex]?.trim().toUpperCase() === 'AA') {
-                                            const afp2CatValue = parseInt(values[afp2CatIndex]);
-                                             if (!isNaN(afp2CatValue) && afp2CatValue >= 1 && afp2CatValue <= 9) {
-                                                const catPoints = categoryValues[afp2CatValue]?.[gsdForCalculation] || categoryValues[afp2CatValue]?.["3in"] || 0;
-                                                if (techStats[techId].categoryCounts[afp2CatValue] !== undefined) techStats[techId].categoryCounts[afp2CatValue]++;
-                                                if (catPoints) totalRowFixPoints += catPoints;
-                                            }
-                                        }
+                                        });
 
                                         if (isFixTaskIR && totalRowFixPoints > 0) {
                                             totalRowFixPoints *= irModifierValue;
                                         }
 
+                                        techStats[techId].points += totalRowFixPoints;
                                         techStats[techId].pointsBreakdown.fix += totalRowFixPoints;
-                                        points += totalRowFixPoints;
                                     }
                                 }
                             }
