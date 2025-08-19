@@ -372,6 +372,8 @@
                 id: '', points: 0, fixTasks: 0, refixTasks: 0, warnings: [],
                 refixDetails: [],
                 missedCategories: [],
+                approvedByRQA: [],
+                approvedByRQACategoryCounts: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0, 8: 0, 9: 0 },
                 categoryCounts: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0, 8: 0, 9: 0 },
                 pointsBreakdown: { fix: 0, qc: 0, i3qa: 0, rv: 0 }
             };
@@ -797,7 +799,11 @@
                             combined.warnings.push(...single.warnings);
                             combined.refixDetails.push(...single.refixDetails);
                             combined.missedCategories.push(...single.missedCategories);
-                            for (let i = 1; i <= 9; i++) combined.categoryCounts[i] += single.categoryCounts[i];
+                            combined.approvedByRQA.push(...single.approvedByRQA);
+                            for (let i = 1; i <= 9; i++) {
+                                combined.categoryCounts[i] += single.categoryCounts[i];
+                                combined.approvedByRQACategoryCounts[i] += single.approvedByRQACategoryCounts[i];
+                            }
                             for (const type in single.pointsBreakdown) combined.pointsBreakdown[type] += single.pointsBreakdown[type];
                         }
                         combinedSummaryStats.totalRows += parsedData.summaryStats.totalRows;
@@ -1126,6 +1132,15 @@
                                                     const catPoints = categoryValues[catValue]?.[gsdForCalculation] || categoryValues[catValue]?.["3in"] || 0;
                                                     if (techStats[techId].categoryCounts[catValue] !== undefined) techStats[techId].categoryCounts[catValue]++;
                                                     if (catPoints) totalRowFixPoints += catPoints;
+                                                    
+                                                    if (techStats[techId].approvedByRQACategoryCounts[catValue] !== undefined) {
+                                                        techStats[techId].approvedByRQACategoryCounts[catValue]++;
+                                                    }
+                                                    techStats[techId].approvedByRQA.push({
+                                                        round: afp.toUpperCase(),
+                                                        category: catValue,
+                                                        project: currentProjectName
+                                                    });
                                                 }
                                             }
                                         });
@@ -1352,6 +1367,19 @@
                 ? `<ul class="list-disc list-inside text-xs text-gray-700 mt-1 space-y-0.5">${visibleMisses.map(m => `<li>Task: <span class="font-mono font-semibold">${m.round}</span> <span class="font-semibold text-orange-600">(Cat: ${m.category})</span> (Project: ${m.project})</li>`).join('')}</ul>`
                 : `<p class="text-xs text-gray-500 italic mt-1 pl-4">No misses recorded.</p>`;
 
+            let approvedByRQACount = tech.approvedByRQA.length;
+            let approvedByRQADetailHtml = approvedByRQACount > 0
+                ? `<ul class="list-disc list-inside text-xs text-gray-700 mt-1 space-y-0.5">${tech.approvedByRQA.map(a => `<li>Task: <span class="font-mono font-semibold">${a.round}</span> <span class="font-semibold text-green-600">(Cat: ${a.category})</span> (Project: ${a.project})</li>`).join('')}</ul>`
+                : `<p class="text-xs text-gray-500 italic mt-1 pl-4">No tasks approved by RQA recorded.</p>`;
+
+            let approvedCategoryHtml = '';
+            for (let i = 1; i <= 9; i++) {
+                if (tech.approvedByRQACategoryCounts[i] > 0) {
+                     approvedCategoryHtml += `<li class="flex justify-between"><span>Category ${i}:</span> <span class="font-mono">${tech.approvedByRQACategoryCounts[i]}</span></li>`;
+                }
+            }
+            if (!approvedCategoryHtml) approvedCategoryHtml = '<li>No approved tasks recorded.</li>';
+
             const bodyHtml = `<div class="space-y-4 text-sm">
                 <div class="p-3 bg-gray-50 rounded-lg border">
                     <h4 class="font-semibold text-base text-gray-800 mb-2">Core Stats</h4>
@@ -1360,11 +1388,17 @@
                     ${refixDetailHtml}
                     <div class="flex justify-between mt-2"><span class="text-gray-600">Misses (M):</span><span class="font-bold text-orange-600">${visibleMisses.length}</span></div>
                     ${missesDetailHtml}
+                    <div class="flex justify-between mt-2"><span class="text-gray-600">Approved by RQA (AA):</span><span class="font-bold text-green-600">${approvedByRQACount}</span></div>
+                    ${approvedByRQADetailHtml}
                     <div class="flex justify-between mt-2"><span class="text-gray-600">Warnings:</span><span class="font-bold text-red-600">${tech.warnings.length}</span></div>
                     ${warningsDetailHtml}
                     <details class="mt-2 text-xs">
-                        <summary class="cursor-pointer font-medium text-gray-500">Show Category Counts</summary>
+                        <summary class="cursor-pointer font-medium text-gray-500">Show Primary Fix Category Counts</summary>
                         <ul class="list-disc list-inside mt-1 space-y-1 pl-2">${categoryHtml}</ul>
+                    </details>
+                    <details class="mt-2 text-xs">
+                        <summary class="cursor-pointer font-medium text-gray-500">Show Approved by RQA Category Counts</summary>
+                        <ul class="list-disc list-inside mt-1 space-y-1 pl-2">${approvedCategoryHtml}</ul>
                     </details>
                 </div>
                 <div class="p-3 bg-gray-50 rounded-lg border">
