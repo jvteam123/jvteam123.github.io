@@ -357,6 +357,24 @@
                         <div>
                             <h4 class="text-lg font-bold text-gray-900 mb-2">How The Calculation Works</h4>
                             <p>The calculation logic is based on the data from the selected project(s) and follows the "Phili IC Fixpoints App Documentation v1.0".</p>
+                            
+                            <h5 class="text-md font-semibold text-gray-800 mt-4 mb-1">Primary Fix Category Counts</h5>
+                            <p>This is a count of all categories handled by a technician. It is calculated by checking the following columns in your raw data:</p>
+                            <ul class="list-disc list-inside pl-4 text-xs font-mono">
+                                <li><code>category</code></li>
+                                <li><code>rv1_cat</code></li>
+                                <li><code>rv2_cat</code></li>
+                                <li><code>afp1_cat</code> (only if <code>afp1_stat</code> is "AA")</li>
+                                <li><code>afp2_cat</code> (only if <code>afp2_stat</code> is "AA")</li>
+                            </ul>
+
+                            <h5 class="text-md font-semibold text-gray-800 mt-4 mb-1">Points from Fix Tasks Calculation</h5>
+                            <p>This is the sum of points a technician earns from all fix-related tasks. Points are calculated based on the categories found in these columns:</p>
+                             <ul class="list-disc list-inside pl-4 text-xs font-mono">
+                                <li><code>category</code>, <code>rv1_cat</code>, <code>rv2_cat</code> (These are always included for the main technician)</li>
+                                <li><code>afp1_cat</code>, <code>afp2_cat</code> (Points are only added if the corresponding <code>_stat</code> column is "AA" - Approved by RQA)</li>
+                                <li><code>rv1_cat</code>, <code>rv2_cat</code>, etc. (Points are also added if the corresponding <code>_label</code> column contains an "M" for Miss, credited to the technician who performed that fix)</li>
+                            </ul>
                         </div>
                        </div>`
             },
