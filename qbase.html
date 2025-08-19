@@ -1017,11 +1017,13 @@
                                     techStats[techId].pointsBreakdown.fix += catPoints;
                                     techStats[techId].fixTasks += 1; 
                                     
-                                    techStats[techId].missedCategories.push({
-                                        round: check.round.toUpperCase(),
-                                        category: categoryValue,
-                                        project: currentProjectName
-                                    });
+                                    if(check.round.toLowerCase() !== 'i3qa'){
+                                        techStats[techId].missedCategories.push({
+                                            round: check.round.toUpperCase(),
+                                            category: categoryValue,
+                                            project: currentProjectName
+                                        });
+                                    }
                                 }
                             }
                         }
@@ -1290,8 +1292,9 @@
                 ? `<ul class="list-disc list-inside text-xs text-gray-700 mt-1 space-y-0.5">${tech.refixDetails.map(r => `<li>Task: <span class="font-mono font-semibold">${r.round}</span> <span class="font-semibold text-red-600">(Cat: ${r.category})</span> (Project: ${r.project})</li>`).join('')}</ul>`
                 : `<p class="text-xs text-gray-500 italic mt-1 pl-4">No refixes recorded.</p>`;
             
-            let missesDetailHtml = tech.missedCategories.filter(m => m.round.toLowerCase() !== 'i3qa').length > 0
-                ? `<ul class="list-disc list-inside text-xs text-gray-700 mt-1 space-y-0.5">${tech.missedCategories.filter(m => m.round.toLowerCase() !== 'i3qa').map(m => `<li>Task: <span class="font-mono font-semibold">${m.round}</span> <span class="font-semibold text-orange-600">(Cat: ${m.category})</span> (Project: ${m.project})</li>`).join('')}</ul>`
+            const visibleMisses = tech.missedCategories.filter(m => m.round.toLowerCase() !== 'i3qa');
+            let missesDetailHtml = visibleMisses.length > 0
+                ? `<ul class="list-disc list-inside text-xs text-gray-700 mt-1 space-y-0.5">${visibleMisses.map(m => `<li>Task: <span class="font-mono font-semibold">${m.round}</span> <span class="font-semibold text-orange-600">(Cat: ${m.category})</span> (Project: ${m.project})</li>`).join('')}</ul>`
                 : `<p class="text-xs text-gray-500 italic mt-1 pl-4">No misses recorded.</p>`;
 
             const bodyHtml = `<div class="space-y-4 text-sm">
@@ -1300,7 +1303,7 @@
                     <div class="flex justify-between"><span class="text-gray-600">Primary Fix Tasks:</span><span class="font-bold">${tech.fixTasks}</span></div>
                     <div class="flex justify-between"><span class="text-gray-600">Refix Tasks:</span><span class="font-bold">${tech.refixTasks}</span></div>
                     ${refixDetailHtml}
-                    <div class="flex justify-between mt-2"><span class="text-gray-600">Misses (M):</span><span class="font-bold text-orange-600">${tech.missedCategories.length}</span></div>
+                    <div class="flex justify-between mt-2"><span class="text-gray-600">Misses (M):</span><span class="font-bold text-orange-600">${visibleMisses.length}</span></div>
                     ${missesDetailHtml}
                     <div class="flex justify-between mt-2"><span class="text-gray-600">Warnings:</span><span class="font-bold text-red-600">${tech.warnings.length}</span></div>
                     ${warningsDetailHtml}
