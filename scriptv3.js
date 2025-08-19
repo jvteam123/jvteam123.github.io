@@ -7,11 +7,9 @@
  * global variables, improves performance, and ensures correct
  * timezone handling.
  *
- * @version 4.9.3
+ * @version 4.9.2
  * @author Gemini AI Refactor & Bug-Fix
  * @changeLog
- * - ADDED: Fix task calculation now checks rv1_label, rv2_label, and rv3_label for "M" and counts the corresponding category.
- * - ADDED: Tech detailed view now shows how many "Miss" tasks have been counted and what category they were.
  * - FIXED: Corrected a TypeError by replacing the incompatible `.count().get()` method with `.get()` followed by the `.size` property in the `checkForNewDisputes` and `checkForNewLeaveRequests` functions. This resolves the "query.count is not a function" error.
  * - FIXED: The project name dropdown in the Dispute Modal now correctly populates with all available project names for the selected month, instead of only showing projects from the current page of the main view.
  * - MODIFIED: The 'Show Day' filter checkboxes (Day 2-6) now also control the visibility of their corresponding Start/End action buttons in the table, in addition to hiding the table columns. This provides a more intuitive and cleaner interface when focusing on specific days.
