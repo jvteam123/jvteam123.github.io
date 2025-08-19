@@ -775,7 +775,7 @@
                 resultsTitleEl.textContent = `${titleText} - Bonus Results ${isMultiplierUsed ? `(Multiplier: ${bonusMultiplier})` : ''}`;
                 
                 let combinedTechStats = {};
-                let combinedSummaryStats = { allCategoryCounts: {}, totalRows: 0, comboTasks: 0 };
+                let combinedSummaryStats = { allCategoryCounts: {}, totalRows: 0, comboTasks: 0, rv1CatCounts: {}, rv2CatCounts: {}, rv3CatCounts: {}, rv4CatCounts: {} };
                 const corruptedProjects = []; 
                 
                 projectsToCalc.forEach(project => {
@@ -805,6 +805,17 @@
                         for (const cat in parsedData.summaryStats.allCategoryCounts) {
                             combinedSummaryStats.allCategoryCounts[cat] = (combinedSummaryStats.allCategoryCounts[cat] || 0) + parsedData.summaryStats.allCategoryCounts[cat];
                         }
+                        for (const cat in parsedData.summaryStats.rv1CatCounts) combinedSummaryStats.rv1CatCounts[cat] = (combinedSummaryStats.rv1CatCounts[cat] || 0) + parsedData.summaryStats.rv1CatCounts[cat];
+                        for (const cat in parsedData.summaryStats.rv2CatCounts) combinedSummaryStats.rv2CatCounts[cat] = (combinedSummaryStats.rv2CatCounts[cat] || 0) + parsedData.summaryStats.rv2CatCounts[cat];
+                        for (const cat in parsedData.summaryStats.rv3CatCounts) {
+                             if (!combinedSummaryStats.rv3CatCounts[cat]) combinedSummaryStats.rv3CatCounts[cat] = { total: 0, techs: {} };
+                             const combinedCat = combinedSummaryStats.rv3CatCounts[cat];
+                             const singleCat = parsedData.summaryStats.rv3CatCounts[cat];
+                             combinedCat.total += singleCat.total;
+                             for(const tech in singleCat.techs) combinedCat.techs[tech] = (combinedCat.techs[tech] || 0) + singleCat.techs[tech];
+                        }
+                        for (const cat in parsedData.summaryStats.rv4CatCounts) combinedSummaryStats.rv4CatCounts[cat] = (combinedSummaryStats.rv4CatCounts[cat] || 0) + parsedData.summaryStats.rv4CatCounts[cat];
+
                     }
                 });
 
@@ -900,7 +911,41 @@
         }
         
         function calculateQualityModifier(qualityRate) {
-            if (qualityRate >= 100) return 1.0;
+            if (qualityRate >= 100) return 1.20;
+            if (qualityRate >= 99.5) return 1.18;
+            if (qualityRate >= 99) return 1.16;
+            if (qualityRate >= 98.5) return 1.14;
+            if (qualityRate >= 98) return 1.12;
+            if (qualityRate >= 97.5) return 1.10;
+            if (qualityRate >= 97) return 1.08;
+            if (qualityRate >= 96.5) return 1.06;
+            if (qualityRate >= 96) return 1.04;
+            if (qualityRate >= 95.5) return 1.02;
+            if (qualityRate >= 95) return 1.00;
+            if (qualityRate >= 94.5) return 0.99;
+            if (qualityRate >= 94) return 0.98;
+            if (qualityRate >= 93.5) return 0.97;
+            if (qualityRate >= 93) return 0.96;
+            if (qualityRate >= 92.5) return 0.95;
+            if (qualityRate >= 92) return 0.94;
+            if (qualityRate >= 91.5) return 0.93;
+            if (qualityRate >= 91) return 0.91;
+            if (qualityRate >= 90.5) return 0.90;
+            if (qualityRate >= 90) return 0.88;
+            if (qualityRate >= 89.5) return 0.87;
+            if (qualityRate >= 89) return 0.85;
+            if (qualityRate >= 88.5) return 0.83;
+            if (qualityRate >= 88) return 0.80;
+            if (qualityRate >= 87.5) return 0.78;
+            if (qualityRate >= 87) return 0.75;
+            if (qualityRate >= 86.5) return 0.73;
+            if (qualityRate >= 86) return 0.70;
+            if (qualityRate >= 85.5) return 0.68;
+            if (qualityRate >= 85) return 0.66;
+            if (qualityRate >= 84.5) return 0.64;
+            if (qualityRate >= 84) return 0.62;
+            if (qualityRate >= 83.5) return 0.60;
+            if (qualityRate >= 83) return 0.57;
             if (qualityRate >= 82.5) return 0.55;
             if (qualityRate >= 82) return 0.50;
             if (qualityRate >= 81.5) return 0.45;
@@ -958,6 +1003,7 @@
             
             const summaryStats = {
                 allCategoryCounts: {},
+                rv1CatCounts: {}, rv2CatCounts: {}, rv3CatCounts: {}, rv4CatCounts: {},
                 totalRows: lines.length,
                 comboTasks: 0
             };
@@ -1140,7 +1186,7 @@
                 return;
             }
 
-            const createCategoryHtml = (title, counts) => {
+            const createSimpleCategoryHtml = (title, counts) => {
                 let html = `<details class="text-sm" open><summary class="cursor-pointer font-medium text-gray-700 mt-3">${title}</summary>`;
                 const sortedCats = Object.keys(counts).sort((a, b) => a - b);
 
@@ -1161,13 +1207,54 @@
                 return html;
             };
             
-            const categoryHtml = createCategoryHtml('All Error Category Counts', stats.allCategoryCounts);
+            const createRv3CategoryHtml = (title, counts) => {
+                let html = `<details class="text-sm" open><summary class="cursor-pointer font-medium text-gray-700 mt-3">${title}</summary>`;
+                const sortedCats = Object.keys(counts).sort((a, b) => a - b);
+
+                if (sortedCats.length > 0) {
+                    html += '<div class="mt-1 border rounded-md divide-y divide-gray-200">';
+                    sortedCats.forEach((cat, index) => {
+                        const catData = counts[cat];
+                        const bgColor = index % 2 === 0 ? 'bg-gray-50' : 'bg-white';
+
+                        const techEntries = Object.entries(catData.techs).sort((a,b) => a[0].localeCompare(b[0])).map(([techId, count]) =>
+                            `<li class="text-xs flex justify-between"><span>- ${techId}</span><span class="font-mono">${count}</span></li>`
+                        ).join('');
+
+                        html += `
+                            <details class="text-sm ${bgColor}" open>
+                                <summary class="p-2 cursor-pointer flex justify-between items-center">
+                                    <span class="text-gray-800">Category ${cat}:</span>
+                                    <span class="font-mono font-medium text-gray-900">${catData.total}</span>
+                                </summary>
+                                <div class="p-2 border-t border-gray-200">
+                                    <ul class="pl-4 text-gray-600 space-y-1">${techEntries}</ul>
+                                </div>
+                            </details>
+                        `;
+                    });
+                    html += '</div>';
+                } else {
+                    html += '<p class="text-gray-500 text-xs italic mt-1 pl-4">No entries found.</p>';
+                }
+                html += '</details>';
+                return html;
+            };
+            
+            const rv1Html = createSimpleCategoryHtml('RV1_CAT Counts', stats.rv1CatCounts);
+            const rv2Html = createSimpleCategoryHtml('RV2_CAT Counts', stats.rv2CatCounts);
+            const rv3Html = createRv3CategoryHtml('RV3_CAT Counts', stats.rv3CatCounts);
+            const rv4Html = createSimpleCategoryHtml('RV4_CAT Counts', stats.rv4CatCounts);
+
 
             content.innerHTML = `
                 <div class="flex justify-between"><span class="text-gray-600">Total Data Rows Parsed:</span><span class="font-bold">${stats.totalRows}</span></div>
                 <div class="flex justify-between"><span class="text-gray-600">"Combo?" (Y) Tasks:</span><span class="font-bold">${stats.comboTasks}</span></div>
                 <hr class="my-2">
-                ${categoryHtml}
+                ${rv1Html}
+                ${rv2Html}
+                ${rv3Html}
+                ${rv4Html}
             `;
             card.classList.add('visible');
         }
