@@ -775,7 +775,7 @@
                 resultsTitleEl.textContent = `${titleText} - Bonus Results ${isMultiplierUsed ? `(Multiplier: ${bonusMultiplier})` : ''}`;
                 
                 let combinedTechStats = {};
-                let combinedSummaryStats = { allCategoryCounts: {}, totalRows: 0, comboTasks: 0, rv1CatCounts: {}, rv2CatCounts: {}, rv3CatCounts: {}, rv4CatCounts: {} };
+                let combinedSummaryStats = { allCategoryCounts: {}, totalRows: 0, comboTasks: 0, rv1CatCounts: {}, rv2CatCounts: {}, rv3CatCounts: {}, rv4CatCounts: {}, totalIncorrect: 0, totalMiss: 0 };
                 const corruptedProjects = []; 
                 
                 projectsToCalc.forEach(project => {
@@ -802,6 +802,9 @@
                         }
                         combinedSummaryStats.totalRows += parsedData.summaryStats.totalRows;
                         combinedSummaryStats.comboTasks += parsedData.summaryStats.comboTasks;
+                        combinedSummaryStats.totalIncorrect += parsedData.summaryStats.totalIncorrect;
+                        combinedSummaryStats.totalMiss += parsedData.summaryStats.totalMiss;
+
                         for (const cat in parsedData.summaryStats.allCategoryCounts) {
                             combinedSummaryStats.allCategoryCounts[cat] = (combinedSummaryStats.allCategoryCounts[cat] || 0) + parsedData.summaryStats.allCategoryCounts[cat];
                         }
@@ -1002,10 +1005,11 @@
             }
             
             const summaryStats = {
-                allCategoryCounts: {},
                 rv1CatCounts: {}, rv2CatCounts: {}, rv3CatCounts: {}, rv4CatCounts: {},
                 totalRows: lines.length,
-                comboTasks: 0
+                comboTasks: 0,
+                totalIncorrect: 0,
+                totalMiss: 0,
             };
 
             const techIdCols = headers.filter(h => h.endsWith('_id'));
@@ -1019,16 +1023,6 @@
                 if (headerMap['combo?'] !== undefined && values[headerMap['combo?']]?.trim().toUpperCase() === 'Y') {
                     summaryStats.comboTasks++;
                 }
-
-                catCols.forEach(colName => {
-                    const catIndex = headerMap[colName];
-                    if (catIndex !== undefined) {
-                        const catValue = values[catIndex]?.trim();
-                        if (catValue && !isNaN(catValue) && catValue >= 1 && catValue <= 9) {
-                            summaryStats.allCategoryCounts[catValue] = (summaryStats.allCategoryCounts[catValue] || 0) + 1;
-                        }
-                    }
-                });
                 
                 const allTechsInRow = new Set(techIdCols.map(col => values[headerMap[col]]?.trim()).filter(Boolean));
                 allTechsInRow.forEach(techId => {
@@ -1053,6 +1047,7 @@
                     if (labelIndex !== undefined && catIndex !== undefined && fixIdIndex !== undefined) {
                         const labelValue = values[labelIndex]?.trim().toUpperCase();
                         if (labelValue && labelValue.includes('M')) {
+                            summaryStats.totalMiss++;
                             const techId = values[fixIdIndex]?.trim();
                             if (techId && techStats[techId]) {
                                 const categoryValue = parseInt(values[catIndex]);
@@ -1095,6 +1090,7 @@
                                 }
 
                                 if (isIncorrect) {
+                                    summaryStats.totalIncorrect++;
                                     const rvCatColName = `rv${round}_cat`;
                                     const rvCatIndex = headerMap[rvCatColName];
                                     const refixCategory = (rvCatIndex !== undefined && values[rvCatIndex]?.trim()) ? values[rvCatIndex].trim() : 'N/A';
@@ -1185,27 +1181,6 @@
                 card.classList.remove('visible');
                 return;
             }
-
-            const createSimpleCategoryHtml = (title, counts) => {
-                let html = `<details class="text-sm" open><summary class="cursor-pointer font-medium text-gray-700 mt-3">${title}</summary>`;
-                const sortedCats = Object.keys(counts).sort((a, b) => a - b);
-
-                if (sortedCats.length > 0) {
-                    html += '<div class="mt-1 border rounded-md divide-y divide-gray-200">';
-                    sortedCats.forEach((cat, index) => {
-                        const bgColor = index % 2 === 0 ? 'bg-gray-50' : 'bg-white';
-                        html += `<div class="p-2 flex justify-between items-center ${bgColor}">
-                                    <span class="text-gray-800">Category ${cat}:</span>
-                                    <span class="font-mono font-medium text-gray-900">${counts[cat]}</span>
-                                 </div>`;
-                    });
-                    html += '</div>';
-                } else {
-                    html += '<p class="text-gray-500 text-xs italic mt-1 pl-4">No entries found.</p>';
-                }
-                html += '</details>';
-                return html;
-            };
             
             const createRv3CategoryHtml = (title, counts) => {
                 let html = `<details class="text-sm" open><summary class="cursor-pointer font-medium text-gray-700 mt-3">${title}</summary>`;
@@ -1241,20 +1216,14 @@
                 return html;
             };
             
-            const rv1Html = createSimpleCategoryHtml('RV1_CAT Counts', stats.rv1CatCounts);
-            const rv2Html = createSimpleCategoryHtml('RV2_CAT Counts', stats.rv2CatCounts);
-            const rv3Html = createRv3CategoryHtml('RV3_CAT Counts', stats.rv3CatCounts);
-            const rv4Html = createSimpleCategoryHtml('RV4_CAT Counts', stats.rv4CatCounts);
-
+            const rv3Html = createRv3CategoryHtml('RV3_CAT / Fix4 Breakdown', stats.rv3CatCounts);
 
             content.innerHTML = `
                 <div class="flex justify-between"><span class="text-gray-600">Total Data Rows Parsed:</span><span class="font-bold">${stats.totalRows}</span></div>
-                <div class="flex justify-between"><span class="text-gray-600">"Combo?" (Y) Tasks:</span><span class="font-bold">${stats.comboTasks}</span></div>
+                <div class="flex justify-between"><span class="text-gray-600">Total Incorrect:</span><span class="font-bold text-red-600">${stats.totalIncorrect}</span></div>
+                <div class="flex justify-between"><span class="text-gray-600">Total Miss:</span><span class="font-bold text-orange-600">${stats.totalMiss}</span></div>
                 <hr class="my-2">
-                ${rv1Html}
-                ${rv2Html}
                 ${rv3Html}
-                ${rv4Html}
             `;
             card.classList.add('visible');
         }
