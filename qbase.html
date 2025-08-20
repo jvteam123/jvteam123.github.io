@@ -229,8 +229,8 @@
                         </div>
 
                         <div id="drop-zone">
-                            <label for="techData" class="block text-sm font-medium text-gray-600 mb-2">Paste your raw, tab-separated project data here, or drag & drop a shapefile .zip</label>
-                            <textarea id="techData" rows="10" class="w-full p-3 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none font-mono text-sm" placeholder="Paste data or drop file..."></textarea>
+                            <label for="techData" class="block text-sm font-medium text-gray-600 mb-2">Paste your raw, tab-separated project data here, or drag & drop all shapefile parts (.shp, .dbf, etc.)</label>
+                            <textarea id="techData" rows="10" class="w-full p-3 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none font-mono text-sm" placeholder="Paste data or drop files..."></textarea>
                         </div>
                     </div>
                     <div class="flex gap-4">
@@ -686,28 +686,42 @@
                 e.stopPropagation();
                 dropZone.classList.remove('drag-over');
 
-                const files = e.dataTransfer.files;
-                if (files.length !== 1) {
-                    alert("Please drop a single file.");
+                const files = Array.from(e.dataTransfer.files);
+                if (files.length === 0) return;
+
+                const shpFile = files.find(f => f.name.toLowerCase().endsWith('.shp'));
+                const dbfFile = files.find(f => f.name.toLowerCase().endsWith('.dbf'));
+
+                if (!shpFile || !dbfFile) {
+                    alert("Drop incomplete. Please make sure you drag and drop both the .shp and .dbf files together.");
                     return;
                 }
-                const file = files[0];
-                const fileName = file.name.toLowerCase();
 
-                const reader = new FileReader();
+                const shpReader = new FileReader();
+                const dbfReader = new FileReader();
 
-                reader.onload = async (event) => {
-                    const arrayBuffer = event.target.result;
-                    
+                const shpPromise = new Promise((resolve, reject) => {
+                    shpReader.onload = (event) => resolve(event.target.result);
+                    shpReader.onerror = (err) => reject(err);
+                });
+
+                const dbfPromise = new Promise((resolve, reject) => {
+                    dbfReader.onload = (event) => resolve(event.target.result);
+                    dbfReader.onerror = (err) => reject(err);
+                });
+
+                shpReader.readAsArrayBuffer(shpFile);
+                dbfReader.readAsArrayBuffer(dbfFile);
+
+                Promise.all([shpPromise, dbfPromise]).then(async ([shpBuffer, dbfBuffer]) => {
                     if (typeof shapefile === 'undefined') {
-                        alert("Shapefile parser is still loading. Please wait a moment and try dropping the file again.");
+                        alert("Shapefile parser is still loading. Please wait a moment and try dropping the files again.");
                         return;
                     }
-
                     try {
-                        const geojson = await shapefile.read(arrayBuffer);
+                        const geojson = await shapefile.read(shpBuffer, dbfBuffer);
                         if (!geojson || !geojson.features || geojson.features.length === 0) {
-                            alert("The file appears to be empty or could not be read correctly.");
+                            alert("The shapefile appears to be empty or could not be read correctly.");
                             return;
                         }
 
@@ -726,12 +740,10 @@
                         console.error("Error parsing shapefile:", error);
                         alert("Could not parse the shapefile. Please ensure you dropped a valid .zip containing .shp and .dbf files.");
                     }
-                };
-
-                reader.onerror = () => {
-                    alert("Error reading the file.");
-                };
-                reader.readAsArrayBuffer(file);
+                }).catch(error => {
+                    console.error("Error reading files:", error);
+                    alert("An error occurred while reading the files.");
+                });
             });
         }
 
