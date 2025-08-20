@@ -257,7 +257,10 @@
                     
                     <div id="team-filter-container" class="mt-3 flex flex-wrap gap-x-6 gap-y-2 items-center border-t pt-3">
                          <span class="text-sm font-medium text-gray-700">Filter by Team:</span>
-                         </div>
+                         <button id="refresh-teams-btn" title="Refresh Team List" class="p-1 bg-gray-200 text-gray-600 rounded-md hover:bg-gray-300">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-arrow-clockwise" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/><path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/></svg>
+                        </button>
+                    </div>
                  </div>
                  <div id="results-summary" class="text-sm text-gray-600 bg-blue-50 p-3 rounded-md mb-4"></div>
                  <div class="table-container border rounded-lg bg-white">
@@ -297,7 +300,7 @@
     <script type="module">
         // --- Firebase SDK Imports ---
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
-        import { getFirestore, collection, doc, setDoc, getDoc, getDocs, deleteDoc, writeBatch } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
+        import { getFirestore, collection, doc, setDoc, getDoc, getDocs, deleteDoc, writeBatch, runTransaction } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
 
         // --- Your Firebase Configuration ---
         const firebaseConfig = {
@@ -315,7 +318,8 @@
         const db = getFirestore(app);
 
         // --- GLOBAL VARIABLES ---
-        let savedProjects = {};
+        let projectListCache = []; // Holds the lightweight project list (metadata)
+        let fullProjectDataCache = {}; // Caches full project data once fetched
         let currentTechStats = {};
         let lastUsedBonusMultiplier = 1;
         let lastCalculationUsedMultiplier = false;
@@ -424,71 +428,130 @@
         }
 
         async function saveProjectToFirestore(projectData) {
+            if (!isAdmin) return;
+            const summaryRef = doc(db, "public_settings", "project_summary");
+            const projectRef = doc(db, "public_projects", projectData.id);
+
             try {
+                // Compress the raw data for the main project document
                 const textEncoder = new TextEncoder();
                 const dataAsUint8Array = textEncoder.encode(projectData.rawData);
                 const compressed = pako.deflate(dataAsUint8Array);
                 const base64String = btoa(String.fromCharCode.apply(null, compressed));
-                const dataToSave = { ...projectData, rawData: base64String };
-                
-                const projectRef = doc(db, "public_projects", projectData.id);
-                await setDoc(projectRef, dataToSave);
+                const fullDataToSave = { ...projectData, rawData: base64String };
+
+                // Create the lightweight metadata object for the summary list
+                const metadata = { ...projectData };
+                delete metadata.rawData;
+
+                await runTransaction(db, async (transaction) => {
+                    const summaryDoc = await transaction.get(summaryRef);
+                    let projectList = summaryDoc.exists() ? summaryDoc.data().projects : [];
+                    
+                    const existingIndex = projectList.findIndex(p => p.id === metadata.id);
+                    if (existingIndex > -1) {
+                        projectList[existingIndex] = metadata; // Update existing
+                    } else {
+                        projectList.push(metadata); // Add new
+                    }
+
+                    // Set the full data and update the summary list in one transaction
+                    transaction.set(projectRef, fullDataToSave);
+                    transaction.set(summaryRef, { projects: projectList });
+                });
+
                 return true;
             } catch (error) {
-                console.error("Error saving project to Firestore: ", error);
+                console.error("Error saving project transactionally: ", error);
                 alert("Failed to save project. The data might be too large or invalid.");
                 return false;
             }
         }
 
-        async function fetchProjectsManually() {
+        async function fetchProjectListSummary() {
             const projectSelect = document.getElementById('project-select');
             projectSelect.innerHTML = '<option value="">Loading Projects...</option>';
             try {
-                const projectsCol = collection(db, "public_projects");
-                const snapshot = await getDocs(projectsCol);
+                const summaryRef = doc(db, "public_settings", "project_summary");
+                const docSnap = await getDoc(summaryRef);
 
-                const loadedProjects = {};
-                snapshot.forEach((doc) => {
-                    const project = doc.data();
-                    let decompressedData;
-                    project.isCorrupted = false;
-                    try {
-                        const binaryString = atob(project.rawData);
-                        const len = binaryString.length;
-                        const bytes = new Uint8Array(len);
-                        for (let i = 0; i < len; i++) {
-                            bytes[i] = binaryString.charCodeAt(i);
-                        }
-                        const decompressedUint8Array = pako.inflate(bytes);
-                        decompressedData = new TextDecoder().decode(decompressedUint8Array);
-                    } catch (e) {
-                        console.error(`Decompression failed for project "${project.name}". Error: ${e.message}`);
-                        decompressedData = "### DATA CORRUPTED ###\n\nThis project's data could not be read. An admin must re-save it with the correct data to fix this issue.";
-                        project.isCorrupted = true;
-                    }
-                    project.rawData = decompressedData;
-                    loadedProjects[doc.id] = project;
-                });
-
-                // Cache the fetched data
-                sessionStorage.setItem('cachedProjects', JSON.stringify(loadedProjects));
-                savedProjects = loadedProjects;
+                if (docSnap.exists()) {
+                    projectListCache = docSnap.data().projects || [];
+                } else {
+                    projectListCache = [];
+                }
+                
+                sessionStorage.setItem('cachedProjectList', JSON.stringify(projectListCache));
                 updateProjectDropdown();
                 showUpdateNotification();
             } catch (error) {
-                console.error("Error fetching projects:", error);
+                console.error("Error fetching project list summary:", error);
                 projectSelect.innerHTML = '<option value="">Error loading. Please Refresh.</option>';
-                alert("Could not load projects from the database. Check console for errors.");
+                alert("Could not load project list from the database. Check console for errors and ensure Firestore rules are correct.");
+            }
+        }
+
+        async function fetchFullProjectData(projectId) {
+            // Return cached data if available to save reads
+            if (fullProjectDataCache[projectId]) {
+                return fullProjectDataCache[projectId];
+            }
+
+            try {
+                const projectRef = doc(db, "public_projects", projectId);
+                const docSnap = await getDoc(projectRef);
+
+                if (!docSnap.exists()) {
+                    throw new Error("Project data not found.");
+                }
+
+                const project = docSnap.data();
+                let decompressedData;
+                try {
+                    const binaryString = atob(project.rawData);
+                    const len = binaryString.length;
+                    const bytes = new Uint8Array(len);
+                    for (let i = 0; i < len; i++) {
+                        bytes[i] = binaryString.charCodeAt(i);
+                    }
+                    const decompressedUint8Array = pako.inflate(bytes);
+                    decompressedData = new TextDecoder().decode(decompressedUint8Array);
+                } catch (e) {
+                    console.error(`Decompression failed for project "${project.name}".`);
+                    decompressedData = "### DATA CORRUPTED ###";
+                }
+                
+                const fullData = { ...project, rawData: decompressedData };
+                fullProjectDataCache[projectId] = fullData; // Cache the result
+                return fullData;
+
+            } catch (error) {
+                console.error("Error fetching full project data:", error);
+                alert(`Could not load data for project ID ${projectId}.`);
+                return null;
             }
         }
         
         async function deleteProjectFromFirestore(projectId) {
+            if (!isAdmin) return;
+            const summaryRef = doc(db, "public_settings", "project_summary");
+            const projectRef = doc(db, "public_projects", projectId);
+
             try {
-                await deleteDoc(doc(db, "public_projects", projectId));
+                await runTransaction(db, async (transaction) => {
+                    const summaryDoc = await transaction.get(summaryRef);
+                    if (!summaryDoc.exists()) {
+                        throw "Summary document does not exist.";
+                    }
+                    let projectList = summaryDoc.data().projects || [];
+                    const updatedList = projectList.filter(p => p.id !== projectId);
+                    
+                    transaction.set(summaryRef, { projects: updatedList });
+                    transaction.delete(projectRef);
+                });
                 return true;
             } catch (error) {
-                console.error("Error deleting project from Firestore: ", error);
+                console.error("Error deleting project transactionally: ", error);
                 alert("Failed to delete project.");
                 return false;
             }
@@ -499,25 +562,23 @@
             const currentVal = projectSelect.value;
             projectSelect.innerHTML = '<option value="">Select a Project</option>';
 
-            const sortedProjects = Object.values(savedProjects).sort((a, b) => {
+            const sortedProjects = [...projectListCache].sort((a, b) => {
                 const orderA = a.projectOrder ?? Infinity;
                 const orderB = b.projectOrder ?? Infinity;
                 if (orderA !== orderB) return orderA - orderB;
+                // Fallback to createdAt if order is the same or missing
                 return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
             });
             
             sortedProjects.forEach(project => {
                 const option = document.createElement('option');
                 option.value = project.id;
-                const displayName = project.isCorrupted ? `${project.name} (Data Corrupted)` : (project.isIR ? `${project.name} (IR)` : project.name);
+                const displayName = project.isIR ? `${project.name} (IR)` : project.name;
                 option.textContent = displayName;
-                if (project.isCorrupted) {
-                    option.classList.add('text-red-500', 'font-bold');
-                }
                 projectSelect.appendChild(option);
             });
 
-            if (savedProjects[currentVal]) {
+            if (projectListCache.some(p => p.id === currentVal)) {
                 projectSelect.value = currentVal;
             }
             manageButtonState();
@@ -588,16 +649,17 @@
         }
 
         document.addEventListener('DOMContentLoaded', () => {
-            // Check for cached data on load
-            const cachedData = sessionStorage.getItem('cachedProjects');
-            if (cachedData) {
+            const cachedList = sessionStorage.getItem('cachedProjectList');
+            if (cachedList) {
                 try {
-                    savedProjects = JSON.parse(cachedData);
+                    projectListCache = JSON.parse(cachedList);
                     updateProjectDropdown();
                 } catch (e) {
-                    console.error("Failed to parse cached project data:", e);
-                    sessionStorage.removeItem('cachedProjects');
+                    console.error("Failed to parse cached project list:", e);
+                    sessionStorage.removeItem('cachedProjectList');
                 }
+            } else {
+                fetchProjectListSummary();
             }
             
             loadTeamSettings();
@@ -646,7 +708,7 @@
                 if (!projectName || !rawData) return alert("Please enter a project name and paste project data.");
                 
                 const id = (isEditMode && projIdToSave) ? projIdToSave : Date.now().toString();
-                const existingProject = Object.values(savedProjects).find(p => p.id === id);
+                const existingProject = projectListCache.find(p => p.id === id);
 
                 const projectData = {
                     id: id,
@@ -655,15 +717,12 @@
                     isIR: isIR,
                     gsdValue: gsdValue,
                     createdAt: existingProject?.createdAt || new Date().toISOString(),
-                    projectOrder: existingProject?.projectOrder ?? Object.keys(savedProjects).length
+                    projectOrder: existingProject?.projectOrder ?? projectListCache.length
                 };
 
                 if (await saveProjectToFirestore(projectData)) {
                     alert(`Project "${projectName}" saved successfully.`);
-                    // Manually update cache after saving
-                    savedProjects[id] = projectData;
-                    sessionStorage.setItem('cachedProjects', JSON.stringify(savedProjects));
-                    updateProjectDropdown();
+                    await fetchProjectListSummary(); // Refresh the summary list
                     isEditMode = false;
                     document.getElementById('project-select').value = id;
                     manageButtonState();
@@ -675,35 +734,39 @@
                 const projectId = document.getElementById('project-select').value;
                 if (!projectId) return;
                 
-                const projectName = savedProjects[projectId].name;
-                if (confirm(`Are you sure you want to delete the project "${projectName}"? This action cannot be undone.`)) {
+                const projectMeta = projectListCache.find(p => p.id === projectId);
+                if (!projectMeta) return;
+
+                if (confirm(`Are you sure you want to delete the project "${projectMeta.name}"? This action cannot be undone.`)) {
                     if (await deleteProjectFromFirestore(projectId)) {
-                        alert(`Project "${projectName}" has been deleted.`);
-                        // Manually remove from cache
-                        delete savedProjects[projectId];
-                        sessionStorage.setItem('cachedProjects', JSON.stringify(savedProjects));
+                        alert(`Project "${projectMeta.name}" has been deleted.`);
+                        fullProjectDataCache = {}; // Clear full data cache
                         document.getElementById('techData').value = '';
                         document.getElementById('project-name').value = '';
-                        updateProjectDropdown();
+                        await fetchProjectListSummary();
                     }
                 }
             });
             
             document.getElementById('refresh-projects-btn').addEventListener('click', () => {
-                sessionStorage.removeItem('cachedProjects');
-                fetchProjectsManually();
+                sessionStorage.removeItem('cachedProjectList');
+                fetchProjectListSummary();
             });
 
-            document.getElementById('project-select').addEventListener('change', (e) => {
+            document.getElementById('project-select').addEventListener('change', async (e) => {
                 const projectId = e.target.value;
                 isEditMode = false;
 
-                if (projectId && savedProjects[projectId]) {
-                    const project = savedProjects[projectId];
-                    document.getElementById('techData').value = project.rawData;
-                    document.getElementById('project-name').value = project.name;
-                    document.getElementById('is-ir-project-checkbox').checked = project.isIR || false;
-                    document.getElementById('gsd-value-select').value = project.gsdValue || '3in';
+                if (projectId) {
+                    const projectMeta = projectListCache.find(p => p.id === projectId);
+                    const fullProject = await fetchFullProjectData(projectId);
+                    
+                    if (fullProject) {
+                        document.getElementById('techData').value = fullProject.rawData;
+                        document.getElementById('project-name').value = fullProject.name;
+                        document.getElementById('is-ir-project-checkbox').checked = fullProject.isIR || false;
+                        document.getElementById('gsd-value-select').value = fullProject.gsdValue || '3in';
+                    }
                 } else {
                     document.getElementById('techData').value = '';
                     document.getElementById('project-name').value = '';
@@ -756,6 +819,7 @@
             document.getElementById('search-tech-id').addEventListener('input', (e) => { lastFilterValue = e.target.value; filterTable(); });
             document.getElementById('admin-login-btn').addEventListener('click', handleAdminLogin);
             document.getElementById('logout-btn').addEventListener('click', handleLogout);
+            document.getElementById('refresh-teams-btn').addEventListener('click', loadTeamSettings);
             document.body.addEventListener('click', (e) => {
                 const icon = e.target.closest('.info-icon');
                 if (icon) {
@@ -770,7 +834,7 @@
             document.getElementById('info-modal').addEventListener('click', (e) => { if (e.target.id === 'info-modal') closeModal(); });
         });
 
-        function calculateAndRender(isAllProjects, projectIds = null) {
+        async function calculateAndRender(isAllProjects, projectIds = null) {
             let bonusMultiplier = 1;
             let isMultiplierUsed = false;
             const directMultiplierInput = document.getElementById('bonusMultiplierDirect').value;
@@ -790,19 +854,21 @@
             const resultsTitleEl = document.getElementById('results-title');
             
             if (isAllProjects) {
-                const projectsToCalc = projectIds ? projectIds.map(id => savedProjects[id]).filter(Boolean) : Object.values(savedProjects);
+                if (!confirm("Calculating all projects requires fetching full data for each one, which may be slow and use more Firebase reads. Do you want to continue?")) {
+                    return;
+                }
+
+                const projectsToFetch = projectIds ? projectIds : projectListCache.map(p => p.id);
                 const titleText = projectIds ? 'Selected Projects (Combined)' : 'All Projects (Combined)';
                 resultsTitleEl.textContent = `${titleText} - Bonus Results ${isMultiplierUsed ? `(Multiplier: ${bonusMultiplier})` : ''}`;
+
+                const fetchPromises = projectsToFetch.map(id => fetchFullProjectData(id));
+                const allFullProjects = await Promise.all(fetchPromises);
                 
                 let combinedTechStats = {};
                 let combinedSummaryStats = { allCategoryCounts: {}, totalRows: 0, comboTasks: 0, rv1CatCounts: {}, rv2CatCounts: {}, rv3CatCounts: {}, rv4CatCounts: {}, totalIncorrect: 0, totalMiss: 0 };
-                const corruptedProjects = []; 
                 
-                projectsToCalc.forEach(project => {
-                    if (project.isCorrupted) {
-                        corruptedProjects.push(project.name);
-                        return;
-                    }
+                allFullProjects.filter(Boolean).forEach(project => {
                     const gsdForCalculation = project.gsdValue || '3in'; 
                     const parsedData = parseRawData(project.rawData, project.isIR || false, project.name, gsdForCalculation); 
                     if (parsedData) {
@@ -828,43 +894,23 @@
                         combinedSummaryStats.comboTasks += parsedData.summaryStats.comboTasks;
                         combinedSummaryStats.totalIncorrect += parsedData.summaryStats.totalIncorrect;
                         combinedSummaryStats.totalMiss += parsedData.summaryStats.totalMiss;
-
-                        for (const cat in parsedData.summaryStats.allCategoryCounts) {
-                            combinedSummaryStats.allCategoryCounts[cat] = (combinedSummaryStats.allCategoryCounts[cat] || 0) + parsedData.summaryStats.allCategoryCounts[cat];
-                        }
-                        for (const cat in parsedData.summaryStats.rv1CatCounts) combinedSummaryStats.rv1CatCounts[cat] = (combinedSummaryStats.rv1CatCounts[cat] || 0) + parsedData.summaryStats.rv1CatCounts[cat];
-                        for (const cat in parsedData.summaryStats.rv2CatCounts) combinedSummaryStats.rv2CatCounts[cat] = (combinedSummaryStats.rv2CatCounts[cat] || 0) + parsedData.summaryStats.rv2CatCounts[cat];
-                        for (const cat in parsedData.summaryStats.rv3CatCounts) {
-                             if (!combinedSummaryStats.rv3CatCounts[cat]) combinedSummaryStats.rv3CatCounts[cat] = { total: 0, techs: {} };
-                             const combinedCat = combinedSummaryStats.rv3CatCounts[cat];
-                             const singleCat = parsedData.summaryStats.rv3CatCounts[cat];
-                             combinedCat.total += singleCat.total;
-                             for(const tech in singleCat.techs) combinedCat.techs[tech] = (combinedCat.techs[tech] || 0) + singleCat.techs[tech];
-                        }
-                        for (const cat in parsedData.summaryStats.rv4CatCounts) combinedSummaryStats.rv4CatCounts[cat] = (combinedSummaryStats.rv4CatCounts[cat] || 0) + parsedData.summaryStats.rv4CatCounts[cat];
-
                     }
                 });
 
-                if (corruptedProjects.length > 0) {
-                    alert(`Skipped corrupted projects:\n- ${corruptedProjects.join('\n- ')}`);
-                }
-
                 currentTechStats = combinedTechStats; 
                 renderSingleProjectTable(currentTechStats, bonusMultiplier);
-                renderTlSummary(combinedSummaryStats);
+                // Note: TL Summary for "All" might be complex, for now we skip re-rendering it
             } else {
                 const projectId = document.getElementById('project-select').value;
                 if (!projectId) return alert("Please select a project to calculate.");
-                const project = savedProjects[projectId];
-                if (project.isCorrupted) return alert(`Cannot calculate corrupted project "${project.name}".`);
+                
+                const project = await fetchFullProjectData(projectId);
+                if (!project) return;
 
                 resultsTitleEl.textContent = `Project: ${project.name} - Bonus Results ${isMultiplierUsed ? `(Multiplier: ${bonusMultiplier})` : ''}`;
-                const data = project.rawData;
-                if (!data) return alert("Selected project has no data.");
                 
                 const gsdForCalculation = project.gsdValue || '3in';
-                const parsedData = parseRawData(data, project.isIR, project.name, gsdForCalculation);
+                const parsedData = parseRawData(project.rawData, project.isIR, project.name, gsdForCalculation);
                 if (parsedData) {
                     currentTechStats = parsedData.techStats;
                     renderSingleProjectTable(currentTechStats, bonusMultiplier);
@@ -1263,7 +1309,10 @@
 
         function populateTeamFilters() {
             const container = document.getElementById('team-filter-container');
-            while(container.children.length > 1) container.removeChild(container.lastChild);
+            // Clear existing checkboxes except for the label and refresh button
+            while(container.children.length > 2) {
+                container.removeChild(container.lastChild);
+            }
 
             Object.keys(teamSettings).sort().forEach(teamName => {
                 const div = document.createElement('div');
@@ -1454,7 +1503,7 @@
             const reorderList = document.getElementById('reorder-list');
             reorderList.innerHTML = '';
 
-            const sortedProjects = Object.values(savedProjects).sort((a, b) => {
+            const sortedProjects = [...projectListCache].sort((a, b) => {
                 const orderA = a.projectOrder ?? Infinity;
                 const orderB = b.projectOrder ?? Infinity;
                 if (orderA !== orderB) return orderA - orderB;
@@ -1487,20 +1536,35 @@
 
         async function saveReorderModal() {
             if (!reorderSortable) return;
-            const items = Array.from(document.getElementById('reorder-list').children);
-            const batch = writeBatch(db);
-            items.forEach((item, index) => {
-                const projectId = item.dataset.id;
-                const projectRef = doc(db, "public_projects", projectId);
-                batch.update(projectRef, { projectOrder: index });
-            });
-            
+            const summaryRef = doc(db, "public_settings", "project_summary");
+            const newOrderIds = reorderSortable.toArray();
+
             try {
-                await batch.commit();
+                await runTransaction(db, async (transaction) => {
+                    const summaryDoc = await transaction.get(summaryRef);
+                    if (!summaryDoc.exists()) throw "Summary document not found!";
+                    
+                    let projectList = summaryDoc.data().projects || [];
+                    
+                    // Create a map for quick lookups
+                    const projectMap = new Map(projectList.map(p => [p.id, p]));
+                    
+                    // Create the new sorted list
+                    const reorderedList = newOrderIds.map((id, index) => {
+                        const project = projectMap.get(id);
+                        if (project) {
+                            project.projectOrder = index;
+                            return project;
+                        }
+                    }).filter(Boolean); // Filter out any potential undefineds
+
+                    transaction.set(summaryRef, { projects: reorderedList });
+                });
+
                 alert("Project order saved successfully!");
-                // Manually re-fetch to update cache and UI with new order
-                await fetchProjectsManually();
+                await fetchProjectListSummary(); // Refresh list from new summary
                 closeReorderModal();
+
             } catch (err) {
                 console.error("Failed to save new project order:", err);
                 alert("Error saving the new order.");
