@@ -8,6 +8,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+    <!-- DBF Parser Library -->
+    <script src="https://cdn.jsdelivr.net/npm/dbf@0.3.0/dist/dbf.min.js"></script>
     <style>
         body {
             font-family: 'Inter', sans-serif;
@@ -109,6 +111,19 @@
         }
         details[open] > summary::before {
             transform: rotate(90deg);
+        }
+        /* Drag and Drop Styles */
+        #drop-zone {
+            border: 2px dashed #d1d5db;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            text-align: center;
+            color: #6b7280;
+            transition: background-color 0.2s, border-color 0.2s;
+        }
+        #drop-zone.drag-over {
+            border-color: #2563eb;
+            background-color: #eff6ff;
         }
     </style>
 </head>
@@ -213,8 +228,10 @@
                             </div>
                         </div>
 
-                        <label for="techData" class="block text-sm font-medium text-gray-600 mb-2">Paste your raw, tab-separated project data here.</label>
-                        <textarea id="techData" rows="12" class="w-full p-3 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none font-mono text-sm" placeholder="Paste all rows and columns from your project data..."></textarea>
+                        <div id="drop-zone">
+                            <label for="techData" class="block text-sm font-medium text-gray-600 mb-2">Paste your raw, tab-separated project data here, or drag & drop a .dbf file.</label>
+                            <textarea id="techData" rows="10" class="w-full p-3 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none font-mono text-sm" placeholder="Paste data or drop file..."></textarea>
+                        </div>
                     </div>
                     <div class="flex gap-4">
                         <input type="text" id="project-name" class="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Enter Project Name to Save/Update">
@@ -648,6 +665,68 @@
             }
         }
 
+        function setupDragAndDrop() {
+            const dropZone = document.getElementById('drop-zone');
+            const techData = document.getElementById('techData');
+
+            dropZone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropZone.classList.add('drag-over');
+            });
+
+            dropZone.addEventListener('dragleave', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropZone.classList.remove('drag-over');
+            });
+
+            dropZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropZone.classList.remove('drag-over');
+
+                const files = e.dataTransfer.files;
+                if (files.length !== 1) {
+                    alert("Please drop a single file.");
+                    return;
+                }
+                const file = files[0];
+                if (!file.name.toLowerCase().endsWith('.dbf')) {
+                    alert("Please drop a .dbf file.");
+                    return;
+                }
+
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    try {
+                        const arrayBuffer = event.target.result;
+                        const { header, records } = DBF.parse(arrayBuffer);
+                        
+                        const headers = header.fields.map(f => f.name);
+                        let tsv = headers.join('\t') + '\n';
+
+                        records.forEach(record => {
+                            const values = headers.map(h => record[h]);
+                            tsv += values.join('\t') + '\n';
+                        });
+
+                        techData.value = tsv;
+                        // Manually trigger input event for other listeners
+                        techData.dispatchEvent(new Event('input'));
+
+                    } catch (error) {
+                        console.error("Error parsing DBF file:", error);
+                        alert("Could not parse the DBF file. It may be corrupt or in an unsupported format.");
+                    }
+                };
+                reader.onerror = () => {
+                    alert("Error reading the file.");
+                };
+                reader.readAsArrayBuffer(file);
+            });
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
             const cachedList = sessionStorage.getItem('cachedProjectList');
             if (cachedList) {
@@ -664,6 +743,7 @@
             
             loadTeamSettings();
             manageButtonState();
+            setupDragAndDrop();
 
             // Modal Handlers
             document.getElementById('reorder-projects-btn').addEventListener('click', openReorderModal);
