@@ -1102,6 +1102,29 @@
                     }
                 });
 
+                // --- CORRECTED LOGIC for RV3_CAT / Fix4 Breakdown ---
+                const fix4IdIndex = headerMap['fix4_id'];
+                const rv3CatIndex = headerMap['rv3_cat'];
+                
+                if (fix4IdIndex !== undefined && rv3CatIndex !== undefined) {
+                    const fix4TechId = values[fix4IdIndex]?.trim();
+                    const rv3Category = values[rv3CatIndex]?.trim();
+
+                    if (fix4TechId && rv3Category) {
+                        const categoryNum = parseInt(rv3Category);
+                        if (!isNaN(categoryNum)) {
+                            if (!summaryStats.rv3CatCounts[categoryNum]) {
+                                summaryStats.rv3CatCounts[categoryNum] = { total: 0, techs: {} };
+                            }
+                            if (!summaryStats.rv3CatCounts[categoryNum].techs[fix4TechId]) {
+                                summaryStats.rv3CatCounts[categoryNum].techs[fix4TechId] = 0;
+                            }
+                            summaryStats.rv3CatCounts[categoryNum].total++;
+                            summaryStats.rv3CatCounts[categoryNum].techs[fix4TechId]++;
+                        }
+                    }
+                }
+
                 const missChecks = [
                     { label: 'i3qa_label', cat: 'i3qa_cat', fixId: 'fix1_id', round: 'i3qa' },
                     { label: 'rv1_label', cat: 'rv1_cat', fixId: 'fix2_id', round: 'RV1' },
