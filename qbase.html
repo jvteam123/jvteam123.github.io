@@ -698,47 +698,59 @@
                 const reader = new FileReader();
 
                 reader.onload = (event) => {
-                    try {
-                        const arrayBuffer = event.target.result;
-                        let tsv = '';
+                    const arrayBuffer = event.target.result;
+                    
+                    let attempts = 0;
+                    const maxAttempts = 15; // Try for 3 seconds (15 * 200ms)
+                    
+                    function tryParse() {
+                        const isDbf = fileName.endsWith('.dbf');
+                        const isExcel = fileName.endsWith('.xlsx') || fileName.endsWith('.xls');
 
-                        if (fileName.endsWith('.dbf')) {
-                            if (typeof DBF === 'undefined') {
-                                alert("DBF parser is still loading. Please wait a moment and try dropping the file again.");
+                        if ((isDbf && typeof DBF === 'undefined') || (isExcel && typeof XLSX === 'undefined')) {
+                            attempts++;
+                            if (attempts < maxAttempts) {
+                                setTimeout(tryParse, 200);
+                                return;
+                            } else {
+                                alert("File parser could not be loaded. Please check your internet connection and refresh the page.");
                                 return;
                             }
-                            const { header, records } = DBF.parse(arrayBuffer);
-                            const headers = header.fields.map(f => f.name);
-                            tsv = headers.join('\t') + '\n';
-                            records.forEach(record => {
-                                const values = headers.map(h => record[h]);
-                                tsv += values.join('\t') + '\n';
-                            });
-                        } else if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
-                            if (typeof XLSX === 'undefined') {
-                                alert("Excel parser is still loading. Please wait a moment and try dropping the file again.");
-                                return;
-                            }
-                            const workbook = XLSX.read(arrayBuffer, { type: 'buffer' });
-                            const firstSheetName = workbook.SheetNames[0];
-                            const worksheet = workbook.Sheets[firstSheetName];
-                            const json = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-                            
-                            if (json.length > 0) {
-                                tsv = json.map(row => row.join('\t')).join('\n');
-                            }
-                        } else {
-                            alert("Unsupported file type. Please drop a .dbf, .xlsx, or .xls file.");
-                            return;
                         }
-                        
-                        techData.value = tsv;
-                        techData.dispatchEvent(new Event('input'));
 
-                    } catch (error) {
-                        console.error("Error parsing file:", error);
-                        alert("Could not parse the file. It may be corrupt or in an unsupported format.");
+                        try {
+                            let tsv = '';
+                            if (isDbf) {
+                                const { header, records } = DBF.parse(arrayBuffer);
+                                const headers = header.fields.map(f => f.name);
+                                tsv = headers.join('\t') + '\n';
+                                records.forEach(record => {
+                                    const values = headers.map(h => record[h]);
+                                    tsv += values.join('\t') + '\n';
+                                });
+                            } else if (isExcel) {
+                                const workbook = XLSX.read(arrayBuffer, { type: 'buffer' });
+                                const firstSheetName = workbook.SheetNames[0];
+                                const worksheet = workbook.Sheets[firstSheetName];
+                                const json = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                                
+                                if (json.length > 0) {
+                                    tsv = json.map(row => row.join('\t')).join('\n');
+                                }
+                            } else {
+                                alert("Unsupported file type. Please drop a .dbf, .xlsx, or .xls file.");
+                                return;
+                            }
+                            
+                            techData.value = tsv;
+                            techData.dispatchEvent(new Event('input'));
+
+                        } catch (error) {
+                            console.error("Error parsing file:", error);
+                            alert("Could not parse the file. It may be corrupt or in an unsupported format.");
+                        }
                     }
+                    tryParse();
                 };
 
                 reader.onerror = () => {
