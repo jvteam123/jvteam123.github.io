@@ -8,8 +8,9 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
-    <!-- DBF Parser Library -->
+    <!-- DBF and XLSX Parser Libraries -->
     <script src="https://cdn.jsdelivr.net/npm/dbf@0.3.0/dist/dbf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
         body {
             font-family: 'Inter', sans-serif;
@@ -229,7 +230,7 @@
                         </div>
 
                         <div id="drop-zone">
-                            <label for="techData" class="block text-sm font-medium text-gray-600 mb-2">Paste your raw, tab-separated project data here, or drag & drop a .dbf file.</label>
+                            <label for="techData" class="block text-sm font-medium text-gray-600 mb-2">Paste your raw, tab-separated project data here, or drag & drop a .dbf, .xlsx, or .xls file.</label>
                             <textarea id="techData" rows="10" class="w-full p-3 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none font-mono text-sm" placeholder="Paste data or drop file..."></textarea>
                         </div>
                     </div>
@@ -692,34 +693,46 @@
                     return;
                 }
                 const file = files[0];
-                if (!file.name.toLowerCase().endsWith('.dbf')) {
-                    alert("Please drop a .dbf file.");
-                    return;
-                }
+                const fileName = file.name.toLowerCase();
 
                 const reader = new FileReader();
+
                 reader.onload = (event) => {
                     try {
                         const arrayBuffer = event.target.result;
-                        const { header, records } = DBF.parse(arrayBuffer);
+                        let tsv = '';
+
+                        if (fileName.endsWith('.dbf')) {
+                            const { header, records } = DBF.parse(arrayBuffer);
+                            const headers = header.fields.map(f => f.name);
+                            tsv = headers.join('\t') + '\n';
+                            records.forEach(record => {
+                                const values = headers.map(h => record[h]);
+                                tsv += values.join('\t') + '\n';
+                            });
+                        } else if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
+                            const workbook = XLSX.read(arrayBuffer, { type: 'buffer' });
+                            const firstSheetName = workbook.SheetNames[0];
+                            const worksheet = workbook.Sheets[firstSheetName];
+                            const json = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                            
+                            if (json.length > 0) {
+                                tsv = json.map(row => row.join('\t')).join('\n');
+                            }
+                        } else {
+                            alert("Unsupported file type. Please drop a .dbf, .xlsx, or .xls file.");
+                            return;
+                        }
                         
-                        const headers = header.fields.map(f => f.name);
-                        let tsv = headers.join('\t') + '\n';
-
-                        records.forEach(record => {
-                            const values = headers.map(h => record[h]);
-                            tsv += values.join('\t') + '\n';
-                        });
-
                         techData.value = tsv;
-                        // Manually trigger input event for other listeners
                         techData.dispatchEvent(new Event('input'));
 
                     } catch (error) {
-                        console.error("Error parsing DBF file:", error);
-                        alert("Could not parse the DBF file. It may be corrupt or in an unsupported format.");
+                        console.error("Error parsing file:", error);
+                        alert("Could not parse the file. It may be corrupt or in an unsupported format.");
                     }
                 };
+
                 reader.onerror = () => {
                     alert("Error reading the file.");
                 };
