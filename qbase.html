@@ -703,6 +703,10 @@
                         let tsv = '';
 
                         if (fileName.endsWith('.dbf')) {
+                            if (typeof DBF === 'undefined') {
+                                alert("DBF parser is still loading. Please wait a moment and try dropping the file again.");
+                                return;
+                            }
                             const { header, records } = DBF.parse(arrayBuffer);
                             const headers = header.fields.map(f => f.name);
                             tsv = headers.join('\t') + '\n';
@@ -711,6 +715,10 @@
                                 tsv += values.join('\t') + '\n';
                             });
                         } else if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
+                            if (typeof XLSX === 'undefined') {
+                                alert("Excel parser is still loading. Please wait a moment and try dropping the file again.");
+                                return;
+                            }
                             const workbook = XLSX.read(arrayBuffer, { type: 'buffer' });
                             const firstSheetName = workbook.SheetNames[0];
                             const worksheet = workbook.Sheets[firstSheetName];
