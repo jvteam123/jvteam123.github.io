@@ -1240,13 +1240,16 @@ document.addEventListener('DOMContentLoaded', () => {
                         const status = groupLockStatus[groupKey];
                         let lockIcon = '';
                         if (status && status.total > 0) {
-                            if (status.locked === status.total) {
-                                lockIcon = ' 白';
-                            } else if (status.locked > 0) {
-                                lockIcon = ' 泊';
-                            } else {
-                                lockIcon = ' 箔';
-                            }
+                        if (status.locked === status.total) {
+                        // Fully locked icon (solid lock)
+                        lockIcon = ' <i class="fas fa-lock" title="All tasks in this group are locked"></i>';
+                        } else if (status.locked > 0) {
+                        // Partially locked icon (lock with a slash or similar - using regular lock as placeholder)
+                        lockIcon = ' <i class="fas fa-lock" title="Some tasks in this group are locked"></i>';
+                        } else {
+                        // Unlocked icon
+                        lockIcon = ' <i class="fas fa-unlock-alt" title="All tasks in this group are unlocked"></i>';
+                           }
                         }
 
                         const groupHeaderRow = this.elements.projectTableBody.insertRow();
