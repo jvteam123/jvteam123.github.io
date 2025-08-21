@@ -59,7 +59,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     "default": "#FFFFFF"
                 }
             },
-            NUM_TABLE_COLUMNS: 28,
+            NUM_TABLE_COLUMNS: 27,
             CSV_HEADERS_FOR_IMPORT: [
                 "Fix Cat", "Project Name", "Area/Task", "GSD", "Assigned To", "Status",
                 "Day 1 Start", "Day 1 Finish", "Day 1 Break",
@@ -1377,16 +1377,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     totalDurationCell.textContent = totalMinutes;
                     totalDurationCell.className = 'total-duration-column';
 
-                    const techNotesCell = row.insertCell();
-                    const techNotesInput = document.createElement('textarea');
-                    techNotesInput.value = project.techNotes || "";
-                    techNotesInput.className = 'tech-notes-input';
-                    techNotesInput.disabled = project.status === "Reassigned_TechAbsent" || project.isLocked;
-                    techNotesInput.onchange = (e) => this.db.collection("projects").doc(project.id).update({
-                        techNotes: e.target.value,
-                        lastModifiedTimestamp: firebase.firestore.FieldValue.serverTimestamp()
-                    });
-                    techNotesCell.appendChild(techNotesInput);
 
                     const actionsCell = row.insertCell();
                     const actionButtonsDiv = document.createElement('div');
