@@ -2622,10 +2622,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 modal.className = 'notification-modal-content';
 
                 const title = document.createElement('h4');
-                title.textContent = '粕 New Update';
+                // V-- WITH THIS NEW LINE --V
+                title.innerHTML = '<i class="fas fa-info-circle"></i> New Update';
 
                 const messageP = document.createElement('p');
-                messageP.textContent = notification.message;
 
                 const buttonContainer = document.createElement('div');
                 buttonContainer.className = 'notification-modal-buttons';
