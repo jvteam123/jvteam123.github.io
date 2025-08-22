@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Time Segment Randomizer</title>
+    <script src="https://cdn.tailwindcss.com/3.4.3"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* --- DARK THEME STYLES --- */
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #1e293b; /* Dark Slate BG */
+            color: #cbd5e1; /* Lighter Slate text */
+            font-family: "Inter", sans-serif;
+            padding: 1rem;
+        }
+
+        h2, h3 {
+             color: #f1f5f9; /* Brightest Slate text for headers */
+        }
+        
+        .container {
+            background-color: #334155; /* Mid-tone Slate for main container */
+            padding: 2.5rem;
+            border-radius: 0.75rem; /* Larger radius */
+            border: 1px solid #475569; /* Subtle border */
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.2), 0 4px 6px -2px rgba(0, 0, 0, 0.15);
+            text-align: center;
+            width: 100%;
+            max-width: 1200px; /* Increased max-width for more columns */
+        }
+
+        .time-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 1.5rem;
+            border: 1px solid #475569;
+            border-radius: 0.5rem;
+            overflow: hidden;
+            font-size: 0.9rem; /* Slightly smaller font for more columns */
+        }
+
+        .time-table th, .time-table td {
+            padding: 0.75rem;
+            text-align: left;
+            border-bottom: 1px solid #475569;
+        }
+
+         .time-table th {
+            background-color: #475569; /* Darker header for contrast */
+            color: #f1f5f9;
+            font-weight: 600; /* Bolder */
+         }
+
+        .time-table td {
+            font-family: monospace;
+            font-size: 0.95rem;
+            color: #e2e8f0;
+        }
+
+        .time-table tbody tr:last-child td {
+            border-bottom: none;
+        }
+        
+        .time-table tbody tr:hover {
+            background-color: #404d61; /* Subtle hover for rows */
+        }
+
+        .button {
+            padding: 0.75rem 1.5rem;
+            margin: 0.5rem;
+            border-radius: 0.375rem; /* Standard rounded-md */
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 500;
+            transition: all 0.2s ease-in-out;
+            border: none;
+        }
+
+        .button:hover {
+            transform: translateY(-2px); /* Add a little lift on hover */
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        }
+
+        .button-primary {
+            background-color: #3b82f6;
+            color: white;
+        }
+        .button-primary:hover {
+            background-color: #2563eb;
+        }
+        .button-secondary {
+            background-color: #475569;
+            color: #f1f5f9;
+        }
+        .button-secondary:hover {
+            background-color: #64748b;
+        }
+
+        .message-box {
+            margin-top: 1.5rem;
+            padding: 0.85rem;
+            border-radius: 0.375rem;
+            font-weight: 500;
+            visibility: hidden;
+            opacity: 0;
+            transition: opacity 0.3s ease-in-out;
+        }
+        .message-box.visible {
+            visibility: visible;
+            opacity: 1;
+        }
+
+        .message-box:not(.error) {
+            background-color: #166534; color: #dcfce7; border: 1px solid #22c55e;
+        }
+        .message-box.error {
+            background-color: #991b1b; color: #fee2e2; border: 1px solid #f87171;
+        }
+
+        /* Modal Styles */
+        .modal {
+            display: none; position: fixed; z-index: 1000; left: 0; top: 0;
+            width: 100%; height: 100%; overflow: auto;
+            background-color: rgba(0,0,0,0.75);
+            justify-content: center; align-items: center;
+        }
+        .modal[style*="display: flex;"] { /* Fix for z-index stacking */
+            z-index: 1000;
+        }
+        #scheduleModal[style*="display: flex;"], #insertTaskModal[style*="display: flex;"] {
+            z-index: 1001; /* Ensure child modals are on top */
+        }
+
+        .modal-content {
+            background-color: #334155; margin: auto; padding: 2rem;
+            border: 1px solid #475569; width: 90%;
+            border-radius: 0.75rem; box-shadow: 0 10px 25px rgba(0,0,0,0.4);
+            position: relative;
+        }
+
+        .close-button {
+            color: #94a3b8; font-size: 28px; font-weight: bold;
+            position: absolute; top: 15px; right: 25px;
+            cursor: pointer; transition: color 0.2s ease;
+        }
+
+        .close-button:hover, .close-button:focus { color: #f1f5f9; }
+        
+        .modal-body {
+            max-height: 70vh; overflow-y: auto; padding-right: 10px;
+        }
+        .modal-body::-webkit-scrollbar { width: 8px; }
+        .modal-body::-webkit-scrollbar-track { background: #475569; border-radius: 4px;}
+        .modal-body::-webkit-scrollbar-thumb { background: #64748b; border-radius: 4px; }
+        .modal-body::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        
+        .settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+        .settings-section { background-color: #1e293b; border: 1px solid #475569; padding: 1.25rem; border-radius: 0.5rem; }
+        .settings-section h4 { font-size: 1.1rem; font-weight: 600; color: #e2e8f0; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid #475569; }
+        
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; font-size: 0.875rem; font-weight: 500; color: #cbd5e1; margin-bottom: 0.5rem; text-align: left; }
+        .form-group input, .form-group select {
+            width: 100%; background-color: #334155; color: #f1f5f9;
+            border: 1px solid #64748b; border-radius: 0.375rem; padding: 0.5rem 0.75rem;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+        /* Style for time input icon */
+        input[type="time"]::-webkit-calendar-picker-indicator {
+            filter: invert(1);
+        }
+        .form-group input:focus, .form-group select:focus {
+            outline: none; border-color: #3b82f6;
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.4);
+        }
+        @media (max-width: 768px) {
+            .settings-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h2 class="text-3xl font-bold mb-2">Time Segment Randomizer</h2>
+        <p class="text-slate-300 mb-8">Generates time-logged rows based on a series of time points with randomized seconds.</p>
+        
+        <div id="durationWarning" class="hidden p-4 mb-4 text-sm text-yellow-200 bg-yellow-800 border border-yellow-700 rounded-lg text-left" role="alert"></div>
+
+        <table class="time-table">
+            <thead>
+                <tr>
+                    <th>TechNumber</th>
+                    <th>Username</th>
+                    <th>Shift</th>
+                    <th>Date</th>
+                    <th>Start Time</th>
+                    <th>End Time</th>
+                    <th>Hours</th>
+                    <th>MainCategory</th>
+                    <th>SubCategory</th>
+                    <th>OT</th>
+                </tr>
+            </thead>
+            <tbody id="timeTableBody">
+            </tbody>
+        </table>
+
+        <button id="randomizeButton" class="button button-primary">Randomize & Recalculate</button>
+        <button id="insertTaskButton" class="button bg-green-600 hover:bg-green-700 text-white">Insert Task</button>
+        <button id="copyButton" class="button button-secondary">Copy Table</button>
+        <button id="settingsButton" class="button button-secondary">Settings</button>
+
+        <div id="messageBox" class="message-box"></div>
+    </div>
+
+    <div id="settingsModal" class="modal">
+        <div class="modal-content max-w-4xl">
+            <span id="closeSettingsModalButton" class="close-button">&times;</span>
+            <h3 class="text-2xl font-semibold mb-6">Settings</h3>
+            <div class="modal-body">
+                 <div class="settings-grid">
+                    <div class="settings-section">
+                        <h4>General Info & Schedule</h4>
+                        <div class="form-group">
+                            <label for="shiftInput">Shift</label>
+                            <input type="text" id="shiftInput" class="w-full" placeholder="e.g., Day Shift">
+                        </div>
+                        <div class="form-group">
+                           <label class="!mb-2">Time Points</label>
+                           <button id="generateScheduleButton" title="Auto-generate Time Points from a schedule" class="button !m-0 bg-indigo-600 hover:bg-indigo-700 text-sm w-full py-2 px-3">Auto-Generate from Schedule</button>
+                        </div>
+                        <div class="form-group"><label for="techNumberInput">Tech Number</label><input type="text" id="techNumberInput"></div>
+                        <div class="form-group"><label for="usernameInput">Username</label><input type="text" id="usernameInput"></div>
+                        <div class="form-group"><label for="dateInput">Date</label><input type="date" id="dateInput"></div>
+                        <div class="form-group">
+                            <label for="otInput">OT</label>
+                             <select id="otInput"><option value="NO">NO</option><option value="YES">YES</option></select>
+                        </div>
+                    </div>
+                    <div class="settings-section">
+                        <h4>Default Category</h4>
+                        <h5 class="text-slate-400 font-normal text-sm -mt-4 mb-4">Used for all non-break segments.</h5>
+                        <div class="form-group mt-4"><label for="mainCatSelect">Main Category</label><select id="mainCatSelect"></select></div>
+                        <div class="form-group"><label for="subCatSelect">Sub Category</label><select id="subCatSelect"></select></div>
+                    </div>
+                 </div>
+            </div>
+            <div class="flex justify-between items-center mt-6 pt-4 border-t border-slate-600">
+                <button id="resetSettingsButton" class="button bg-yellow-600 hover:bg-yellow-700 text-white">Reset All</button>
+                <div>
+                    <button id="saveSettingsButton" class="button button-primary mr-2">Save & Apply</button>
+                    <button id="cancelSettingsButton" class="button button-secondary">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div id="scheduleModal" class="modal">
+        <div class="modal-content max-w-md">
+             <h3 class="text-2xl font-semibold mb-6">Generate Time Points from Schedule</h3>
+             <div class="space-y-4">
+                <div class="form-group"><label for="schedTimeIn">Time IN</label><input type="time" id="schedTimeIn" class="w-full"></div>
+                <div class="form-group"><label for="schedBreak1">1st Break Start (15 min)</label><input type="time" id="schedBreak1" class="w-full"></div>
+                <div class="form-group"><label for="schedLunch">Lunch Start (1 hour)</label><input type="time" id="schedLunch" class="w-full"></div>
+                <div class="form-group"><label for="schedBreak2">2nd Break Start (15 min)</label><input type="time" id="schedBreak2" class="w-full"></div>
+                <div class="form-group"><label for="schedTimeOut">Time OUT</label><input type="time" id="schedTimeOut" class="w-full"></div>
+             </div>
+             <div id="scheduleErrorMessage" class="text-red-400 mt-4 text-sm h-4"></div>
+             <div class="flex justify-end items-center mt-6 pt-4 border-t border-slate-600">
+                <button id="applyScheduleButton" class="button button-primary mr-2">Apply & Save</button>
+                <button id="cancelScheduleButton" class="button button-secondary">Cancel</button>
+             </div>
+        </div>
+    </div>
+
+    <div id="insertTaskModal" class="modal">
+        <div class="modal-content max-w-lg">
+             <span id="closeTaskModalButton" class="close-button">&times;</span>
+             <h3 class="text-2xl font-semibold mb-6">Insert New Task</h3>
+             <div class="space-y-4">
+                <div class="form-group">
+                    <label for="taskSegmentSelect">Split this time segment:</label>
+                    <select id="taskSegmentSelect"></select>
+                </div>
+                 <div class="form-group">
+                    <label for="taskDurationInput">New Task Duration</label>
+                    <input type="text" id="taskDurationInput" placeholder="HH:MM:SS">
+                </div>
+                <div class="form-group">
+                    <label for="taskMainCatSelect">New Task Main Category</label>
+                    <select id="taskMainCatSelect"></select>
+                </div>
+                <div class="form-group">
+                    <label for="taskSubCatSelect">New Task Sub Category</label>
+                    <select id="taskSubCatSelect"></select>
+                </div>
+             </div>
+             <div id="taskErrorMessage" class="text-red-400 mt-4 text-sm h-4"></div>
+             <div class="flex justify-end items-center mt-6 pt-4 border-t border-slate-600">
+                <button id="applyTaskButton" class="button button-primary mr-2">Insert Task</button>
+                <button id="cancelTaskButton" class="button button-secondary">Cancel</button>
+             </div>
+        </div>
+    </div>
+
+
+    <script>
+    // --- ELEMENT REFERENCES ---
+    const timeTableBody = document.getElementById('timeTableBody');
+    const randomizeButton = document.getElementById('randomizeButton');
+    const copyButton = document.getElementById('copyButton');
+    const messageBox = document.getElementById('messageBox');
+    const insertTaskButton = document.getElementById('insertTaskButton');
+    const settingsButton = document.getElementById('settingsButton');
+    const durationWarning = document.getElementById('durationWarning');
+    const settingsModal = document.getElementById('settingsModal');
+    const saveSettingsButton = document.getElementById('saveSettingsButton');
+    const cancelSettingsButton = document.getElementById('cancelSettingsButton');
+    const closeSettingsModalButton = document.getElementById('closeSettingsModalButton');
+    const resetSettingsButton = document.getElementById('resetSettingsButton');
+    const generateScheduleButton = document.getElementById('generateScheduleButton');
+    const scheduleModal = document.getElementById('scheduleModal');
+    const applyScheduleButton = document.getElementById('applyScheduleButton');
+    const cancelScheduleButton = document.getElementById('cancelScheduleButton');
+    const scheduleErrorMessage = document.getElementById('scheduleErrorMessage');
+    const insertTaskModal = document.getElementById('insertTaskModal');
+    const closeTaskModalButton = document.getElementById('closeTaskModalButton');
+    const applyTaskButton = document.getElementById('applyTaskButton');
+    const cancelTaskButton = document.getElementById('cancelTaskButton');
+    const taskErrorMessage = document.getElementById('taskErrorMessage');
+
+    // --- GLOBAL STATE & CONSTANTS ---
+    const LOCAL_STORAGE_KEY = 'timeRandomizerSettings_v18_final';
+    const DURATION_LIMIT_SECONDS = 27000; // 7 hours 30 minutes
+    const categoryData = {
+        "SARANAC": ["CF"],
+        "ACCUPLUS": ["DEM", "I3", "PCS", "REFIX", "i3QA", "RQA"],
+        "DOWNTIME": ["System", "NoProject"],
+        "TRAINING": ["Formal - Accuplus"]
+    };
+    const originalTimeSegments = [
+        { start: "13:45:00", end: "15:30:00" }, { start: "13:30:00", end: "13:45:00" },
+        { start: "12:00:00", end: "13:30:00" }, { start: "11:00:00", end: "12:00:00" },
+        { start: "08:45:00", end: "11:00:00" }, { start: "08:30:00", end: "08:45:00" },
+        { start: "06:30:00", end: "08:30:00" }
+    ];
+    let currentSettings = {};
+    let currentDisplayedData = [];
+
+    // --- INITIALIZATION & SETTINGS MANAGEMENT ---
+    function generateDefaultTimePoints() {
+        const timePointStrings = new Set();
+        originalTimeSegments.forEach(entry => {
+            timePointStrings.add(entry.start);
+            timePointStrings.add(entry.end);
+        });
+        const sortedTimePoints = Array.from(timePointStrings).sort((a, b) => {
+             let minutesA = timeStringToMinutes(a); let minutesB = timeStringToMinutes(b);
+             if (minutesA > 1000 && minutesB < 500) return -1;
+             if (minutesB > 1000 && minutesA < 500) return 1;
+             return minutesA - minutesB;
+        });
+        return sortedTimePoints.map(timeStr => timeString24hrToPointObject(timeStr));
+    }
+
+    function getDefaultSettings() {
+        return {
+            techNumber: '7236', username: 'lorens.ebrado', shift: 'Day',
+            date: new Date().toISOString().slice(0, 10), ot: 'NO',
+            categoryPair1: { main: 'DOWNTIME', sub: 'NoProject' },
+            timePoints: generateDefaultTimePoints()
+        };
+    }
+
+    function initializeSettings(forceReset = false) {
+        if (forceReset) localStorage.removeItem(LOCAL_STORAGE_KEY);
+        const storedSettings = localStorage.getItem(LOCAL_STORAGE_KEY);
+        if (storedSettings) {
+            try {
+                const loaded = JSON.parse(storedSettings);
+                if (loaded.timePoints && loaded.categoryPair1) { 
+                    currentSettings = loaded; return;
+                }
+            } catch (e) { console.error("Failed to parse settings", e); }
+        }
+        currentSettings = getDefaultSettings();
+    }
+
+    // --- UTILITY FUNCTIONS ---
+    function formatTimeComponent(c) { return String(c).padStart(2, '0'); }
+    function timeStringToMinutes(timeStr) {
+        const [h=0, m=0] = (timeStr || "0:0").split(':').map(Number);
+        return h * 60 + m;
+    }
+    function timeString24hrToSeconds(timeStr) {
+        const parts = (timeStr || "0:0:0").split(':');
+        return (parseInt(parts[0],10) * 3600) + (parseInt(parts[1],10) * 60) + (parseInt(parts[2],10) || 0);
+    }
+    function secondsToHmsString(totalSeconds) {
+        const h = Math.floor(totalSeconds / 3600);
+        const m = Math.floor((totalSeconds % 3600) / 60);
+        const s = totalSeconds % 60;
+        return `${formatTimeComponent(h)}:${formatTimeComponent(m)}:${formatTimeComponent(s)}`;
+    }
+    function addMinutesToTime(timeStr, minutesToAdd) {
+        const totalMinutes = timeStringToMinutes(timeStr) + minutesToAdd;
+        const newHours = Math.floor(totalMinutes / 60) % 24;
+        const newMinutes = totalMinutes % 60;
+        return `${formatTimeComponent(newHours)}:${formatTimeComponent(newMinutes)}`;
+    }
+    function convert12hrTo24hr(h12, period) {
+        let h24 = parseInt(h12, 10);
+        if (period.toUpperCase() === 'PM' && h24 !== 12) h24 += 12;
+        else if (period.toUpperCase() === 'AM' && h24 === 12) h24 = 0;
+        return h24;
+    }
+    function convert24hrTo12hr(h24, min) {
+        const period = h24 >= 12 ? 'PM' : 'AM';
+        let hour12 = h24 % 12;
+        if (hour12 === 0) hour12 = 12;
+        return { hour: hour12, minute: parseInt(min, 10), period: period };
+    }
+    function timeString24hrToPointObject(timeStr) {
+        const parts = timeStr.split(':');
+        const hour24 = parts[0]; const minute = parts[1]; const second = parts[2] || '00';
+        const converted = convert24hrTo12hr(parseInt(hour24, 10), parseInt(minute, 10));
+        return {
+            originalReferenceTime: `${hour24}:${minute}:${second}`,
+            currentHour: converted.hour, currentMinute: converted.minute,
+            currentPeriod: converted.period, override: null,
+            uniqueId: `tp-${Date.now()}-${Math.random()}`
+        };
+    }
+    
+    // --- CORE LOGIC ---
+    function randomizeAllSecondsAndCalculate() {
+        const { timePoints } = currentSettings;
+        if (!timePoints || timePoints.length <= 1) {
+            currentDisplayedData = []; updateDisplay(); checkTotalWorkHours(); return;
+        }
+        const randomizedChronologicalPoints24Hr = timePoints.map(tp => {
+            const h24 = convert12hrTo24hr(tp.currentHour, tp.currentPeriod);
+            const randomSecond = Math.floor(Math.random() * 60);
+            return `${formatTimeComponent(h24)}:${formatTimeComponent(tp.currentMinute)}:${formatTimeComponent(randomSecond)}`;
+        });
+        const newTableData = [];
+        for (let i = 0; i < timePoints.length - 1; i++) {
+            const startPoint = timePoints[i];
+            const nextPoint = timePoints[i+1];
+            let assignedCategory, assignedOT;
+            if (startPoint.override) {
+                assignedCategory = startPoint.override;
+                assignedOT = startPoint.override.ot || currentSettings.ot;
+            } else {
+                let startMinutes = convert12hrTo24hr(startPoint.currentHour, startPoint.currentPeriod) * 60 + startPoint.currentMinute;
+                let endMinutes = convert12hrTo24hr(nextPoint.currentHour, nextPoint.currentPeriod) * 60 + nextPoint.currentMinute;
+                if (endMinutes < startMinutes) { endMinutes += 24 * 60; }
+                const intendedDurationInMinutes = endMinutes - startMinutes;
+                assignedCategory = currentSettings.categoryPair1;
+                assignedOT = currentSettings.ot;
+                if (intendedDurationInMinutes === 15 || intendedDurationInMinutes === 60) {
+                    assignedCategory = { main: 'BREAK', sub: 'BREAK' };
+                    assignedOT = 'NO';
+                }
+            }
+            const startTime24Hr = randomizedChronologicalPoints24Hr[i];
+            const endTime24Hr = randomizedChronologicalPoints24Hr[i + 1];
+            let startTotalSeconds = timeString24hrToSeconds(startTime24Hr);
+            let endTotalSeconds = timeString24hrToSeconds(endTime24Hr);
+            if (endTotalSeconds < startTotalSeconds) endTotalSeconds += 24 * 3600;
+            const durationSeconds = endTotalSeconds - startTotalSeconds;
+            const duration = secondsToHmsString(durationSeconds);
+            const [startH24, startM24, startS24] = startTime24Hr.split(':');
+            const start12hr = convert24hrTo12hr(startH24, startM24);
+            const displayStartTime = `${start12hr.hour}:${formatTimeComponent(start12hr.minute)}:${startS24} ${start12hr.period}`;
+            const [endH24, endM24, endS24] = endTime24Hr.split(':');
+            const end12hr = convert24hrTo12hr(endH24, endM24);
+            const displayEndTime = `${end12hr.hour}:${formatTimeComponent(end12hr.minute)}:${endS24} ${end12hr.period}`;
+            newTableData.push({
+                techNumber: currentSettings.techNumber, username: currentSettings.username,
+                shift: currentSettings.shift, date: currentSettings.date,
+                start: displayStartTime, end: displayEndTime,
+                startTime24: startTime24Hr, endTime24: endTime24Hr,     
+                duration: duration, mainCategory: assignedCategory.main,
+                subCategory: assignedCategory.sub, ot: assignedOT
+            });
+        }
+        currentDisplayedData = newTableData.reverse();
+        updateDisplay();
+        checkTotalWorkHours();
+    }
+
+    function checkTotalWorkHours() {
+        let totalWorkSeconds = 0;
+        currentDisplayedData.forEach(entry => {
+            if (entry.mainCategory !== 'BREAK') {
+                totalWorkSeconds += timeString24hrToSeconds(entry.duration);
+            }
+        });
+
+        if (totalWorkSeconds > DURATION_LIMIT_SECONDS) {
+            const readableWorkHours = secondsToHmsString(totalWorkSeconds);
+            durationWarning.textContent = `Warning: Total work hours are ${readableWorkHours}, which exceeds the 07:30:00 limit.`;
+            durationWarning.classList.remove('hidden');
+        } else {
+            durationWarning.classList.add('hidden');
+        }
+    }
+
+    function updateDisplay() {
+        timeTableBody.innerHTML = '';
+        currentDisplayedData.forEach(entry => {
+            const row = document.createElement('tr');
+            row.innerHTML = `<td>${entry.techNumber}</td><td>${entry.username}</td><td>${entry.shift}</td><td>${entry.date}</td><td>${entry.start}</td><td>${entry.end}</td><td>${entry.duration}</td><td>${entry.mainCategory}</td><td>${entry.subCategory}</td><td>${entry.ot}</td>`;
+            timeTableBody.appendChild(row);
+        });
+    }
+
+    function copyTableDataToClipboard() {
+        if (currentDisplayedData.length === 0) { showMessageBox('No data to copy.', true); return; }
+        let textToCopy = "";
+        currentDisplayedData.forEach(entry => {
+            textToCopy += `${entry.techNumber}\t${entry.username}\t${entry.shift}\t${entry.date}\t${entry.startTime24}\t${entry.endTime24}\t${entry.duration}\t${entry.mainCategory}\t${entry.subCategory}\t${entry.ot}\n`;
+        });
+        navigator.clipboard.writeText(textToCopy)
+            .then(() => showMessageBox('Table data copied (24hr format, no headers)!'))
+            .catch(() => showMessageBox('Failed to copy table data.', true));
+    }
+
+    function showMessageBox(message, isError = false) {
+        messageBox.textContent = message;
+        messageBox.className = 'message-box visible';
+        messageBox.classList.toggle('error', isError);
+        setTimeout(() => messageBox.className = 'message-box', 4000);
+    }
+
+    // --- MODAL UI LOGIC ---
+    function updateSubCategoryDropdown(mainSelect, subSelect, selectedSub = null) {
+        const subOptions = categoryData[mainSelect.value] || [];
+        subSelect.innerHTML = subOptions.map(opt => `<option value="${opt}">${opt}</option>`).join('');
+        if (selectedSub && subOptions.includes(selectedSub)) { subSelect.value = selectedSub; } 
+        else if (subOptions.length > 0) { subSelect.value = subOptions[0]; }
+    }
+
+    function openSettingsModal() {
+        document.getElementById('techNumberInput').value = currentSettings.techNumber;
+        document.getElementById('usernameInput').value = currentSettings.username;
+        document.getElementById('shiftInput').value = currentSettings.shift;
+        document.getElementById('dateInput').value = currentSettings.date;
+        document.getElementById('otInput').value = currentSettings.ot;
+        const mainCatSelect = document.getElementById('mainCatSelect');
+        const subCatSelect = document.getElementById('subCatSelect');
+        mainCatSelect.innerHTML = Object.keys(categoryData).map(k => `<option value="${k}">${k}</option>`).join('');
+        mainCatSelect.value = currentSettings.categoryPair1.main;
+        updateSubCategoryDropdown(mainCatSelect, subCatSelect, currentSettings.categoryPair1.sub);
+        settingsModal.style.display = 'flex';
+    }
+    
+    function saveSettings() {
+        currentSettings.techNumber = document.getElementById('techNumberInput').value;
+        currentSettings.username = document.getElementById('usernameInput').value;
+        currentSettings.shift = document.getElementById('shiftInput').value;
+        currentSettings.date = document.getElementById('dateInput').value;
+        currentSettings.ot = document.getElementById('otInput').value;
+        currentSettings.categoryPair1 = { 
+            main: document.getElementById('mainCatSelect').value,
+            sub: document.getElementById('subCatSelect').value 
+        };
+        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(currentSettings));
+        settingsModal.style.display = 'none';
+        randomizeAllSecondsAndCalculate();
+        showMessageBox('Settings saved!');
+    }
+    
+    function handleApplySchedule() {
+        scheduleErrorMessage.textContent = '';
+        const times = {
+            timeIn: { value: document.getElementById('schedTimeIn').value, name: "Time IN" },
+            break1: { value: document.getElementById('schedBreak1').value, name: "1st Break Start" },
+            lunch:  { value: document.getElementById('schedLunch').value, name: "Lunch Start" },
+            break2: { value: document.getElementById('schedBreak2').value, name: "2nd Break Start" },
+            timeOut:{ value: document.getElementById('schedTimeOut').value, name: "Time OUT" }
+        };
+        for (const key in times) {
+            if (!times[key].value) {
+                scheduleErrorMessage.textContent = `Error: Please fill in the "${times[key].name}" field.`;
+                return;
+            }
+        }
+        const calculatedPoints = [
+            times.timeIn.value, times.break1.value, addMinutesToTime(times.break1.value, 15),
+            times.lunch.value, addMinutesToTime(times.lunch.value, 60),
+            times.break2.value, addMinutesToTime(times.break2.value, 15),
+            times.timeOut.value
+        ];
+        let pointsInMinutes = calculatedPoints.map(t => timeStringToMinutes(t));
+        const dayInMinutes = 24 * 60;
+        for (let i = 1; i < pointsInMinutes.length; i++) {
+            if (pointsInMinutes[i] < pointsInMinutes[0]) pointsInMinutes[i] += dayInMinutes;
+        }
+        for (let i = 1; i < pointsInMinutes.length; i++) {
+            if (pointsInMinutes[i] < pointsInMinutes[i-1]) {
+                scheduleErrorMessage.textContent = 'Error: Times must be in chronological order.';
+                return;
+            }
+        }
+        currentSettings.timePoints = calculatedPoints.map(t => timeString24hrToPointObject(t));
+        currentSettings.timePoints.forEach(p => p.override = null);
+        
+        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(currentSettings));
+        scheduleModal.style.display = 'none';
+        settingsModal.style.display = 'none';
+        randomizeAllSecondsAndCalculate();
+        showMessageBox('New schedule has been generated and saved!');
+    }
+
+    function openInsertTaskModal() {
+        if (currentDisplayedData.length === 0) {
+            showMessageBox("No time segments to modify.", true);
+            return;
+        }
+        taskErrorMessage.textContent = '';
+        const taskSegmentSelect = document.getElementById('taskSegmentSelect');
+        taskSegmentSelect.innerHTML = '';
+        
+        currentDisplayedData.forEach((entry, i) => {
+            if (entry.mainCategory !== 'BREAK') {
+                const option = document.createElement('option');
+                option.value = i;
+                option.textContent = `[Row ${i + 1}] ${entry.start} -> ${entry.end} (${entry.mainCategory})`;
+                taskSegmentSelect.appendChild(option);
+            }
+        });
+
+        if (taskSegmentSelect.options.length === 0) {
+            showMessageBox("No non-break segments available to insert a task into.", true);
+            return;
+        }
+        const taskMainCatSelect = document.getElementById('taskMainCatSelect');
+        const taskSubCatSelect = document.getElementById('taskSubCatSelect');
+        taskMainCatSelect.innerHTML = Object.keys(categoryData).map(k => `<option value="${k}">${k}</option>`).join('');
+        updateSubCategoryDropdown(taskMainCatSelect, taskSubCatSelect);
+        insertTaskModal.style.display = 'flex';
+    }
+
+    function handleApplyTask() {
+        taskErrorMessage.textContent = '';
+        const segmentIndexInDisplayedData = parseInt(document.getElementById('taskSegmentSelect').value, 10);
+        const chronologicalIndex = (currentSettings.timePoints.length - 2) - segmentIndexInDisplayedData;
+        const durationStr = document.getElementById('taskDurationInput').value;
+        if (!/^\d{1,2}:\d{2}:\d{2}$/.test(durationStr)) {
+            taskErrorMessage.textContent = 'Error: Duration must be in HH:MM:SS format.';
+            return;
+        }
+        const newTaskDurationSeconds = timeString24hrToSeconds(durationStr);
+        if (newTaskDurationSeconds <= 0) {
+            taskErrorMessage.textContent = 'Error: Duration must be greater than zero.';
+            return;
+        }
+        const startPoint = currentSettings.timePoints[chronologicalIndex];
+        const endPoint = currentSettings.timePoints[chronologicalIndex + 1];
+        let startPointSeconds = timeString24hrToSeconds(startPoint.originalReferenceTime);
+        let endPointSeconds = timeString24hrToSeconds(endPoint.originalReferenceTime);
+        if (endPointSeconds < startPointSeconds) endPointSeconds += 24 * 3600;
+        const originalSegmentDuration = endPointSeconds - startPointSeconds;
+        if(newTaskDurationSeconds >= originalSegmentDuration) {
+            taskErrorMessage.textContent = 'Error: New task duration is longer than the selected segment.';
+            return;
+        }
+        const newPointTotalSeconds = startPointSeconds + newTaskDurationSeconds;
+        const newPointTimeString = secondsToHmsString(newPointTotalSeconds);
+        const newTimePointObject = timeString24hrToPointObject(newPointTimeString);
+        const main = document.getElementById('taskMainCatSelect').value;
+        const sub = document.getElementById('taskSubCatSelect').value;
+        startPoint.override = { main, sub };
+        currentSettings.timePoints.splice(chronologicalIndex + 1, 0, newTimePointObject);
+        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(currentSettings));
+        randomizeAllSecondsAndCalculate();
+        showMessageBox('New task inserted successfully!');
+        insertTaskModal.style.display = 'none';
+    }
+
+    // --- EVENT LISTENERS ---
+    document.addEventListener('DOMContentLoaded', () => {
+        // Main page
+        randomizeButton.addEventListener('click', randomizeAllSecondsAndCalculate);
+        copyButton.addEventListener('click', copyTableDataToClipboard);
+        settingsButton.addEventListener('click', openSettingsModal);
+        insertTaskButton.addEventListener('click', openInsertTaskModal);
+        
+        // Settings Modal
+        document.getElementById('mainCatSelect').addEventListener('change', () => updateSubCategoryDropdown(document.getElementById('mainCatSelect'), document.getElementById('subCatSelect')));
+        saveSettingsButton.addEventListener('click', saveSettings);
+        cancelSettingsButton.addEventListener('click', () => settingsModal.style.display = 'none');
+        closeSettingsModalButton.addEventListener('click', () => settingsModal.style.display = 'none');
+        resetSettingsButton.addEventListener('click', () => {
+            if (confirm("Reset all settings to default?")) {
+                initializeSettings(true);
+                settingsModal.style.display = 'none';
+                randomizeAllSecondsAndCalculate();
+                showMessageBox("Settings reset to default.");
+            }
+        });
+        
+        // Schedule Modal
+        generateScheduleButton.addEventListener('click', () => { scheduleErrorMessage.textContent = ''; scheduleModal.style.display = 'flex'; });
+        applyScheduleButton.addEventListener('click', handleApplySchedule);
+        cancelScheduleButton.addEventListener('click', () => scheduleModal.style.display = 'none');
+        
+        // Task Modal
+        document.getElementById('taskMainCatSelect').addEventListener('change', () => updateSubCategoryDropdown(document.getElementById('taskMainCatSelect'), document.getElementById('taskSubCatSelect')));
+        applyTaskButton.addEventListener('click', handleApplyTask);
+        cancelTaskButton.addEventListener('click', () => insertTaskModal.style.display = 'none');
+        closeTaskModalButton.addEventListener('click', () => insertTaskModal.style.display = 'none');
+
+        // Initial Load
+        initializeSettings();
+        randomizeAllSecondsAndCalculate();
+    });
+</script>
+
+</body>
+</html>
