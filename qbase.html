@@ -341,7 +341,7 @@
 
                         <div id="drop-zone">
                             <label for="techData" class="block text-sm font-medium text-gray-400 mb-2">Paste your raw, tab-separated project data here, or drag & drop all shapefile parts (.shp, .dbf, etc.)</label>
-                            <textarea id="techData" rows="10" class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none font-mono text-sm" placeholder="Paste data or drop files..."></textarea>
+                            <textarea id="techData" rows="10" class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none font-mono text-sm mb-4" placeholder="Paste data or drop files..."></textarea>
                         </div>
 
                         <div class="flex gap-4 mt-4">
@@ -1498,7 +1498,10 @@
                 div.className = 'flex items-center';
                 div.innerHTML = `<input id="team-filter-${teamName}" data-team-name="${teamName}" type="checkbox" class="h-4 w-4 text-indigo-500 focus:ring-indigo-600 bg-gray-700 border-gray-600 rounded"><label for="team-filter-${teamName}" class="ml-2 block text-sm text-gray-200">${teamName}</label>`;
                 container.appendChild(div);
-                div.querySelector('input').addEventListener('change', () => renderPerformanceMetrics(currentTechStats));
+                div.querySelector('input').addEventListener('change', () => {
+                    renderPerformanceMetrics(currentTechStats);
+                    filterTable();
+                });
             });
         }
         
