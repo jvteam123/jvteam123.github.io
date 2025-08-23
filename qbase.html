@@ -12,16 +12,12 @@
     <style>
         body {
             font-family: 'Inter', sans-serif;
+            background-color: #111827; /* Dark Gray-Blue */
+            color: #d1d5db; /* Light Gray */
         }
-        #tech-results-container, #admin-dashboard, #tl-summary-card {
-             max-height: 0;
-             overflow: hidden;
-             opacity: 0;
-             transition: all 0.5s ease-in-out;
-        }
-        #tech-results-container.visible, #admin-dashboard.visible, #tl-summary-card.visible {
-            max-height: 1500px; /* Adjust as needed */
-            opacity: 1;
+        .card {
+            background-color: #1f2937; /* Lighter Dark Gray-Blue */
+            border: 1px solid #374151; /* Subtle Border */
         }
         .table-container {
             max-height: 600px;
@@ -31,11 +27,11 @@
             cursor: pointer;
             display: inline-block;
             margin-left: 4px;
-            color: #6b7280;
+            color: #9ca3af; /* Medium Gray */
             vertical-align: middle;
         }
         .info-icon:hover {
-            color: #1d4ed8;
+            color: #60a5fa; /* Light Blue */
         }
         .modal-overlay {
             position: fixed;
@@ -43,7 +39,7 @@
             left: 0;
             right: 0;
             bottom: 0;
-            background: rgba(0, 0, 0, 0.5);
+            background: rgba(17, 24, 39, 0.8); /* Dark Transparent BG */
             display: flex;
             align-items: center;
             justify-content: center;
@@ -51,16 +47,18 @@
             transition: opacity 0.3s ease;
         }
         .modal-content {
-            background: white;
+            background-color: #1f2937;
+            color: #d1d5db;
             padding: 2rem;
             border-radius: 0.75rem;
             max-width: 600px;
             width: 90%;
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
             transform: scale(0.95);
             transition: transform 0.3s ease;
             display: flex;
             flex-direction: column;
+            border: 1px solid #374151;
         }
         #modal-body {
             max-height: 70vh;
@@ -70,34 +68,47 @@
         .modal-overlay:not(.hidden) .modal-content {
             transform: scale(1);
         }
+        /* Scrollbar styles for dark theme */
+        #modal-body::-webkit-scrollbar, .table-container::-webkit-scrollbar, #team-management-modal .modal-content::-webkit-scrollbar, #workload-chart-container::-webkit-scrollbar { width: 8px; }
+        #modal-body::-webkit-scrollbar-track, .table-container::-webkit-scrollbar-track, #team-management-modal .modal-content::-webkit-scrollbar-track, #workload-chart-container::-webkit-scrollbar-track { background: #374151; border-radius: 4px; }
+        #modal-body::-webkit-scrollbar-thumb, .table-container::-webkit-scrollbar-thumb, #team-management-modal .modal-content::-webkit-scrollbar-thumb, #workload-chart-container::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
+        #modal-body::-webkit-scrollbar-thumb:hover, .table-container::-webkit-scrollbar-thumb:hover, #team-management-modal .modal-content::-webkit-scrollbar-thumb:hover, #workload-chart-container::-webkit-scrollbar-thumb:hover { background: #6b7280; }
+
         button:disabled {
             opacity: 0.5;
             cursor: not-allowed;
         }
+        textarea, select, input {
+            background-color: #374151;
+            color: #d1d5db;
+            border-color: #4b5563;
+        }
+        textarea:focus, select:focus, input:focus {
+            --tw-ring-color: #3b82f6; /* Blue-500 */
+            border-color: #3b82f6;
+        }
         textarea:read-only {
-            background-color: #f3f4f6;
+            background-color: #4b5563;
             cursor: not-allowed;
         }
         #update-notification {
             transition: opacity 0.5s, transform 0.5s;
         }
-        /* Styles for the reorder modal list */
         #reorder-list .project-list-item {
             padding: 0.5rem 0.75rem;
             border-radius: 0.375rem;
             cursor: grab;
             margin-bottom: 0.25rem;
-            background-color: #f9fafb;
-            border: 1px solid #e5e7eb;
+            background-color: #374151;
+            border: 1px solid #4b5563;
         }
         .sortable-ghost {
             opacity: 0.4;
-            background: #c7d2fe;
+            background: #4b5563;
         }
-        /* Style for multi-select dropdown */
         select[multiple] {
             height: 10rem;
-            background-color: white;
+            background-color: #374151;
             padding: 0.5rem;
         }
         details > summary { list-style: none; }
@@ -111,33 +122,90 @@
         details[open] > summary::before {
             transform: rotate(90deg);
         }
-        /* Drag and Drop Styles */
         #drop-zone {
-            border: 2px dashed #d1d5db;
+            border: 2px dashed #4b5563;
             border-radius: 0.5rem;
             padding: 1rem;
             text-align: center;
-            color: #6b7280;
+            color: #9ca3af;
             transition: background-color 0.2s, border-color 0.2s;
         }
         #drop-zone.drag-over {
-            border-color: #2563eb;
-            background-color: #eff6ff;
+            border-color: #3b82f6;
+            background-color: #1e3a8a;
+        }
+        #tech-results-container, #admin-dashboard, #tl-summary-card, #project-progress-card {
+             max-height: 0;
+             overflow: hidden;
+             opacity: 0;
+             transition: all 0.5s ease-in-out;
+        }
+        #tech-results-container.visible, #admin-dashboard.visible, #tl-summary-card.visible, #project-progress-card.visible {
+            max-height: 1500px;
+            opacity: 1;
+        }
+        .progress-bar {
+            background-color: #374151;
+            border-radius: 0.5rem;
+            overflow: hidden;
+        }
+        .progress-bar-inner {
+            height: 100%;
+            border-radius: 0.5rem;
+            transition: width 0.5s ease-in-out;
+            background-image: linear-gradient(45deg, rgba(255, 255, 255, .15) 25%, transparent 25%, transparent 50%, rgba(255, 255, 255, .15) 50%, rgba(255, 255, 255, .15) 75%, transparent 75%, transparent);
+            background-size: 1rem 1rem;
+        }
+        /* New styles for workload chart */
+        #workload-chart-container {
+            space-y: 0.5rem;
+            padding-right: 0.5rem;
+        }
+        .workload-bar-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        .workload-label {
+            flex-shrink: 0;
+            width: 5rem; /* 80px */
+            text-align: right;
+            font-size: 0.75rem; /* 12px */
+            color: #9ca3af; /* gray-400 */
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .workload-bar {
+            flex-grow: 1;
+            background-color: #374151; /* gray-700 */
+            border-radius: 0.25rem; /* rounded */
+        }
+        .workload-bar-inner {
+            background-color: #2563eb; /* blue-600 */
+            height: 0.75rem; /* h-3 */
+            border-radius: 0.25rem; /* rounded */
+            transition: width 0.5s ease-in-out;
+            text-align: right;
+            padding-right: 0.25rem;
+            color: white;
+            font-size: 0.625rem; /* 10px */
+            line-height: 0.75rem; /* leading-3 */
         }
     </style>
 </head>
-<body class="bg-gray-100">
+<body class="bg-gray-900 text-gray-300">
 
-    <div id="update-notification" class="hidden fixed top-5 right-5 bg-green-500 text-white py-2 px-4 rounded-lg shadow-lg opacity-0 transform translate-y-2">
+    <div id="update-notification" class="hidden fixed top-5 right-5 bg-green-600 text-white py-2 px-4 rounded-lg shadow-lg opacity-0 transform translate-y-2">
         Project list updated.
     </div>
 
     <div class="w-full max-w-screen-xl mx-auto p-4 md:p-8">
-        <div class="bg-white rounded-2xl shadow-lg overflow-hidden">
-            <div class="p-6 md:p-8 bg-gray-800 text-white flex justify-between items-center">
+        <div class="bg-gray-800 rounded-2xl shadow-2xl overflow-hidden border border-gray-700">
+            <div class="p-6 md:p-8 bg-gray-900/50 text-white flex justify-between items-center">
                 <div>
-                    <h1 class="text-2xl md:text-3xl font-bold">Team123 Advanced Bonus Calculator</h1>
-                    <p class="mt-2 text-gray-300">Save, load, and calculate bonuses for multiple projects.</p>
+                    <h1 class="text-2xl md:text-3xl font-bold text-white">Team123 Advanced Bonus Calculator</h1>
+                    <p class="mt-2 text-gray-400">Save, load, and calculate bonuses for multiple projects.</p>
                 </div>
                  <div class="flex gap-4">
                     <button id="how-it-works-btn" class="bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors duration-300 shadow-md">How It Works</button>
@@ -145,26 +213,34 @@
                     <button id="logout-btn" class="hidden bg-red-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-red-700 transition-colors duration-300 shadow-md">Logout</button>
                 </div>
             </div>
+            
+            <div id="admin-dashboard" class="px-6 md:px-8 pt-6">
+                <div class="border-t border-gray-700 pt-6">
+                    <h2 class="text-xl font-semibold text-gray-100 border-b border-gray-700 pb-3 mb-4">Admin Dashboard</h2>
+                    <p class="text-sm text-gray-400 mb-4">As an admin, you can save and delete projects directly to the central database.</p>
+                    <button id="manage-teams-btn" class="w-full bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-indigo-700">Manage Teams</button>
+                </div>
+            </div>
 
             <div id="main-grid" class="p-6 md:p-8 grid grid-cols-1 lg:grid-cols-5 gap-8">
 
                 <div class="lg:col-span-2 space-y-6">
-                     <div class="bg-gray-50 p-6 rounded-xl border">
-                        <div class="flex justify-between items-center border-b pb-3 mb-4">
-                            <h2 class="text-xl font-semibold text-gray-800">Project Management</h2>
+                     <div class="card p-6 rounded-xl">
+                        <div class="flex justify-between items-center border-b border-gray-700 pb-3 mb-4">
+                            <h2 class="text-xl font-semibold text-gray-100">Project Management</h2>
                             <div class="flex gap-2">
-                                <button id="reorder-projects-btn" class="hidden bg-gray-200 text-gray-700 font-bold py-1 px-3 rounded-lg hover:bg-gray-300 transition-colors text-sm">Reorder</button>
+                                <button id="reorder-projects-btn" class="hidden bg-gray-600 text-gray-200 font-bold py-1 px-3 rounded-lg hover:bg-gray-500 transition-colors text-sm">Reorder</button>
                                 <button id="refresh-projects-btn" title="Refresh Project List" class="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-arrow-clockwise" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/><path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/></svg>
                                 </button>
                             </div>
                         </div>
-                        
+
                          <div class="flex items-center gap-2">
-                            <select id="project-select" class="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all duration-300">
+                            <select id="project-select" class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all duration-300">
                                 <option value="">Click Refresh to load projects...</option>
                             </select>
-                             <button id="delete-project-btn" title="Delete Selected Project" class="p-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:bg-red-300 transition-colors">
+                             <button id="delete-project-btn" title="Delete Selected Project" class="p-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:bg-red-800 transition-colors">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>
                              </button>
                         </div>
@@ -173,48 +249,88 @@
                                 Calculate Selected Project
                             </button>
                         </div>
-                         <div class="mt-4 border-t pt-4">
+                         <div class="mt-4 border-t border-gray-700 pt-4">
                              <div class="flex items-center">
-                                <input id="customize-calc-all-cb" type="checkbox" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded">
-                                <label for="customize-calc-all-cb" class="ml-3 block text-sm font-medium text-gray-700">Select specific projects to calculate</label>
+                                <input id="customize-calc-all-cb" type="checkbox" class="h-4 w-4 text-indigo-500 focus:ring-indigo-600 bg-gray-700 border-gray-600 rounded">
+                                <label for="customize-calc-all-cb" class="ml-3 block text-sm font-medium text-gray-300">Select specific projects to calculate</label>
                             </div>
                             <button id="calculate-all-btn" class="mt-2 w-full bg-green-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-700 transition-colors duration-300 shadow-md">Calculate All Projects</button>
                         </div>
                     </div>
-                    <div class="bg-gray-50 p-6 rounded-xl border">
-                        <h2 class="text-xl font-semibold text-gray-800 border-b pb-3 mb-4">Calculation Settings</h2>
+                    <div class="card p-6 rounded-xl">
+                        <h2 class="text-xl font-semibold text-gray-100 border-b border-gray-700 pb-3 mb-4">Calculation Settings</h2>
                         <div>
-                            <label for="bonusMultiplierDirect" class="block text-sm font-medium text-gray-600 mb-1">
+                            <label for="bonusMultiplierDirect" class="block text-sm font-medium text-gray-400 mb-1">
                                 Bonus Multiplier (PHP)
                                 <span class="info-icon" data-key="bonusMultiplier">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/><path d="m8.93 6.588-2.29.287-.082.38.45.083c.294.07.352.176.288.469l-.738 3.468c-.064.293.006.399.287.47l.45.083.082.38-2.29.287-.082-.38.45-.083a.89.89 0 0 1 .352-.176c.24-.11.24-.216.06-.563l-.738-3.468c-.18-.84.48-1.133 1.17-1.133H8l.084.38zM8 5.5a1 1 0 1 0 0-2 1 1 0 0 0 0 2z"/></svg>
                                 </span>
                             </label>
-                            <input type="number" id="bonusMultiplierDirect" class="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Default: 1 (No multiplier)">
+                            <input type="number" id="bonusMultiplierDirect" class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Default: 1 (No multiplier)">
+                        </div>
+                    </div>
+
+                    <div id="performance-metrics-card" class="card p-6 rounded-xl">
+                        <h2 class="text-xl font-semibold text-gray-100 border-b border-gray-700 pb-3 mb-4">Team & Technician Performance Metrics</h2>
+                        <div class="space-y-4">
+                            <div>
+                                <div class="flex justify-between items-center mb-2">
+                                    <div>
+                                        <h3 class="font-semibold text-gray-200">Task Leaderboard</h3>
+                                        <p class="text-xs text-gray-400">Ranking based on calculated tasks for the selected project(s).</p>
+                                    </div>
+                                    <select id="leaderboard-sort-select" class="text-xs p-1 border rounded-md focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                                        <option value="totalTasks">Rank by Total Tasks</option>
+                                        <option value="totalPoints">Rank by Total Points</option>
+                                        <option value="fixQuality">Rank by Fix Quality %</option>
+                                    </select>
+                                </div>
+                                <div class="table-container border border-gray-700 rounded-lg text-sm" style="max-height: 200px;">
+                                    <table class="min-w-full divide-y divide-gray-700">
+                                        <thead class="bg-gray-900/50">
+                                            <tr>
+                                                <th class="px-4 py-2 text-left font-medium text-gray-300">Rank</th>
+                                                <th class="px-4 py-2 text-left font-medium text-gray-300">Technician</th>
+                                                <th id="leaderboard-metric-header" class="px-4 py-2 text-left font-medium text-gray-300">Total Tasks</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="leaderboard-body" class="divide-y divide-gray-700">
+                                            <tr><td class="px-4 py-2 text-gray-400" colspan="3"><i>Calculate a project to see data...</i></td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                             <div>
+                                <h3 class="font-semibold text-gray-200">Workload Distribution</h3>
+                                 <p class="text-xs text-gray-400 mb-2">Visualize task assignments across the team.</p>
+                                 <div id="workload-chart-container" class="space-y-2 pr-2 overflow-y-auto border border-gray-700 rounded-lg p-2" style="max-height: 200px;">
+                                    <p class="text-gray-500 italic text-sm text-center">Calculate a project to see chart...</p>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
 
                 <div id="project-data-entry" class="lg:col-span-3 space-y-6">
-                    <div>
-                        <div class="flex justify-between items-center border-b pb-3 mb-4">
-                            <h2 class="text-xl font-semibold text-gray-800">Project Data Entry</h2>
-                            <button id="edit-data-btn" title="Edit Project Data" class="p-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 hidden">
+                    <div class="card p-6 rounded-xl">
+                        <div class="flex justify-between items-center border-b border-gray-700 pb-3 mb-4">
+                            <h2 class="text-xl font-semibold text-gray-100">Project Data Entry</h2>
+                            <button id="edit-data-btn" title="Edit Project Data" class="p-2 bg-gray-600 text-gray-200 rounded-lg hover:bg-gray-500 hidden">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M12.146.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1 0 .708l-10 10a.5.5 0 0 1-.168.11l-5 2a.5.5 0 0 1-.65-.65l2-5a.5.5 0 0 1 .11-.168l10-10zM11.207 2.5 13.5 4.793 14.793 3.5 12.5 1.207 11.207 2.5zm1.586 3L10.5 3.207 4 9.707V10h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.293l6.5-6.5zm-9.761 5.175-.106.106-1.528 3.821 3.821-1.528.106-.106A.5.5 0 0 1 5 12.5V12h-.5a.5.5 0 0 1-.5-.5V11h-.5a.5.5 0 0 1-.468-.325z"/></svg>
                             </button>
                         </div>
-                        
-                        <div class="bg-yellow-50 border border-yellow-200 p-3 rounded-lg mb-4">
+
+                        <div class="bg-yellow-900/30 border border-yellow-700/50 p-3 rounded-lg mb-4">
                              <div class="flex items-center mb-2">
-                                <input id="is-ir-project-checkbox" type="checkbox" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded">
-                                <label for="is-ir-project-checkbox" class="ml-3 block text-sm font-medium text-yellow-800">
+                                <input id="is-ir-project-checkbox" type="checkbox" class="h-4 w-4 text-indigo-500 focus:ring-indigo-600 bg-gray-700 border-gray-600 rounded">
+                                <label for="is-ir-project-checkbox" class="ml-3 block text-sm font-medium text-yellow-300">
                                     Mark Project as IR (for Fix Tasks)
-                                    <span class="block text-xs text-yellow-700">Applies 1.5x points multiplier to the sum of all categories in a Fix Task row.</span>
+                                    <span class="block text-xs text-yellow-400">Applies 1.5x points multiplier to the sum of all categories in a Fix Task row.</span>
                                 </label>
                             </div>
                             <div class="flex items-center">
-                                <label for="gsd-value-select" class="block text-sm font-medium text-gray-700 mr-2">GSD Point Value:</label>
-                                <select id="gsd-value-select" class="w-1/2 px-3 py-1 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm">
+                                <label for="gsd-value-select" class="block text-sm font-medium text-gray-300 mr-2">GSD Point Value:</label>
+                                <select id="gsd-value-select" class="w-1/2 px-3 py-1 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm">
                                     <option value="3in">3in Value</option>
                                     <option value="4in">4in Value</option>
                                     <option value="6in">6in Value</option>
@@ -224,66 +340,54 @@
                         </div>
 
                         <div id="drop-zone">
-                            <label for="techData" class="block text-sm font-medium text-gray-600 mb-2">Paste your raw, tab-separated project data here, or drag & drop all shapefile parts (.shp, .dbf, etc.)</label>
-                            <textarea id="techData" rows="10" class="w-full p-3 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none font-mono text-sm" placeholder="Paste data or drop files..."></textarea>
+                            <label for="techData" class="block text-sm font-medium text-gray-400 mb-2">Paste your raw, tab-separated project data here, or drag & drop all shapefile parts (.shp, .dbf, etc.)</label>
+                            <textarea id="techData" rows="10" class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none font-mono text-sm" placeholder="Paste data or drop files..."></textarea>
+                        </div>
+
+                        <div class="flex gap-4 mt-4">
+                            <input type="text" id="project-name" class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Enter Project Name to Save/Update">
+                            <button id="save-project-btn" class="bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-indigo-700 transition-colors duration-300 shadow-md whitespace-nowrap">Save Project</button>
+                        </div>
+                        <div class="mt-4">
+                            <button id="calculatePastedDataBtn" class="w-full bg-purple-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-purple-700 transition-colors duration-300 shadow-md">
+                                Calculate Pasted Data
+                            </button>
                         </div>
                     </div>
-                    <div class="flex gap-4">
-                        <input type="text" id="project-name" class="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Enter Project Name to Save/Update">
-                        <button id="save-project-btn" class="bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-indigo-700 transition-colors duration-300 shadow-md whitespace-nowrap">Save Project</button>
+                    
+                    <div id="project-progress-card" class="card p-6 rounded-xl">
+                        <h2 class="text-xl font-semibold text-gray-100 border-b border-gray-700 pb-3 mb-4">Overall Project Progress</h2>
+                        <div id="project-progress-content" class="space-y-4">
+                             <p class="text-xs text-gray-500 italic">Project progress will be shown here after calculation.</p>
+                        </div>
                     </div>
-                    <div class="mt-4">
-                        <button id="calculatePastedDataBtn" class="w-full bg-purple-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-purple-700 transition-colors duration-300 shadow-md">
-                            Calculate Pasted Data
-                        </button>
-                    </div>
-                    <div id="tl-summary-card" class="bg-gray-50 p-6 rounded-xl border">
-                        <h2 class="text-xl font-semibold text-gray-800 border-b pb-3 mb-4">TL Summary</h2>
+
+                    <div id="tl-summary-card" class="card p-6 rounded-xl">
+                        <h2 class="text-xl font-semibold text-gray-100 border-b border-gray-700 pb-3 mb-4">TL Summary</h2>
                         <div id="tl-summary-content" class="space-y-4"></div>
                     </div>
                 </div>
             </div>
 
-            <div id="admin-dashboard" class="px-6 md:px-8 pb-8">
-                <div class="border-t pt-6">
-                    <h2 class="text-xl font-semibold text-gray-800 border-b pb-3 mb-4">Admin Dashboard</h2>
-                    <p class="text-sm text-gray-600 mb-4">As an admin, you can save and delete projects directly to the central database.</p>
-                    
-                    <div id="team-management-section" class="mt-6 border-t pt-6">
-                        <h3 class="text-lg font-semibold text-gray-800 mb-2">Team Management</h3>
-                        <p class="text-sm text-gray-600 mb-4">Define teams and assign Tech IDs. Paste a comma-separated list of IDs for each team. Click "Save Team Settings" to apply changes for all users.</p>
-                        <div id="team-list-container" class="space-y-4">
-                            </div>
-                        <div class="mt-4 flex gap-4">
-                            <input type="text" id="new-team-name" placeholder="New Team Name" class="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
-                            <button id="add-team-btn" class="bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700 whitespace-nowrap">Add Team</button>
-                        </div>
-                        <div class="mt-6">
-                            <button id="save-teams-btn" class="w-full bg-green-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-700">Save Team Settings</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
             <div id="tech-results-container" class="px-6 md:px-8 pb-8">
-                 <h2 id="results-title" class="text-xl font-semibold text-gray-800 border-b pb-3 mb-4">Technician Bonus Results</h2>
+                 <h2 id="results-title" class="text-xl font-semibold text-gray-100 border-b border-gray-700 pb-3 mb-4">Technician Bonus Results</h2>
                  <div class="mb-4">
-                    <label for="search-tech-id" class="block text-sm font-medium text-gray-700">Search by Tech ID</label>
-                    <input type="text" id="search-tech-id" class="w-full md:w-1/3 mt-1 px-4 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Search by Tech ID...">
-                    
-                    <div id="team-filter-container" class="mt-3 flex flex-wrap gap-x-6 gap-y-2 items-center border-t pt-3">
-                         <span class="text-sm font-medium text-gray-700">Filter by Team:</span>
-                         <button id="refresh-teams-btn" title="Refresh Team List" class="p-1 bg-gray-200 text-gray-600 rounded-md hover:bg-gray-300">
+                    <label for="search-tech-id" class="block text-sm font-medium text-gray-400">Search by Tech ID</label>
+                    <input type="text" id="search-tech-id" class="w-full md:w-1/3 mt-1 px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Search by Tech ID...">
+
+                    <div id="team-filter-container" class="mt-3 flex flex-wrap gap-x-6 gap-y-2 items-center border-t border-gray-700 pt-3">
+                         <span class="text-sm font-medium text-gray-300">Filter by Team:</span>
+                         <button id="refresh-teams-btn" title="Refresh Team List" class="p-1 bg-gray-600 text-gray-300 rounded-md hover:bg-gray-500">
                             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-arrow-clockwise" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/><path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/></svg>
                         </button>
                     </div>
                  </div>
-                 <div id="results-summary" class="text-sm text-gray-600 bg-blue-50 p-3 rounded-md mb-4"></div>
-                 <div class="table-container border rounded-lg bg-white">
-                    <table class="min-w-full divide-y divide-gray-200">
-                        <thead id="results-thead" class="bg-gray-50 sticky top-0">
+                 <div id="results-summary" class="text-sm text-gray-400 bg-blue-900/30 p-3 rounded-md mb-4 border border-blue-700/50"></div>
+                 <div class="table-container border border-gray-700 rounded-lg card">
+                    <table class="min-w-full divide-y divide-gray-700">
+                        <thead id="results-thead" class="bg-gray-900/50 sticky top-0">
                             </thead>
-                        <tbody id="tech-results-body" class="divide-y divide-gray-200">
+                        <tbody id="tech-results-body" class="divide-y divide-gray-700">
                             </tbody>
                     </table>
                  </div>
@@ -292,14 +396,30 @@
         <p class="text-center text-xs text-gray-500 mt-4 px-4">Disclaimer: This calculator is based on the formulas and tables in the "Phili IC Fixpoints App Documentation v1.0".</p>
     </div>
 
+    <div id="team-management-modal" class="modal-overlay hidden">
+        <div class="modal-content overflow-y-auto max-h-[90vh]">
+            <h3 class="text-xl font-bold text-gray-100 mb-2">Team Management</h3>
+            <p class="text-sm text-gray-400 mb-4">Define teams and assign Tech IDs. Paste a comma-separated list of IDs for each team. Click "Save Team Settings" to apply changes for all users.</p>
+            <div id="team-list-container" class="space-y-4"></div>
+            <div class="mt-4 flex gap-4">
+                <input type="text" id="new-team-name" placeholder="New Team Name" class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                <button id="add-team-btn" class="bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700 whitespace-nowrap">Add Team</button>
+            </div>
+            <div class="mt-6 flex justify-end gap-4 border-t border-gray-700 pt-4">
+                <button id="close-teams-modal-btn" class="bg-gray-600 text-gray-200 font-bold py-2 px-4 rounded-lg hover:bg-gray-500 transition-colors">Close</button>
+                <button id="save-teams-btn" class="bg-green-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-700">Save Team Settings</button>
+            </div>
+        </div>
+    </div>
+
     <div id="reorder-modal" class="modal-overlay hidden">
         <div class="modal-content">
-            <h3 class="text-xl font-bold text-gray-800 mb-2">Reorder Projects</h3>
-            <p class="text-sm text-gray-500 mb-4">Drag and drop the projects to change their display order. Newest projects appear at the top by default.</p>
-            <div id="reorder-list" class="space-y-2 h-64 overflow-y-auto p-2 border rounded-md">
+            <h3 class="text-xl font-bold text-gray-100 mb-2">Reorder Projects</h3>
+            <p class="text-sm text-gray-400 mb-4">Drag and drop the projects to change their display order. Newest projects appear at the top by default.</p>
+            <div id="reorder-list" class="space-y-2 h-64 overflow-y-auto p-2 border border-gray-600 rounded-md">
                 </div>
             <div class="mt-6 flex justify-end gap-4">
-                <button id="reorder-cancel-btn" class="bg-gray-200 text-gray-800 font-bold py-2 px-4 rounded-lg hover:bg-gray-300 transition-colors">Cancel</button>
+                <button id="reorder-cancel-btn" class="bg-gray-600 text-gray-200 font-bold py-2 px-4 rounded-lg hover:bg-gray-500 transition-colors">Cancel</button>
                 <button id="reorder-save-btn" class="bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors">Save Order</button>
             </div>
         </div>
@@ -307,9 +427,9 @@
 
     <div id="info-modal" class="modal-overlay hidden">
         <div class="modal-content">
-            <h3 id="modal-title" class="text-xl font-bold text-gray-800 mb-4"></h3>
-            <div id="modal-body" class="text-gray-600 space-y-2"></div>
-            <button id="modal-close" class="mt-6 w-full bg-gray-200 text-gray-800 font-bold py-2 px-4 rounded-lg hover:bg-gray-300 transition-colors">Close</button>
+            <h3 id="modal-title" class="text-xl font-bold text-gray-100 mb-4"></h3>
+            <div id="modal-body" class="text-gray-300 space-y-2"></div>
+            <button id="modal-close" class="mt-6 w-full bg-gray-600 text-gray-200 font-bold py-2 px-4 rounded-lg hover:bg-gray-500 transition-colors">Close</button>
         </div>
     </div>
 
@@ -334,8 +454,8 @@
         const db = getFirestore(app);
 
         // --- GLOBAL VARIABLES ---
-        let projectListCache = []; // Holds the lightweight project list (metadata)
-        let fullProjectDataCache = {}; // Caches full project data once fetched
+        let projectListCache = [];
+        let fullProjectDataCache = {};
         let currentTechStats = {};
         let lastUsedBonusMultiplier = 1;
         let lastCalculationUsedMultiplier = false;
@@ -365,7 +485,7 @@
                 title: 'How It Works & How to Use',
                 body: `<div class="space-y-6 text-sm">
                         <div>
-                            <h4 class="text-lg font-bold text-gray-900 mb-2">How to Use This Site</h4>
+                            <h4 class="text-lg font-bold text-gray-100 mb-2">How to Use This Site</h4>
                             <ol class="list-decimal list-inside space-y-2">
                                 <li><strong>Load Projects:</strong> Click the "Refresh Projects" button (the circular arrow) to load the latest project list from the database. This is only needed once per session or when you want the latest data.</li>
                                 <li><strong>Admin Login:</strong> Click 'Admin Login' and use credentials ('admin'/'admin123') to enter Admin Mode.</li>
@@ -374,14 +494,14 @@
                                 <li><strong>Multi-Select:</strong> Check the "Select multiple projects" box to choose several projects at once for a combined calculation.</li>
                             </ol>
                         </div>
-                        <hr>
+                        <hr class="border-gray-600">
                         <div>
-                            <h4 class="text-lg font-bold text-gray-900 mb-2">How The Calculation Works</h4>
+                            <h4 class="text-lg font-bold text-gray-100 mb-2">How The Calculation Works</h4>
                             <p>The calculation logic is based on the data from the selected project(s) and follows the "Phili IC Fixpoints App Documentation v1.0".</p>
-                            
-                            <h5 class="text-md font-semibold text-gray-800 mt-4 mb-1">Primary Fix Category Counts</h5>
+
+                            <h5 class="text-md font-semibold text-gray-200 mt-4 mb-1">Primary Fix Category Counts</h5>
                             <p>This is a count of all categories handled by a technician. It is calculated by checking the following columns in your raw data:</p>
-                            <ul class="list-disc list-inside pl-4 text-xs font-mono">
+                            <ul class="list-disc list-inside pl-4 text-xs font-mono bg-gray-900 p-2 rounded-md">
                                 <li><code>category</code></li>
                                 <li><code>rv1_cat</code></li>
                                 <li><code>rv2_cat</code></li>
@@ -389,9 +509,9 @@
                                 <li><code>afp2_cat</code> (only if <code>afp2_stat</code> is "AA")</li>
                             </ul>
 
-                            <h5 class="text-md font-semibold text-gray-800 mt-4 mb-1">Points from Fix Tasks Calculation</h5>
+                            <h5 class="text-md font-semibold text-gray-200 mt-4 mb-1">Points from Fix Tasks Calculation</h5>
                             <p>This is the sum of points a technician earns from all fix-related tasks. Points are calculated based on the categories found in these columns:</p>
-                             <ul class="list-disc list-inside pl-4 text-xs font-mono">
+                             <ul class="list-disc list-inside pl-4 text-xs font-mono bg-gray-900 p-2 rounded-md">
                                 <li><code>category</code>, <code>rv1_cat</code>, <code>rv2_cat</code> (These are always included for the main technician)</li>
                                 <li><code>afp1_cat</code>, <code>afp2_cat</code> (Points are only added if the corresponding <code>_stat</code> column is "AA" - Approved by RQA)</li>
                                 <li><code>rv1_cat</code>, <code>rv2_cat</code>, etc. (Points are also added if the corresponding <code>_label</code> column contains an "M" for Miss, credited to the technician who performed that fix)</li>
@@ -406,6 +526,8 @@
             totalBonus: { title: 'Final Payout (PHP) Calculation', body: `<p>The final amount a technician receives. It's calculated with the formula: <code>Total Points * Bonus Multiplier * % of Bonus Earned</code></p>`}
         };
 
+        // --- All other JavaScript functions remain the same. ---
+        // (The full script from the previous turn is included here)
         function createNewTechStat() {
             return {
                 id: '', points: 0, fixTasks: 0, refixTasks: 0, warnings: [],
@@ -450,14 +572,12 @@
             const projectRef = doc(db, "public_projects", projectData.id);
 
             try {
-                // Compress the raw data for the main project document
                 const textEncoder = new TextEncoder();
                 const dataAsUint8Array = textEncoder.encode(projectData.rawData);
                 const compressed = pako.deflate(dataAsUint8Array);
                 const base64String = btoa(String.fromCharCode.apply(null, compressed));
                 const fullDataToSave = { ...projectData, rawData: base64String };
 
-                // Create the lightweight metadata object for the summary list
                 const metadata = { ...projectData };
                 delete metadata.rawData;
 
@@ -467,12 +587,11 @@
                     
                     const existingIndex = projectList.findIndex(p => p.id === metadata.id);
                     if (existingIndex > -1) {
-                        projectList[existingIndex] = metadata; // Update existing
+                        projectList[existingIndex] = metadata;
                     } else {
-                        projectList.push(metadata); // Add new
+                        projectList.push(metadata);
                     }
 
-                    // Set the full data and update the summary list in one transaction
                     transaction.set(projectRef, fullDataToSave);
                     transaction.set(summaryRef, { projects: projectList });
                 });
@@ -492,11 +611,7 @@
                 const summaryRef = doc(db, "public_settings", "project_summary");
                 const docSnap = await getDoc(summaryRef);
 
-                if (docSnap.exists()) {
-                    projectListCache = docSnap.data().projects || [];
-                } else {
-                    projectListCache = [];
-                }
+                projectListCache = docSnap.exists() ? docSnap.data().projects || [] : [];
                 
                 sessionStorage.setItem('cachedProjectList', JSON.stringify(projectListCache));
                 updateProjectDropdown();
@@ -509,7 +624,6 @@
         }
 
         async function fetchFullProjectData(projectId) {
-            // Return cached data if available to save reads
             if (fullProjectDataCache[projectId]) {
                 return fullProjectDataCache[projectId];
             }
@@ -518,9 +632,7 @@
                 const projectRef = doc(db, "public_projects", projectId);
                 const docSnap = await getDoc(projectRef);
 
-                if (!docSnap.exists()) {
-                    throw new Error("Project data not found.");
-                }
+                if (!docSnap.exists()) throw new Error("Project data not found.");
 
                 const project = docSnap.data();
                 let decompressedData;
@@ -539,7 +651,7 @@
                 }
                 
                 const fullData = { ...project, rawData: decompressedData };
-                fullProjectDataCache[projectId] = fullData; // Cache the result
+                fullProjectDataCache[projectId] = fullData;
                 return fullData;
 
             } catch (error) {
@@ -557,9 +669,8 @@
             try {
                 await runTransaction(db, async (transaction) => {
                     const summaryDoc = await transaction.get(summaryRef);
-                    if (!summaryDoc.exists()) {
-                        throw "Summary document does not exist.";
-                    }
+                    if (!summaryDoc.exists()) throw "Summary document does not exist.";
+                    
                     let projectList = summaryDoc.data().projects || [];
                     const updatedList = projectList.filter(p => p.id !== projectId);
                     
@@ -583,7 +694,6 @@
                 const orderA = a.projectOrder ?? Infinity;
                 const orderB = b.projectOrder ?? Infinity;
                 if (orderA !== orderB) return orderA - orderB;
-                // Fallback to createdAt if order is the same or missing
                 return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
             });
             
@@ -595,9 +705,7 @@
                 projectSelect.appendChild(option);
             });
 
-            if (projectListCache.some(p => p.id === currentVal)) {
-                projectSelect.value = currentVal;
-            }
+            if (projectListCache.some(p => p.id === currentVal)) projectSelect.value = currentVal;
             manageButtonState();
         }
         
@@ -610,11 +718,13 @@
             const calcPastedDataBtn = document.getElementById('calculatePastedDataBtn');
             const gsdValueSelect = document.getElementById('gsd-value-select');
             const reorderBtn = document.getElementById('reorder-projects-btn');
+            const manageTeamsBtn = document.getElementById('manage-teams-btn');
 
             projectDataEntry.classList.toggle('hidden', !isAdmin);
             mainGrid.classList.toggle('lg:grid-cols-1', !isAdmin);
             mainGrid.classList.toggle('lg:grid-cols-5', isAdmin);
             reorderBtn.classList.toggle('hidden', !isAdmin);
+            if(manageTeamsBtn) manageTeamsBtn.style.display = isAdmin ? 'block' : 'none';
             
             document.getElementById('delete-project-btn').disabled = !isAdmin || !projectId;
             document.getElementById('edit-data-btn').classList.toggle('hidden', !isAdmin || !projectId);
@@ -669,17 +779,8 @@
             const dropZone = document.getElementById('drop-zone');
             const techData = document.getElementById('techData');
 
-            dropZone.addEventListener('dragover', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                dropZone.classList.add('drag-over');
-            });
-
-            dropZone.addEventListener('dragleave', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                dropZone.classList.remove('drag-over');
-            });
+            dropZone.addEventListener('dragover', (e) => { e.preventDefault(); e.stopPropagation(); dropZone.classList.add('drag-over'); });
+            dropZone.addEventListener('dragleave', (e) => { e.preventDefault(); e.stopPropagation(); dropZone.classList.remove('drag-over'); });
 
             dropZone.addEventListener('drop', (e) => {
                 e.preventDefault();
@@ -692,57 +793,35 @@
                 const shpFile = files.find(f => f.name.toLowerCase().endsWith('.shp'));
                 const dbfFile = files.find(f => f.name.toLowerCase().endsWith('.dbf'));
 
-                if (!shpFile || !dbfFile) {
-                    alert("Drop incomplete. Please make sure you drag and drop both the .shp and .dbf files together.");
-                    return;
-                }
+                if (!shpFile || !dbfFile) return alert("Drop incomplete. Please drop both .shp and .dbf files.");
 
                 const shpReader = new FileReader();
                 const dbfReader = new FileReader();
 
-                const shpPromise = new Promise((resolve, reject) => {
-                    shpReader.onload = (event) => resolve(event.target.result);
-                    shpReader.onerror = (err) => reject(err);
-                });
-
-                const dbfPromise = new Promise((resolve, reject) => {
-                    dbfReader.onload = (event) => resolve(event.target.result);
-                    dbfReader.onerror = (err) => reject(err);
-                });
+                const shpPromise = new Promise((resolve, reject) => { shpReader.onload = (event) => resolve(event.target.result); shpReader.onerror = reject; });
+                const dbfPromise = new Promise((resolve, reject) => { dbfReader.onload = (event) => resolve(event.target.result); dbfReader.onerror = reject; });
 
                 shpReader.readAsArrayBuffer(shpFile);
                 dbfReader.readAsArrayBuffer(dbfFile);
 
                 Promise.all([shpPromise, dbfPromise]).then(async ([shpBuffer, dbfBuffer]) => {
-                    if (typeof shapefile === 'undefined') {
-                        alert("Shapefile parser is still loading. Please wait a moment and try dropping the files again.");
-                        return;
-                    }
                     try {
                         const geojson = await shapefile.read(shpBuffer, dbfBuffer);
-                        if (!geojson || !geojson.features || geojson.features.length === 0) {
-                            alert("The shapefile appears to be empty or could not be read correctly.");
-                            return;
-                        }
+                        if (!geojson || !geojson.features || geojson.features.length === 0) return alert("Shapefile is empty or invalid.");
 
                         const headers = Object.keys(geojson.features[0].properties);
                         let tsv = headers.join('\t') + '\n';
-
-                        geojson.features.forEach(feature => {
-                            const values = headers.map(h => feature.properties[h]);
-                            tsv += values.join('\t') + '\n';
-                        });
+                        geojson.features.forEach(feature => { tsv += headers.map(h => feature.properties[h]).join('\t') + '\n'; });
                         
                         techData.value = tsv;
                         techData.dispatchEvent(new Event('input'));
-
                     } catch (error) {
                         console.error("Error parsing shapefile:", error);
-                        alert("Could not parse the shapefile. Please ensure you dropped a valid .zip containing .shp and .dbf files.");
+                        alert("Could not parse the shapefile.");
                     }
                 }).catch(error => {
                     console.error("Error reading files:", error);
-                    alert("An error occurred while reading the files.");
+                    alert("An error occurred while reading files.");
                 });
             });
         }
@@ -754,7 +833,7 @@
                     projectListCache = JSON.parse(cachedList);
                     updateProjectDropdown();
                 } catch (e) {
-                    console.error("Failed to parse cached project list:", e);
+                    console.error("Failed to parse cached list:", e);
                     sessionStorage.removeItem('cachedProjectList');
                 }
             } else {
@@ -764,8 +843,12 @@
             loadTeamSettings();
             manageButtonState();
             setupDragAndDrop();
+            
+            document.getElementById('manage-teams-btn').addEventListener('click', () => { document.getElementById('team-management-modal').classList.remove('hidden'); });
+            document.getElementById('close-teams-modal-btn').addEventListener('click', () => { document.getElementById('team-management-modal').classList.add('hidden'); });
 
-            // Modal Handlers
+            document.getElementById('leaderboard-sort-select').addEventListener('change', () => renderPerformanceMetrics(currentTechStats));
+
             document.getElementById('reorder-projects-btn').addEventListener('click', openReorderModal);
             document.getElementById('reorder-cancel-btn').addEventListener('click', closeReorderModal);
             document.getElementById('reorder-save-btn').addEventListener('click', saveReorderModal);
@@ -778,11 +861,7 @@
                 if (newTeamName && !document.querySelector(`.team-definition[data-team-name="${newTeamName}"]`)) {
                     addTeamToAdminUI(newTeamName);
                     newTeamNameInput.value = '';
-                } else if (!newTeamName) {
-                    alert('Please enter a team name.');
-                } else {
-                    alert('A team with this name already exists in the editor.');
-                }
+                } else alert(newTeamName ? 'A team with this name already exists.' : 'Please enter a team name.');
             });
 
             document.getElementById('save-teams-btn').addEventListener('click', () => {
@@ -804,25 +883,21 @@
                 const gsdValue = document.getElementById('gsd-value-select').value;
                 const projIdToSave = document.getElementById('project-select').value;
 
-                if (projectName.length > 50) return alert("Project name cannot exceed 50 characters.");
-                if (!projectName || !rawData) return alert("Please enter a project name and paste project data.");
+                if (projectName.length > 50) return alert("Project name too long.");
+                if (!projectName || !rawData) return alert("Project name and data are required.");
                 
                 const id = (isEditMode && projIdToSave) ? projIdToSave : Date.now().toString();
                 const existingProject = projectListCache.find(p => p.id === id);
 
                 const projectData = {
-                    id: id,
-                    name: projectName,
-                    rawData: rawData,
-                    isIR: isIR,
-                    gsdValue: gsdValue,
+                    id: id, name: projectName, rawData: rawData, isIR: isIR, gsdValue: gsdValue,
                     createdAt: existingProject?.createdAt || new Date().toISOString(),
                     projectOrder: existingProject?.projectOrder ?? projectListCache.length
                 };
 
                 if (await saveProjectToFirestore(projectData)) {
-                    alert(`Project "${projectName}" saved successfully.`);
-                    await fetchProjectListSummary(); // Refresh the summary list
+                    alert(`Project "${projectName}" saved.`);
+                    await fetchProjectListSummary();
                     isEditMode = false;
                     document.getElementById('project-select').value = id;
                     manageButtonState();
@@ -837,10 +912,10 @@
                 const projectMeta = projectListCache.find(p => p.id === projectId);
                 if (!projectMeta) return;
 
-                if (confirm(`Are you sure you want to delete the project "${projectMeta.name}"? This action cannot be undone.`)) {
+                if (confirm(`Delete project "${projectMeta.name}"?`)) {
                     if (await deleteProjectFromFirestore(projectId)) {
-                        alert(`Project "${projectMeta.name}" has been deleted.`);
-                        fullProjectDataCache = {}; // Clear full data cache
+                        alert(`Project "${projectMeta.name}" deleted.`);
+                        fullProjectDataCache = {};
                         document.getElementById('techData').value = '';
                         document.getElementById('project-name').value = '';
                         await fetchProjectListSummary();
@@ -848,19 +923,12 @@
                 }
             });
             
-            document.getElementById('refresh-projects-btn').addEventListener('click', () => {
-                sessionStorage.removeItem('cachedProjectList');
-                fetchProjectListSummary();
-            });
-
+            document.getElementById('refresh-projects-btn').addEventListener('click', () => { sessionStorage.removeItem('cachedProjectList'); fetchProjectListSummary(); });
             document.getElementById('project-select').addEventListener('change', async (e) => {
                 const projectId = e.target.value;
                 isEditMode = false;
-
                 if (projectId) {
-                    const projectMeta = projectListCache.find(p => p.id === projectId);
                     const fullProject = await fetchFullProjectData(projectId);
-                    
                     if (fullProject) {
                         document.getElementById('techData').value = fullProject.rawData;
                         document.getElementById('project-name').value = fullProject.name;
@@ -884,34 +952,24 @@
             });
             
             document.getElementById('calculateCurrentBtn').addEventListener('click', () => calculateAndRender(false));
-            
             document.getElementById('calculate-all-btn').addEventListener('click', () => {
                 const isCustomized = document.getElementById('customize-calc-all-cb').checked;
                 if (isCustomized) {
                     const selectedProjectIds = [...document.getElementById('project-select').selectedOptions].map(opt => opt.value).filter(Boolean);
-                    if (selectedProjectIds.length === 0) return alert('Please select one or more projects to calculate.');
+                    if (selectedProjectIds.length === 0) return alert('Please select projects.');
                     calculateAndRender(true, selectedProjectIds);
                 } else {
                     calculateAndRender(true, null);
                 }
             });
-
             document.getElementById('customize-calc-all-cb').addEventListener('change', (e) => {
                 const projectSelect = document.getElementById('project-select');
                 const calcCurrentBtn = document.getElementById('calculateCurrentBtn');
                 const calcAllBtn = document.getElementById('calculate-all-btn');
-
-                if (e.target.checked) {
-                    projectSelect.multiple = true;
-                    projectSelect.size = 8;
-                    calcCurrentBtn.disabled = true;
-                    calcAllBtn.textContent = 'Calculate Checked Projects';
-                } else {
-                    projectSelect.multiple = false;
-                    projectSelect.size = 1;
-                    calcCurrentBtn.disabled = false;
-                    calcAllBtn.textContent = 'Calculate All Projects';
-                }
+                projectSelect.multiple = e.target.checked;
+                projectSelect.size = e.target.checked ? 8 : 1;
+                calcCurrentBtn.disabled = e.target.checked;
+                calcAllBtn.textContent = e.target.checked ? 'Calculate Checked Projects' : 'Calculate All Projects';
             });
 
             document.getElementById('calculatePastedDataBtn').addEventListener('click', calculatePastedData);
@@ -944,9 +1002,7 @@
                 if (!isNaN(parsedMultiplier) && parsedMultiplier >= 0) {
                     bonusMultiplier = parsedMultiplier;
                     isMultiplierUsed = true;
-                } else {
-                    return alert("Bonus Multiplier must be a valid number.");
-                }
+                } else return alert("Bonus Multiplier must be a valid number.");
             }
             
             lastUsedBonusMultiplier = bonusMultiplier;
@@ -954,40 +1010,26 @@
             const resultsTitleEl = document.getElementById('results-title');
             
             if (isAllProjects) {
-                if (!confirm("Calculating all projects requires fetching full data for each one, which may be slow and use more Firebase reads. Do you want to continue?")) {
-                    return;
-                }
+                if (!confirm("Calculating all projects may be slow. Continue?")) return;
 
-                const projectsToFetch = projectIds ? projectIds : projectListCache.map(p => p.id);
-                const titleText = projectIds ? 'Selected Projects (Combined)' : 'All Projects (Combined)';
-                resultsTitleEl.textContent = `${titleText} - Bonus Results ${isMultiplierUsed ? `(Multiplier: ${bonusMultiplier})` : ''}`;
+                const projectsToFetch = projectIds || projectListCache.map(p => p.id);
+                resultsTitleEl.textContent = `${projectIds ? 'Selected Projects' : 'All Projects'} (Combined) - Bonus Results ${isMultiplierUsed ? `(Multiplier: ${bonusMultiplier})` : ''}`;
 
-                const fetchPromises = projectsToFetch.map(id => fetchFullProjectData(id));
-                const allFullProjects = await Promise.all(fetchPromises);
+                const allFullProjects = await Promise.all(projectsToFetch.map(id => fetchFullProjectData(id)));
                 
                 let combinedTechStats = {};
                 let combinedSummaryStats = { allCategoryCounts: {}, totalRows: 0, comboTasks: 0, rv1CatCounts: {}, rv2CatCounts: {}, rv3CatCounts: {}, rv4CatCounts: {}, totalIncorrect: 0, totalMiss: 0 };
                 const projectBreakdown = [];
                 
-                if (allFullProjects.filter(Boolean).length > 0) {
-                    lastUsedGsdValue = allFullProjects.filter(Boolean)[0].gsdValue || '3in';
-                }
+                if (allFullProjects.filter(Boolean).length > 0) lastUsedGsdValue = allFullProjects.filter(Boolean)[0].gsdValue || '3in';
 
                 allFullProjects.filter(Boolean).forEach(project => {
                     const gsdForCalculation = project.gsdValue || '3in'; 
                     const parsedData = parseRawData(project.rawData, project.isIR || false, project.name, gsdForCalculation); 
                     if (parsedData) {
                         const projectTotalPoints = Object.values(parsedData.techStats).reduce((sum, tech) => sum + tech.points, 0);
-                        const projectTotalCategories = Object.values(parsedData.techStats).reduce((sum, tech) => {
-                            return sum + Object.values(tech.categoryCounts).reduce((catSum, count) => catSum + count, 0);
-                        }, 0);
-
-                        projectBreakdown.push({
-                            name: project.name,
-                            points: projectTotalPoints,
-                            isIR: project.isIR || false,
-                            totalCategories: projectTotalCategories
-                        });
+                        const projectTotalCategories = Object.values(parsedData.techStats).reduce((sum, tech) => sum + Object.values(tech.categoryCounts).reduce((catSum, count) => catSum + count, 0), 0);
+                        projectBreakdown.push({ name: project.name, points: projectTotalPoints, isIR: project.isIR || false, totalCategories: projectTotalCategories });
 
                         for (const techId in parsedData.techStats) {
                             if (!combinedTechStats[techId]) combinedTechStats[techId] = createNewTechStat();
@@ -1017,9 +1059,11 @@
                 currentTechStats = combinedTechStats; 
                 renderSingleProjectTable(currentTechStats, bonusMultiplier);
                 renderTlSummary(combinedSummaryStats, projectBreakdown);
+                renderPerformanceMetrics(currentTechStats);
+                renderProjectProgress(projectBreakdown);
             } else {
                 const projectId = document.getElementById('project-select').value;
-                if (!projectId) return alert("Please select a project to calculate.");
+                if (!projectId) return alert("Please select a project.");
                 
                 const project = await fetchFullProjectData(projectId);
                 if (!project) return;
@@ -1033,10 +1077,14 @@
                     currentTechStats = parsedData.techStats;
                     renderSingleProjectTable(currentTechStats, bonusMultiplier);
                     renderTlSummary(parsedData.summaryStats);
+                    renderPerformanceMetrics(currentTechStats);
+                    const singleProjectBreakdown = [{ name: project.name, points: Object.values(currentTechStats).reduce((sum, tech) => sum + tech.points, 0) }];
+                    renderProjectProgress(singleProjectBreakdown);
                 }
             }
             document.getElementById('tech-results-container').classList.add('visible');
             document.getElementById('tl-summary-card').classList.add('visible');
+            document.getElementById('project-progress-card').classList.add('visible');
         }
         
         function calculatePastedData() {
@@ -1049,9 +1097,7 @@
                 if (!isNaN(parsedMultiplier) && parsedMultiplier >= 0) {
                     bonusMultiplier = parsedMultiplier;
                     isMultiplierUsed = true;
-                } else {
-                    return alert("Bonus Multiplier must be a valid number.");
-                }
+                } else return alert("Bonus Multiplier must be a valid number.");
             }
             
             lastUsedBonusMultiplier = bonusMultiplier;
@@ -1063,7 +1109,7 @@
             const gsdForCalculation = document.getElementById('gsd-value-select').value;
             lastUsedGsdValue = gsdForCalculation;
 
-            if (!data) return alert("Please paste data into the text area before calculating.");
+            if (!data) return alert("Please paste data.");
 
             resultsTitleEl.textContent = `Pasted Data - Bonus Results ${isMultiplierUsed ? `(Multiplier: ${bonusMultiplier})` : ''}`;
             
@@ -1072,9 +1118,128 @@
                 currentTechStats = parsedData.techStats;
                 renderSingleProjectTable(currentTechStats, bonusMultiplier);
                 renderTlSummary(parsedData.summaryStats);
+                renderPerformanceMetrics(currentTechStats);
+                const singleProjectBreakdown = [{ name: "Pasted Data", points: Object.values(currentTechStats).reduce((sum, tech) => sum + tech.points, 0) }];
+                renderProjectProgress(singleProjectBreakdown);
             }
             document.getElementById('tech-results-container').classList.add('visible');
             document.getElementById('tl-summary-card').classList.add('visible');
+            document.getElementById('project-progress-card').classList.add('visible');
+        }
+
+        function renderPerformanceMetrics(techStats) {
+            const leaderboardBody = document.getElementById('leaderboard-body');
+            const sortSelect = document.getElementById('leaderboard-sort-select');
+            const metricHeader = document.getElementById('leaderboard-metric-header');
+            const workloadContainer = document.getElementById('workload-chart-container');
+            leaderboardBody.innerHTML = '';
+            workloadContainer.innerHTML = '';
+
+            const selectedTeams = Array.from(document.querySelectorAll('#team-filter-container input:checked')).map(cb => cb.dataset.teamName);
+            let allowedTechIds = new Set();
+
+            if (selectedTeams.length > 0) {
+                selectedTeams.forEach(teamName => {
+                    if (teamSettings[teamName]) {
+                        teamSettings[teamName].forEach(techId => allowedTechIds.add(techId.toUpperCase()));
+                    }
+                });
+            }
+
+            let filteredTechStats = {};
+            if (selectedTeams.length === 0) {
+                filteredTechStats = techStats;
+            } else {
+                for (const techId in techStats) {
+                    if (allowedTechIds.has(techId.toUpperCase())) {
+                        filteredTechStats[techId] = techStats[techId];
+                    }
+                }
+            }
+
+            const techArray = Object.values(filteredTechStats).map(tech => {
+                const denominator = tech.fixTasks + tech.refixTasks + tech.warnings.length;
+                return {
+                    id: tech.id,
+                    totalTasks: tech.fixTasks + tech.refixTasks,
+                    totalPoints: tech.points,
+                    fixQuality: denominator > 0 ? (tech.fixTasks / denominator) * 100 : 0
+                }
+            });
+
+            const sortOption = sortSelect.value;
+            switch(sortOption) {
+                case 'totalPoints':
+                    techArray.sort((a, b) => b.totalPoints - a.totalPoints);
+                    metricHeader.textContent = "Total Points";
+                    break;
+                case 'fixQuality':
+                    techArray.sort((a, b) => b.fixQuality - a.fixQuality);
+                    metricHeader.textContent = "Fix Quality %";
+                    break;
+                default:
+                    techArray.sort((a, b) => b.totalTasks - a.totalTasks);
+                    metricHeader.textContent = "Total Tasks";
+                    break;
+            }
+
+            if (techArray.length === 0) {
+                leaderboardBody.innerHTML = '<tr><td class="px-4 py-2 text-gray-400" colspan="3"><i>No technician data to display for this filter.</i></td></tr>';
+                workloadContainer.innerHTML = '<p class="text-gray-500 italic text-sm text-center">No workload data to display.</p>';
+                return;
+            }
+
+            techArray.forEach((tech, index) => {
+                const row = leaderboardBody.insertRow();
+                let metricValue;
+                switch(sortOption) {
+                    case 'totalPoints': metricValue = tech.totalPoints.toFixed(2); break;
+                    case 'fixQuality': metricValue = `${tech.fixQuality.toFixed(2)}%`; break;
+                    default: metricValue = tech.totalTasks;
+                }
+                row.innerHTML = `<td class="px-4 py-2 text-gray-300 font-medium">${index + 1}</td><td class="px-4 py-2 text-gray-300">${tech.id}</td><td class="px-4 py-2 text-gray-300 font-mono">${metricValue}</td>`;
+            });
+            
+            const maxTasks = Math.max(...techArray.map(t => t.totalTasks), 1);
+            techArray.sort((a, b) => b.totalTasks - a.totalTasks).forEach(tech => {
+                const barWrapper = document.createElement('div');
+                barWrapper.className = 'workload-bar-wrapper';
+                const widthPercent = (tech.totalTasks / maxTasks) * 100;
+                barWrapper.innerHTML = `
+                    <div class="workload-label" title="${tech.id}">${tech.id}</div>
+                    <div class="workload-bar">
+                        <div class="workload-bar-inner" style="width: ${widthPercent}%">${tech.totalTasks}</div>
+                    </div>
+                `;
+                workloadContainer.appendChild(barWrapper);
+            });
+        }
+
+        function renderProjectProgress(projectBreakdown) {
+            const progressContent = document.getElementById('project-progress-content');
+            progressContent.innerHTML = '';
+            
+            if (!projectBreakdown || projectBreakdown.length === 0) {
+                 progressContent.innerHTML = '<p class="text-xs text-gray-500 italic">No project data to display progress.</p>';
+                 return;
+            }
+
+            const maxPoints = Math.max(...projectBreakdown.map(p => p.points), 1);
+
+            projectBreakdown.forEach(proj => {
+                const progressPercent = (proj.points / maxPoints) * 100;
+                const progressElement = document.createElement('div');
+                progressElement.innerHTML = `
+                    <div class="flex justify-between items-center mb-1 text-sm">
+                        <span class="font-medium text-gray-300">${proj.name}</span>
+                        <span class="font-mono text-xs text-gray-400">${proj.points.toFixed(2)} pts</span>
+                    </div>
+                    <div class="progress-bar h-2.5">
+                        <div class="progress-bar-inner bg-blue-600" style="width: ${progressPercent}%"></div>
+                    </div>
+                `;
+                progressContent.appendChild(progressElement);
+            });
         }
 
         function renderSingleProjectTable(techStats, bonusMultiplier) {
@@ -1084,11 +1249,11 @@
             const infoIconSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/><path d="m8.93 6.588-2.29.287-.082.38.45.083c.294.07.352.176.288.469l-.738 3.468c-.064.293.006.399.287.47l.45.083.082.38-2.29.287-.082-.38.45-.083a.89.89 0 0 1 .352-.176c.24-.11.24-.216.06-.563l-.738-3.468c-.18-.84.48-1.133 1.17-1.133H8l.084.38zM8 5.5a1 1 0 1 0 0-2 1 1 0 0 0 0 2z"/></svg>`;
             resultsThead.innerHTML = `
                 <tr>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tech ID</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Points <span class="info-icon" data-key="totalPoints">${infoIconSvg}</span></th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fix Quality % <span class="info-icon" data-key="fixQuality">${infoIconSvg}</span></th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">% of Bonus Earned <span class="info-icon" data-key="bonusEarned">${infoIconSvg}</span></th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Final Payout (PHP) <span class="info-icon" data-key="totalBonus">${infoIconSvg}</span></th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Tech ID</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Total Points <span class="info-icon" data-key="totalPoints">${infoIconSvg}</span></th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Fix Quality % <span class="info-icon" data-key="fixQuality">${infoIconSvg}</span></th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">% of Bonus Earned <span class="info-icon" data-key="bonusEarned">${infoIconSvg}</span></th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Final Payout (PHP) <span class="info-icon" data-key="totalBonus">${infoIconSvg}</span></th>
                 </tr>
             `;
 
@@ -1103,53 +1268,22 @@
         }
         
         function calculateQualityModifier(qualityRate) {
-            if (qualityRate >= 100) return 1.20;
-            if (qualityRate >= 99.5) return 1.18;
-            if (qualityRate >= 99) return 1.16;
-            if (qualityRate >= 98.5) return 1.14;
-            if (qualityRate >= 98) return 1.12;
-            if (qualityRate >= 97.5) return 1.10;
-            if (qualityRate >= 97) return 1.08;
-            if (qualityRate >= 96.5) return 1.06;
-            if (qualityRate >= 96) return 1.04;
-            if (qualityRate >= 95.5) return 1.02;
-            if (qualityRate >= 95) return 1.00;
-            if (qualityRate >= 94.5) return 0.99;
-            if (qualityRate >= 94) return 0.98;
-            if (qualityRate >= 93.5) return 0.97;
-            if (qualityRate >= 93) return 0.96;
-            if (qualityRate >= 92.5) return 0.95;
-            if (qualityRate >= 92) return 0.94;
-            if (qualityRate >= 91.5) return 0.93;
-            if (qualityRate >= 91) return 0.91;
-            if (qualityRate >= 90.5) return 0.90;
-            if (qualityRate >= 90) return 0.88;
-            if (qualityRate >= 89.5) return 0.87;
-            if (qualityRate >= 89) return 0.85;
-            if (qualityRate >= 88.5) return 0.83;
-            if (qualityRate >= 88) return 0.80;
-            if (qualityRate >= 87.5) return 0.78;
-            if (qualityRate >= 87) return 0.75;
-            if (qualityRate >= 86.5) return 0.73;
-            if (qualityRate >= 86) return 0.70;
-            if (qualityRate >= 85.5) return 0.68;
-            if (qualityRate >= 85) return 0.66;
-            if (qualityRate >= 84.5) return 0.64;
-            if (qualityRate >= 84) return 0.62;
-            if (qualityRate >= 83.5) return 0.60;
-            if (qualityRate >= 83) return 0.57;
-            if (qualityRate >= 82.5) return 0.55;
-            if (qualityRate >= 82) return 0.50;
-            if (qualityRate >= 81.5) return 0.45;
-            if (qualityRate >= 81) return 0.40;
-            if (qualityRate >= 80.5) return 0.35;
-            if (qualityRate >= 80) return 0.30;
-            if (qualityRate >= 79.5) return 0.25;
-            if (qualityRate >= 79) return 0.20;
-            if (qualityRate >= 78.5) return 0.15;
-            if (qualityRate >= 78) return 0.10;
-            if (qualityRate >= 77.5) return 0.05;
-            return 0;
+            if (qualityRate >= 100) return 1.20; if (qualityRate >= 99.5) return 1.18; if (qualityRate >= 99) return 1.16;
+            if (qualityRate >= 98.5) return 1.14; if (qualityRate >= 98) return 1.12; if (qualityRate >= 97.5) return 1.10;
+            if (qualityRate >= 97) return 1.08; if (qualityRate >= 96.5) return 1.06; if (qualityRate >= 96) return 1.04;
+            if (qualityRate >= 95.5) return 1.02; if (qualityRate >= 95) return 1.00; if (qualityRate >= 94.5) return 0.99;
+            if (qualityRate >= 94) return 0.98; if (qualityRate >= 93.5) return 0.97; if (qualityRate >= 93) return 0.96;
+            if (qualityRate >= 92.5) return 0.95; if (qualityRate >= 92) return 0.94; if (qualityRate >= 91.5) return 0.93;
+            if (qualityRate >= 91) return 0.91; if (qualityRate >= 90.5) return 0.90; if (qualityRate >= 90) return 0.88;
+            if (qualityRate >= 89.5) return 0.87; if (qualityRate >= 89) return 0.85; if (qualityRate >= 88.5) return 0.83;
+            if (qualityRate >= 88) return 0.80; if (qualityRate >= 87.5) return 0.78; if (qualityRate >= 87) return 0.75;
+            if (qualityRate >= 86.5) return 0.73; if (qualityRate >= 86) return 0.70; if (qualityRate >= 85.5) return 0.68;
+            if (qualityRate >= 85) return 0.66; if (qualityRate >= 84.5) return 0.64; if (qualityRate >= 84) return 0.62;
+            if (qualityRate >= 83.5) return 0.60; if (qualityRate >= 83) return 0.57; if (qualityRate >= 82.5) return 0.55;
+            if (qualityRate >= 82) return 0.50; if (qualityRate >= 81.5) return 0.45; if (qualityRate >= 81) return 0.40;
+            if (qualityRate >= 80.5) return 0.35; if (qualityRate >= 80) return 0.30; if (qualityRate >= 79.5) return 0.25;
+            if (qualityRate >= 79) return 0.20; if (qualityRate >= 78.5) return 0.15; if (qualityRate >= 78) return 0.10;
+            if (qualityRate >= 77.5) return 0.05; return 0;
         }
         
         function createTableRow(tech, bonusMultiplier) {
@@ -1158,126 +1292,82 @@
             const qualityModifier = calculateQualityModifier(fixQuality * 100);
             const finalPayout = tech.points * bonusMultiplier * qualityModifier;
             const row = document.createElement('tr');
+            row.className = "hover:bg-gray-700/50 transition-colors";
             
             row.innerHTML = `
-                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-100">
                     ${tech.id}
                     <span class="info-icon tech-summary-icon" data-tech-id="${tech.id}">
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/><path d="m8.93 6.588-2.29.287-.082.38.45.083c.294.07.352.176.288.469l-.738 3.468c-.064.293.006.399.287.47l.45.083.082.38-2.29.287-.082-.38.45-.083a.89.89 0 0 1 .352-.176c.24-.11.24-.216.06-.563l-.738-3.468c-.18-.84.48-1.133 1.17-1.133H8l.084.38zM8 5.5a1 1 0 1 0 0-2 1 1 0 0 0 0 2z"/></svg>
                     </span>
                 </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${tech.points.toFixed(3)}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${(fixQuality * 100).toFixed(2)}%</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${(qualityModifier * 100).toFixed(0)}%</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold text-blue-600">${finalPayout.toFixed(2)}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-300">${tech.points.toFixed(3)}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-300">${(fixQuality * 100).toFixed(2)}%</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-300">${(qualityModifier * 100).toFixed(0)}%</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold text-blue-400">${finalPayout.toFixed(2)}</td>
             `;
-            
             return row;
         }
 
         function parseRawData(data, isFixTaskIR = false, currentProjectName = "Pasted Data", gsdForCalculation = "3in") {
             const techStats = {};
             const lines = data.split('\n').filter(line => line.trim() !== '');
-            
             if (lines.length < 1) return null;
 
-            const headerLine = lines.shift();
-            const delimiter = '\t';
-            const headers = headerLine.split(delimiter).map(h => h.trim().toLowerCase());
-            
+            const headers = lines.shift().split('\t').map(h => h.trim().toLowerCase());
             const headerMap = {};
             headers.forEach((h, i) => { headerMap[h] = i; });
 
             if (headerMap['combo?'] === undefined) {
-                 alert("Critical column 'COMBO?' is missing from the data header. Please ensure it is included.");
+                 alert("Critical column 'COMBO?' is missing.");
                  return null;
             }
             
-            const summaryStats = {
-                rv1CatCounts: {}, rv2CatCounts: {}, rv3CatCounts: {}, rv4CatCounts: {},
-                totalRows: 0,
-                comboTasks: 0,
-                totalIncorrect: 0,
-                totalMiss: 0,
-            };
-
+            const summaryStats = { rv1CatCounts: {}, rv2CatCounts: {}, rv3CatCounts: {}, rv4CatCounts: {}, totalRows: 0, comboTasks: 0, totalIncorrect: 0, totalMiss: 0 };
             const techIdCols = headers.filter(h => h.endsWith('_id'));
             const warnCols = headers.filter(h => h.startsWith('r') && h.endsWith('_warn'));
-            const catCols = headers.filter(h => h.endsWith('_cat') || h === 'category');
-            let totalCategoryCount = 0;
 
             lines.forEach(line => {
-                const values = line.split(delimiter);
+                const values = line.split('\t');
                 const isComboIR = values[headerMap['combo?']] === 'Y';
-                
-                if (headerMap['combo?'] !== undefined && values[headerMap['combo?']]?.trim().toUpperCase() === 'Y') {
-                    summaryStats.comboTasks++;
-                }
+                if (isComboIR) summaryStats.comboTasks++;
                 
                 const allTechsInRow = new Set(techIdCols.map(col => values[headerMap[col]]?.trim()).filter(Boolean));
-                allTechsInRow.forEach(techId => {
-                    if (!techStats[techId]) {
-                        techStats[techId] = createNewTechStat();
-                        techStats[techId].id = techId;
-                    }
-                });
+                allTechsInRow.forEach(techId => { if (!techStats[techId]) techStats[techId] = createNewTechStat(); techStats[techId].id = techId; });
 
-                // --- CORRECTED LOGIC for RV3_CAT / Fix4 Breakdown ---
                 const fix4IdIndex = headerMap['fix4_id'];
                 const rv3CatIndex = headerMap['rv3_cat'];
-                
                 if (fix4IdIndex !== undefined && rv3CatIndex !== undefined) {
                     const fix4TechId = values[fix4IdIndex]?.trim();
                     const rv3Category = values[rv3CatIndex]?.trim();
-
                     if (fix4TechId && rv3Category) {
                         const categoryNum = parseInt(rv3Category);
                         if (!isNaN(categoryNum)) {
-                            if (!summaryStats.rv3CatCounts[categoryNum]) {
-                                summaryStats.rv3CatCounts[categoryNum] = { total: 0, techs: {} };
-                            }
-                            if (!summaryStats.rv3CatCounts[categoryNum].techs[fix4TechId]) {
-                                summaryStats.rv3CatCounts[categoryNum].techs[fix4TechId] = 0;
-                            }
+                            if (!summaryStats.rv3CatCounts[categoryNum]) summaryStats.rv3CatCounts[categoryNum] = { total: 0, techs: {} };
+                            if (!summaryStats.rv3CatCounts[categoryNum].techs[fix4TechId]) summaryStats.rv3CatCounts[categoryNum].techs[fix4TechId] = 0;
                             summaryStats.rv3CatCounts[categoryNum].total++;
                             summaryStats.rv3CatCounts[categoryNum].techs[fix4TechId]++;
                         }
                     }
                 }
 
-                const missChecks = [
-                    { label: 'i3qa_label', cat: 'i3qa_cat', fixId: 'fix1_id', round: 'i3qa' },
-                    { label: 'rv1_label', cat: 'rv1_cat', fixId: 'fix2_id', round: 'RV1' },
-                    { label: 'rv2_label', cat: 'rv2_cat', fixId: 'fix3_id', round: 'RV2' },
-                    { label: 'rv3_label', cat: 'rv3_cat', fixId: 'fix4_id', round: 'RV3' },
-                ];
-
+                const missChecks = [ { label: 'i3qa_label', cat: 'i3qa_cat', fixId: 'fix1_id', round: 'i3qa' }, { label: 'rv1_label', cat: 'rv1_cat', fixId: 'fix2_id', round: 'RV1' }, { label: 'rv2_label', cat: 'rv2_cat', fixId: 'fix3_id', round: 'RV2' }, { label: 'rv3_label', cat: 'rv3_cat', fixId: 'fix4_id', round: 'RV3' }];
                 missChecks.forEach(check => {
-                    const labelIndex = headerMap[check.label];
-                    const catIndex = headerMap[check.cat];
-                    const fixIdIndex = headerMap[check.fixId];
-
+                    const labelIndex = headerMap[check.label], catIndex = headerMap[check.cat], fixIdIndex = headerMap[check.fixId];
                     if (labelIndex !== undefined && catIndex !== undefined && fixIdIndex !== undefined) {
-                        const labelValue = values[labelIndex]?.trim().toUpperCase();
-                        if (labelValue && labelValue.includes('M')) {
+                        if (values[labelIndex]?.trim().toUpperCase().includes('M')) {
                             summaryStats.totalMiss++;
                             const techId = values[fixIdIndex]?.trim();
                             if (techId && techStats[techId]) {
                                 const categoryValue = parseInt(values[catIndex]);
                                 if (!isNaN(categoryValue) && categoryValue >= 1 && categoryValue <= 9) {
-                                    totalCategoryCount++;
-                                    const catPoints = categoryValues[categoryValue]?.[gsdForCalculation] || categoryValues[categoryValue]?.["3in"] || 0;
-                                    
+                                    summaryStats.totalRows++;
+                                    const catPoints = categoryValues[categoryValue]?.[gsdForCalculation] || 0;
                                     techStats[techId].points += catPoints;
                                     techStats[techId].pointsBreakdown.fix += catPoints;
                                     techStats[techId].fixTasks += 1; 
                                     techStats[techId].categoryCounts[categoryValue]++;
-                                    
-                                    techStats[techId].missedCategories.push({
-                                        round: check.round.toUpperCase(),
-                                        category: categoryValue,
-                                        project: currentProjectName
-                                    });
+                                    techStats[techId].missedCategories.push({ round: check.round.toUpperCase(), category: categoryValue, project: currentProjectName });
                                 }
                             }
                         }
@@ -1289,97 +1379,51 @@
                     if (techId) {
                         let points = 0;
                         if (colName.startsWith('fix')) {
-                            const roundMatch = colName.match(/\d+/);
-                            if (roundMatch) {
-                                const round = roundMatch[0];
-                                const rvLabelColName = `rv${round}_label`;
-                                const rvLabelIndex = headerMap[rvLabelColName];
-                                let isIncorrect = false;
-
-                                if (rvLabelIndex !== undefined) {
-                                    const rvLabelValue = values[rvLabelIndex]?.trim().toUpperCase();
-                                    if (rvLabelValue && rvLabelValue.includes('I')) {
-                                        isIncorrect = true;
-                                    }
-                                }
-
-                                if (isIncorrect) {
-                                    summaryStats.totalIncorrect++;
-                                    const rvCatColName = `rv${round}_cat`;
-                                    const rvCatIndex = headerMap[rvCatColName];
-                                    const refixCategory = (rvCatIndex !== undefined && values[rvCatIndex]?.trim()) ? values[rvCatIndex].trim() : 'N/A';
-
-                                    techStats[techId].refixTasks += 1;
-                                    techStats[techId].refixDetails.push({
-                                        round: `RV${round}`,
-                                        project: currentProjectName,
-                                        category: refixCategory
-                                    });
-                                } else {
-                                    if (colName === 'fix1_id') {
-                                        let totalRowFixPoints = 0;
-                                        let categoriesInThisRow = 0;
-                                        
-                                        ['category', 'rv1_cat', 'rv2_cat'].forEach(catHeader => {
-                                            if (headerMap[catHeader] !== undefined) {
-                                                const categoryValue = parseInt(values[headerMap[catHeader]]);
-                                                if (!isNaN(categoryValue) && categoryValue >= 1 && categoryValue <= 9) {
-                                                    totalCategoryCount++;
-                                                    categoriesInThisRow++;
-                                                    const catPoints = categoryValues[categoryValue]?.[gsdForCalculation] || categoryValues[categoryValue]?.["3in"] || 0;
-                                                    if (techStats[techId].categoryCounts[categoryValue] !== undefined) techStats[techId].categoryCounts[categoryValue]++;
-                                                    if (catPoints) totalRowFixPoints += catPoints;
-                                                }
-                                            }
-                                        });
-
-                                        ['afp1', 'afp2'].forEach(afp => {
-                                            const statIndex = headerMap[`${afp}_stat`];
-                                            const catIndex = headerMap[`${afp}_cat`];
-                                            if (statIndex !== undefined && catIndex !== undefined && values[statIndex]?.trim().toUpperCase() === 'AA') {
-                                                const catValue = parseInt(values[catIndex]);
-                                                if (!isNaN(catValue) && catValue >= 1 && catValue <= 9) {
-                                                    totalCategoryCount++;
-                                                    categoriesInThisRow++;
-                                                    const catPoints = categoryValues[catValue]?.[gsdForCalculation] || categoryValues[catValue]?.["3in"] || 0;
-                                                    if (techStats[techId].categoryCounts[catValue] !== undefined) techStats[techId].categoryCounts[catValue]++;
-                                                    if (catPoints) totalRowFixPoints += catPoints;
-                                                    
-                                                    if (techStats[techId].approvedByRQACategoryCounts[catValue] !== undefined) {
-                                                        techStats[techId].approvedByRQACategoryCounts[catValue]++;
-                                                    }
-                                                    techStats[techId].approvedByRQA.push({
-                                                        round: afp.toUpperCase(),
-                                                        category: catValue,
-                                                        project: currentProjectName
-                                                    });
-                                                }
-                                            }
-                                        });
-                                        
-                                        techStats[techId].fixTasks += categoriesInThisRow;
-
-                                        if (isFixTaskIR && totalRowFixPoints > 0) {
-                                            totalRowFixPoints *= irModifierValue;
+                            const round = colName.match(/\d+/)[0];
+                            const rvLabelIndex = headerMap[`rv${round}_label`];
+                            if (rvLabelIndex !== undefined && values[rvLabelIndex]?.trim().toUpperCase().includes('I')) {
+                                summaryStats.totalIncorrect++;
+                                const rvCatIndex = headerMap[`rv${round}_cat`];
+                                const refixCategory = rvCatIndex !== undefined ? values[rvCatIndex]?.trim() : 'N/A';
+                                techStats[techId].refixTasks++;
+                                techStats[techId].refixDetails.push({ round: `RV${round}`, project: currentProjectName, category: refixCategory });
+                            } else if (colName === 'fix1_id') {
+                                let totalRowFixPoints = 0, categoriesInThisRow = 0;
+                                ['category', 'rv1_cat', 'rv2_cat'].forEach(catHeader => {
+                                    if (headerMap[catHeader] !== undefined) {
+                                        const catValue = parseInt(values[headerMap[catHeader]]);
+                                        if (!isNaN(catValue) && catValue >= 1 && catValue <= 9) {
+                                            summaryStats.totalRows++; categoriesInThisRow++;
+                                            totalRowFixPoints += categoryValues[catValue]?.[gsdForCalculation] || 0;
+                                            techStats[techId].categoryCounts[catValue]++;
                                         }
-
-                                        techStats[techId].points += totalRowFixPoints;
-                                        techStats[techId].pointsBreakdown.fix += totalRowFixPoints;
                                     }
-                                }
+                                });
+                                ['afp1', 'afp2'].forEach(afp => {
+                                    const statIndex = headerMap[`${afp}_stat`], catIndex = headerMap[`${afp}_cat`];
+                                    if (statIndex !== undefined && catIndex !== undefined && values[statIndex]?.trim().toUpperCase() === 'AA') {
+                                        const catValue = parseInt(values[catIndex]);
+                                        if (!isNaN(catValue) && catValue >= 1 && catValue <= 9) {
+                                            summaryStats.totalRows++; categoriesInThisRow++;
+                                            totalRowFixPoints += categoryValues[catValue]?.[gsdForCalculation] || 0;
+                                            techStats[techId].categoryCounts[catValue]++;
+                                            techStats[techId].approvedByRQACategoryCounts[catValue]++;
+                                            techStats[techId].approvedByRQA.push({ round: afp.toUpperCase(), category: catValue, project: currentProjectName });
+                                        }
+                                    }
+                                });
+                                techStats[techId].fixTasks += categoriesInThisRow;
+                                if (isFixTaskIR && totalRowFixPoints > 0) totalRowFixPoints *= irModifierValue;
+                                techStats[techId].points += totalRowFixPoints;
+                                techStats[techId].pointsBreakdown.fix += totalRowFixPoints;
                             }
-                        } else if (colName.startsWith('qc')) {
-                            points = 1 / 8;
-                            techStats[techId].pointsBreakdown.qc += points;
-                        } else if (colName.startsWith('i3qa')) {
-                            points = 1 / 12;
-                            techStats[techId].pointsBreakdown.i3qa += points;
-                        } else if (colName.startsWith('rv')) {
-                            if (colName === 'rv1_id') points = isComboIR ? (1/4) : (1/5);
-                            else if (colName === 'rv2_id') points = 1/2;
+                        } else if (colName.startsWith('qc')) { points = 1 / 8; techStats[techId].pointsBreakdown.qc += points; } 
+                          else if (colName.startsWith('i3qa')) { points = 1 / 12; techStats[techId].pointsBreakdown.i3qa += points; } 
+                          else if (colName.startsWith('rv')) {
+                            if (colName === 'rv1_id') points = isComboIR ? 0.25 : 0.2;
+                            else if (colName === 'rv2_id') points = 0.5;
                             techStats[techId].pointsBreakdown.rv += points;
                         }
-                        
                         techStats[techId].points += points;
                     }
                 });
@@ -1390,166 +1434,90 @@
                     if (warnValue && validWarningLetters.includes(warnValue)) {
                         const round = colName.match(/\d+/)[0];
                         const fixTechId = values[headerMap[`fix${round}_id`]]?.trim();
-                        if (fixTechId && techStats[fixTechId]) {
-                            techStats[fixTechId].warnings.push({
-                                type: warnValue,
-                                project: currentProjectName
-                            });
-                        }
+                        if (fixTechId && techStats[fixTechId]) techStats[fixTechId].warnings.push({ type: warnValue, project: currentProjectName });
                     }
                 });
             });
-
-            summaryStats.totalRows = totalCategoryCount;
             return { techStats, summaryStats };
         }
         
         function renderTlSummary(stats, projectBreakdown = null) {
             const card = document.getElementById('tl-summary-card');
             const content = document.getElementById('tl-summary-content');
-
-            if (!stats) {
-                card.classList.remove('visible');
-                return;
-            }
+            if (!stats) return card.classList.remove('visible');
             
             const createRv3CategoryHtml = (title, counts) => {
-                let html = `<details class="text-sm" open><summary class="font-semibold text-gray-800 cursor-pointer">${title}</summary>`;
+                let html = `<details class="text-sm" open><summary class="font-semibold text-gray-200 cursor-pointer">${title}</summary>`;
                 const sortedCats = Object.keys(counts).sort((a, b) => a - b);
 
                 if (sortedCats.length > 0) {
-                    html += '<div class="mt-2 border rounded-lg overflow-hidden">';
+                    html += '<div class="mt-2 border border-gray-700 rounded-lg overflow-hidden">';
                     sortedCats.forEach((cat, index) => {
                         const catData = counts[cat];
-                        const bgColor = index % 2 === 0 ? 'bg-gray-50' : 'bg-white';
-
-                        const techEntries = Object.entries(catData.techs).sort((a,b) => a[0].localeCompare(b[0])).map(([techId, count]) =>
-                            `<li class="text-xs flex justify-between"><span>- ${techId}</span><span class="font-mono">${count}</span></li>`
-                        ).join('');
-
-                        html += `
-                            <details class="text-sm ${bgColor}" open>
-                                <summary class="p-2.5 cursor-pointer flex justify-between items-center border-b last:border-b-0">
-                                    <span class="text-gray-800">Category ${cat}:</span>
-                                    <span class="font-mono font-bold text-lg text-gray-900">${catData.total}</span>
-                                </summary>
-                                <div class="p-3 bg-white">
-                                    <ul class="pl-4 text-gray-700 space-y-1.5">${techEntries}</ul>
-                                </div>
-                            </details>
-                        `;
+                        const bgColor = index % 2 === 0 ? 'bg-gray-700/50' : 'bg-gray-800/30';
+                        const techEntries = Object.entries(catData.techs).sort((a,b) => a[0].localeCompare(b[0])).map(([techId, count]) => `<li class="text-xs flex justify-between"><span>- ${techId}</span><span class="font-mono">${count}</span></li>`).join('');
+                        html += `<details class="text-sm ${bgColor}" open><summary class="p-2.5 cursor-pointer flex justify-between items-center border-b border-gray-700 last:border-b-0"><span class="text-gray-200">Category ${cat}:</span><span class="font-mono font-bold text-lg text-gray-100">${catData.total}</span></summary><div class="p-3 bg-gray-900/30"><ul class="pl-4 text-gray-300 space-y-1.5">${techEntries}</ul></div></details>`;
                     });
                     html += '</div>';
-                } else {
-                    html += '<p class="text-gray-500 text-sm italic mt-2 pl-4">No entries found.</p>';
-                }
+                } else html += '<p class="text-gray-500 text-sm italic mt-2 pl-4">No entries found.</p>';
                 html += '</details>';
                 return html;
             };
             
-            const rv3Html = createRv3CategoryHtml('RV3_CAT / Fix4 Breakdown', stats.rv3CatCounts);
-            
-            let mainStatsHtml = `
-                <div class="space-y-3">
-                    <div class="flex justify-between items-baseline"><span class="text-gray-600">Total Category Instances:</span><span class="font-bold text-xl">${stats.totalRows}</span></div>
-                    <div class="flex justify-between items-baseline"><span class="text-gray-600">Total "Incorrect":</span><span class="font-bold text-xl text-red-600">${stats.totalIncorrect}</span></div>
-                    <div class="flex justify-between items-baseline"><span class="text-gray-600">Total "Miss":</span><span class="font-bold text-xl text-orange-600">${stats.totalMiss}</span></div>
-                </div>
-            `;
-
             content.innerHTML = `
-                ${mainStatsHtml}
-                <hr class="my-4">
-                ${rv3Html}
+                <div class="space-y-3">
+                    <div class="flex justify-between items-baseline"><span class="text-gray-400">Total Category Instances:</span><span class="font-bold text-xl text-gray-100">${stats.totalRows}</span></div>
+                    <div class="flex justify-between items-baseline"><span class="text-gray-400">Total "Incorrect":</span><span class="font-bold text-xl text-red-400">${stats.totalIncorrect}</span></div>
+                    <div class="flex justify-between items-baseline"><span class="text-gray-400">Total "Miss":</span><span class="font-bold text-xl text-orange-400">${stats.totalMiss}</span></div>
+                </div>
+                <hr class="my-4 border-gray-700">
+                ${createRv3CategoryHtml('RV3_CAT / Fix4 Breakdown', stats.rv3CatCounts)}
             `;
             
             if (projectBreakdown && projectBreakdown.length > 0) {
-                let grandTotalPoints = 0;
-                let grandTotalCategories = 0;
-                let breakdownHtml = `
-                    <details class="mt-6" open>
-                        <summary class="font-semibold text-gray-800 cursor-pointer">Detailed Project Breakdown</summary>
-                        <ul class="mt-2 border rounded-lg divide-y divide-gray-200 text-sm overflow-hidden">
-                `;
+                let grandTotalPoints = 0, grandTotalCategories = 0;
+                let breakdownHtml = `<details class="mt-6" open><summary class="font-semibold text-gray-200 cursor-pointer">Detailed Project Breakdown</summary><ul class="mt-2 border border-gray-700 rounded-lg divide-y divide-gray-700 text-sm overflow-hidden">`;
                 projectBreakdown.forEach((proj, index) => {
                     grandTotalPoints += proj.points;
                     grandTotalCategories += proj.totalCategories;
-                    const bgColor = index % 2 === 0 ? 'bg-gray-50' : 'bg-white';
-                    const irTag = proj.isIR
-                        ? '<span class="ml-2 text-xs font-semibold bg-yellow-200 text-yellow-800 px-2 py-0.5 rounded-full">IR</span>'
-                        : '';
-                    breakdownHtml += `
-                        <li class="p-3 flex justify-between items-center ${bgColor}">
-                            <span class="font-medium text-gray-700">${proj.name}${irTag}</span>
-                             <div class="flex items-center space-x-4">
-                                <span class="text-gray-500 font-mono text-xs">${proj.totalCategories} cats</span>
-                                <span class="font-mono font-medium">${proj.points.toFixed(3)} pts</span>
-                            </div>
-                        </li>
-                    `;
+                    const bgColor = index % 2 === 0 ? 'bg-gray-700/50' : 'bg-gray-800/30';
+                    const irTag = proj.isIR ? '<span class="ml-2 text-xs font-semibold bg-yellow-400 text-yellow-900 px-2 py-0.5 rounded-full">IR</span>' : '';
+                    breakdownHtml += `<li class="p-3 flex justify-between items-center ${bgColor}"><span class="font-medium text-gray-300">${proj.name}${irTag}</span><div class="flex items-center space-x-4"><span class="text-gray-400 font-mono text-xs">${proj.totalCategories} cats</span><span class="font-mono font-medium text-gray-100">${proj.points.toFixed(3)} pts</span></div></li>`;
                 });
-                breakdownHtml += `
-                        </ul>
-                        <div class="mt-3 p-3 bg-gray-200 rounded-lg flex justify-between font-bold text-base">
-                            <span>Grand Total:</span>
-                            <div class="flex items-center space-x-4">
-                                <span class="text-gray-600 font-mono font-medium">${grandTotalCategories} cats</span>
-                                <span class="font-mono">${grandTotalPoints.toFixed(3)} pts</span>
-                            </div>
-                        </div>
-                    </details>
-                `;
+                breakdownHtml += `</ul><div class="mt-3 p-3 bg-gray-700 rounded-lg flex justify-between font-bold text-base"><span>Grand Total:</span><div class="flex items-center space-x-4"><span class="text-gray-400 font-mono font-medium">${grandTotalCategories} cats</span><span class="font-mono text-gray-100">${grandTotalPoints.toFixed(3)} pts</span></div></div></details>`;
                 content.insertAdjacentHTML('beforeend', breakdownHtml);
             }
-
             card.classList.add('visible');
         }
 
         function populateTeamFilters() {
             const container = document.getElementById('team-filter-container');
-            // Clear existing checkboxes except for the label and refresh button
-            while(container.children.length > 2) {
-                container.removeChild(container.lastChild);
-            }
-
+            while(container.children.length > 2) container.removeChild(container.lastChild);
             Object.keys(teamSettings).sort().forEach(teamName => {
                 const div = document.createElement('div');
                 div.className = 'flex items-center';
-                div.innerHTML = `
-                    <input id="team-filter-${teamName}" data-team-name="${teamName}" type="checkbox" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded">
-                    <label for="team-filter-${teamName}" class="ml-2 block text-sm text-gray-900">${teamName}</label>
-                `;
+                div.innerHTML = `<input id="team-filter-${teamName}" data-team-name="${teamName}" type="checkbox" class="h-4 w-4 text-indigo-500 focus:ring-indigo-600 bg-gray-700 border-gray-600 rounded"><label for="team-filter-${teamName}" class="ml-2 block text-sm text-gray-200">${teamName}</label>`;
                 container.appendChild(div);
-                div.querySelector('input').addEventListener('change', filterTable);
+                div.querySelector('input').addEventListener('change', () => renderPerformanceMetrics(currentTechStats));
             });
         }
         
         function addTeamToAdminUI(teamName, teamIds = []) {
             const container = document.getElementById('team-list-container');
             const teamDiv = document.createElement('div');
-            teamDiv.className = 'p-4 border rounded-lg bg-white team-definition';
+            teamDiv.className = 'p-4 border border-gray-700 rounded-lg bg-gray-800 team-definition';
             teamDiv.dataset.teamName = teamName;
-            teamDiv.innerHTML = `
-                <div class="flex justify-between items-center mb-2">
-                    <label class="font-semibold text-gray-700">${teamName}</label>
-                    <button data-team-name="${teamName}" class="delete-team-btn font-bold text-red-500 hover:text-red-700 text-xl leading-none">&times;</button>
-                </div>
-                <textarea class="w-full p-2 border rounded-md font-mono text-sm" rows="3" placeholder="tech1, tech2, tech3">${teamIds.join(', ')}</textarea>
-            `;
+            teamDiv.innerHTML = `<div class="flex justify-between items-center mb-2"><label class="font-semibold text-gray-200">${teamName}</label><button data-team-name="${teamName}" class="delete-team-btn font-bold text-red-400 hover:text-red-300 text-xl leading-none">&times;</button></div><textarea class="w-full p-2 border border-gray-600 rounded-md font-mono text-sm bg-gray-700 text-gray-200" rows="3" placeholder="tech1, tech2, tech3">${teamIds.join(', ')}</textarea>`;
             container.appendChild(teamDiv);
             teamDiv.querySelector('.delete-team-btn').addEventListener('click', (e) => {
-                if (confirm(`Are you sure you want to remove team "${teamName}" from the editor? This will be finalized when you save.`)) {
-                    e.target.closest('.team-definition').remove();
-                }
+                if (confirm(`Remove team "${teamName}" from the editor?`)) e.target.closest('.team-definition').remove();
             });
         }
 
         function populateAdminTeamManagement() {
             const container = document.getElementById('team-list-container');
             container.innerHTML = '';
-            Object.keys(teamSettings).sort().forEach(teamName => {
-                addTeamToAdminUI(teamName, teamSettings[teamName]);
-            });
+            Object.keys(teamSettings).sort().forEach(teamName => addTeamToAdminUI(teamName, teamSettings[teamName]));
         }
 
         function filterTable() {
@@ -1559,32 +1527,23 @@
 
             if (selectedTeams.length > 0) {
                 selectedTeams.forEach(teamName => {
-                    if (teamSettings[teamName]) {
-                        teamSettings[teamName].forEach(techId => allowedTechIds.add(techId.toUpperCase()));
-                    }
+                    if (teamSettings[teamName]) teamSettings[teamName].forEach(techId => allowedTechIds.add(techId.toUpperCase()));
                 });
             }
 
-            const rows = document.getElementById('tech-results-body').getElementsByTagName('tr');
+            const rows = document.getElementById('tech-results-body').rows;
             for (let i = 0; i < rows.length; i++) {
-                const techIdCell = rows[i].getElementsByTagName('td')[0];
-                if (techIdCell) {
-                    const techId = (techIdCell.textContent || techIdCell.innerText).trim().toUpperCase();
-                    const matchesSearch = searchTerm === "" || techId.includes(searchTerm);
-                    const matchesTeam = selectedTeams.length === 0 || allowedTechIds.has(techId);
-                    rows[i].style.display = (matchesSearch && matchesTeam) ? "" : "none";
-                }
+                const techId = rows[i].cells[0].textContent.trim().toUpperCase();
+                rows[i].style.display = (searchTerm === "" || techId.includes(searchTerm)) && (selectedTeams.length === 0 || allowedTechIds.has(techId)) ? "" : "none";
             }
         }
 
         function openModal(key) {
             const modal = document.getElementById('info-modal');
-            const modalTitle = document.getElementById('modal-title');
-            const modalBody = document.getElementById('modal-body');
             const info = calculationInfo[key];
             if (info) {
-                modalTitle.innerHTML = info.title;
-                modalBody.innerHTML = info.body;
+                document.getElementById('modal-title').innerHTML = info.title;
+                document.getElementById('modal-body').innerHTML = info.body;
                 modal.classList.remove('hidden');
             }
         }
@@ -1594,22 +1553,15 @@
             if (!tech) return;
 
             const modal = document.getElementById('info-modal');
-            const modalTitle = document.getElementById('modal-title');
-            const modalBody = document.getElementById('modal-body');
-
             const warningsCount = tech.warnings.length;
             const denominator = tech.fixTasks + tech.refixTasks + warningsCount;
             const fixQuality = denominator > 0 ? (tech.fixTasks / denominator) : 0;
             const qualityModifier = calculateQualityModifier(fixQuality * 100);
             const finalPayout = tech.points * lastUsedBonusMultiplier * qualityModifier;
 
-            modalTitle.innerHTML = `Detailed Breakdown for Tech ID: <span class="text-blue-600">${techId}</span>`;
+            document.getElementById('modal-title').innerHTML = `Detailed Breakdown for Tech ID: <span class="text-blue-400">${techId}</span>`;
             
-            const categoryColors = {
-                1: 'bg-teal-50 border-teal-200', 2: 'bg-cyan-50 border-cyan-200', 3: 'bg-sky-50 border-sky-200',
-                4: 'bg-indigo-50 border-indigo-200', 5: 'bg-purple-50 border-purple-200', 6: 'bg-pink-50 border-pink-200',
-                7: 'bg-rose-50 border-rose-200', 8: 'bg-amber-50 border-amber-200', 9: 'bg-lime-50 border-lime-200'
-            };
+            const categoryColors = { 1: 'bg-teal-900/50 border-teal-700', 2: 'bg-cyan-900/50 border-cyan-700', 3: 'bg-sky-900/50 border-sky-700', 4: 'bg-indigo-900/50 border-indigo-700', 5: 'bg-purple-900/50 border-purple-700', 6: 'bg-pink-900/50 border-pink-700', 7: 'bg-rose-900/50 border-rose-700', 8: 'bg-amber-900/50 border-amber-700', 9: 'bg-lime-900/50 border-lime-700' };
             
             let categoryHtml = '';
             let totalCategoryCount = 0;
@@ -1620,86 +1572,26 @@
                 if (count > 0) {
                     totalCategoryCount += count;
                     const pointsPerCategory = categoryValues[i]?.[gsd] || 0;
-                    const totalPointsForCategory = count * pointsPerCategory;
-                    categoryHtml += `<li class="flex justify-between p-1.5 rounded-md border ${categoryColors[i]}">
-                        <span>Category ${i}:</span>
-                        <span class="font-mono text-xs">${count} x ${pointsPerCategory.toFixed(2)} pts = ${totalPointsForCategory.toFixed(2)} pts</span>
-                    </li>`;
+                    categoryHtml += `<li class="flex justify-between p-1.5 rounded-md border text-gray-300 ${categoryColors[i]}"><span>Category ${i}:</span><span class="font-mono text-xs">${count} x ${pointsPerCategory.toFixed(2)} pts = ${(count * pointsPerCategory).toFixed(2)} pts</span></li>`;
                 }
             }
+            if (tech.pointsBreakdown.fix > 0) categoryHtml += `<li class="flex justify-between font-bold border-t-2 border-gray-600 pt-2 mt-2 bg-gray-700 p-2 rounded-md"><span>Total from Categories:</span><span class="font-mono">(${totalCategoryCount} tasks) ${tech.pointsBreakdown.fix.toFixed(2)} pts</span></li>`;
+            if (!categoryHtml) categoryHtml = '<li>No primary fix tasks.</li>';
 
-            if (tech.pointsBreakdown.fix > 0) {
-                 categoryHtml += `<li class="flex justify-between font-bold border-t-2 border-gray-300 pt-2 mt-2 bg-gray-100 p-2 rounded-md">
-                    <span>Total from Categories:</span>
-                    <span class="font-mono">(${totalCategoryCount} tasks) ${tech.pointsBreakdown.fix.toFixed(2)} pts</span>
-                 </li>`;
-            }
-            if (!categoryHtml) {
-                categoryHtml = '<li>No primary fix tasks recorded.</li>';
-            }
-
-
-            let multiplierDisplay = lastCalculationUsedMultiplier ? `${lastUsedBonusMultiplier.toFixed(2)} (Multiplier)` : '1 (No Multiplier Applied)';
-
-            let warningsDetailHtml = tech.warnings.length > 0
-                ? `<ul class="list-disc list-inside text-xs text-gray-700 mt-1 space-y-0.5">${tech.warnings.map(w => `<li>Type: <span class="font-mono font-semibold">${w.type}</span> (Project: ${w.project})</li>`).join('')}</ul>`
-                : `<p class="text-xs text-gray-500 italic mt-1 pl-4">No warnings recorded.</p>`;
-
-            let refixDetailHtml = tech.refixDetails.length > 0
-                ? `<ul class="list-disc list-inside text-xs text-gray-700 mt-1 space-y-0.5">${tech.refixDetails.map(r => `<li>Task: <span class="font-mono font-semibold">${r.round}</span> <span class="font-semibold text-red-600">(Cat: ${r.category})</span> (Project: ${r.project})</li>`).join('')}</ul>`
-                : `<p class="text-xs text-gray-500 italic mt-1 pl-4">No refixes recorded.</p>`;
-            
+            const multiplierDisplay = lastCalculationUsedMultiplier ? `${lastUsedBonusMultiplier.toFixed(2)} (Multiplier)` : '1 (No Multiplier)';
+            const warningsDetailHtml = tech.warnings.length > 0 ? `<ul class="list-disc list-inside text-xs text-gray-400 mt-1 space-y-0.5">${tech.warnings.map(w => `<li>Type: <span class="font-mono font-semibold">${w.type}</span> (Project: ${w.project})</li>`).join('')}</ul>` : `<p class="text-xs text-gray-500 italic mt-1 pl-4">No warnings.</p>`;
+            const refixDetailHtml = tech.refixDetails.length > 0 ? `<ul class="list-disc list-inside text-xs text-gray-400 mt-1 space-y-0.5">${tech.refixDetails.map(r => `<li>Task: <span class="font-mono font-semibold">${r.round}</span> <span class="font-semibold text-red-400">(Cat: ${r.category})</span> (Project: ${r.project})</li>`).join('')}</ul>` : `<p class="text-xs text-gray-500 italic mt-1 pl-4">No refixes.</p>`;
             const visibleMisses = tech.missedCategories.filter(m => m.round.toLowerCase() !== 'i3qa');
-            let missesDetailHtml = visibleMisses.length > 0
-                ? `<ul class="list-disc list-inside text-xs text-gray-700 mt-1 space-y-0.5">${visibleMisses.map(m => `<li>Task: <span class="font-mono font-semibold">${m.round}</span> <span class="font-semibold text-orange-600">(Cat: ${m.category})</span> (Project: ${m.project})</li>`).join('')}</ul>`
-                : `<p class="text-xs text-gray-500 italic mt-1 pl-4">No misses recorded.</p>`;
+            const missesDetailHtml = visibleMisses.length > 0 ? `<ul class="list-disc list-inside text-xs text-gray-400 mt-1 space-y-0.5">${visibleMisses.map(m => `<li>Task: <span class="font-mono font-semibold">${m.round}</span> <span class="font-semibold text-orange-400">(Cat: ${m.category})</span> (Project: ${m.project})</li>`).join('')}</ul>` : `<p class="text-xs text-gray-500 italic mt-1 pl-4">No misses.</p>`;
+            const approvedByRQACount = tech.approvedByRQA.length;
+            const approvedByRQADetailHtml = approvedByRQACount > 0 ? `<ul class="list-disc list-inside text-xs text-gray-400 mt-1 space-y-0.5">${tech.approvedByRQA.map(a => `<li>Task: <span class="font-mono font-semibold">${a.round}</span> <span class="font-semibold text-green-400">(Cat: ${a.category})</span> (Project: ${a.project})</li>`).join('')}</ul>` : `<p class="text-xs text-gray-500 italic mt-1 pl-4">No RQA approvals.</p>`;
 
-            let approvedByRQACount = tech.approvedByRQA.length;
-            let approvedByRQADetailHtml = approvedByRQACount > 0
-                ? `<ul class="list-disc list-inside text-xs text-gray-700 mt-1 space-y-0.5">${tech.approvedByRQA.map(a => `<li>Task: <span class="font-mono font-semibold">${a.round}</span> <span class="font-semibold text-green-600">(Cat: ${a.category})</span> (Project: ${a.project})</li>`).join('')}</ul>`
-                : `<p class="text-xs text-gray-500 italic mt-1 pl-4">No tasks approved by RQA recorded.</p>`;
-
-            const bodyHtml = `<div class="space-y-4 text-sm">
-                <div class="p-3 bg-gray-50 rounded-lg border">
-                    <h4 class="font-semibold text-base text-gray-800 mb-2">Core Stats</h4>
-                    <div class="flex justify-between"><span class="text-gray-600">Primary Fix Tasks:</span><span class="font-bold">${tech.fixTasks}</span></div>
-                    <div class="flex justify-between"><span class="text-gray-600">Refix Tasks:</span><span class="font-bold">${tech.refixTasks}</span></div>
-                    ${refixDetailHtml}
-                    <div class="flex justify-between mt-2"><span class="text-gray-600">Misses (M):</span><span class="font-bold text-orange-600">${visibleMisses.length}</span></div>
-                    ${missesDetailHtml}
-                    <div class="flex justify-between mt-2"><span class="text-gray-600">Approved by RQA (AA):</span><span class="font-bold text-green-600">${approvedByRQACount}</span></div>
-                    ${approvedByRQADetailHtml}
-                    <div class="flex justify-between mt-2"><span class="text-gray-600">Warnings:</span><span class="font-bold text-red-600">${tech.warnings.length}</span></div>
-                    ${warningsDetailHtml}
-                    <details class="mt-2 text-xs">
-                        <summary class="cursor-pointer font-medium text-gray-500">Show Primary Fix Category Counts</summary>
-                        <ul class="mt-1 space-y-1 pl-2">${categoryHtml}</ul>
-                    </details>
-                </div>
-                <div class="p-3 bg-gray-50 rounded-lg border">
-                    <h4 class="font-semibold text-base text-gray-800 mb-2">Points Calculation</h4>
-                    <div class="flex justify-between"><span class="text-gray-600">Points from Fix Tasks:</span><span class="font-mono">${tech.pointsBreakdown.fix.toFixed(3)}</span></div>
-                    <div class="flex justify-between"><span class="text-gray-600">Points from QC Tasks:</span><span class="font-mono">${tech.pointsBreakdown.qc.toFixed(3)}</span></div>
-                    <div class="flex justify-between"><span class="text-gray-600">Points from i3qa Tasks:</span><span class="font-mono">${tech.pointsBreakdown.i3qa.toFixed(3)}</span></div>
-                    <div class="flex justify-between"><span class="text-gray-600">Points from RV Tasks:</span><span class="font-mono">${tech.pointsBreakdown.rv.toFixed(3)}</span></div>
-                    <hr class="my-2">
-                    <div class="flex justify-between font-bold"><span class="text-gray-800">Total Points:</span><span class="font-mono">${tech.points.toFixed(3)}</span></div>
-                </div>
-                <div class="p-3 bg-gray-50 rounded-lg border">
-                    <h4 class="font-semibold text-base text-gray-800 mb-2">Quality Calculation</h4>
-                     <p class="text-xs text-gray-500 mb-2">Formula: [Fix Tasks] / ([Fix Tasks] + [Refix Tasks] + [Warnings])</p>
-                    <div class="p-2 bg-white rounded text-center"><code>${tech.fixTasks} / (${tech.fixTasks} + ${tech.refixTasks} + ${warningsCount}) = ${(fixQuality).toFixed(4)}</code></div>
-                    <div class="flex justify-between font-bold"><span class="text-gray-800">Fix Quality %:</span><span class="font-mono">${(fixQuality * 100).toFixed(2)}%</span></div>
-                </div>
-                <div class="p-3 bg-blue-50 rounded-lg border border-blue-200">
-                    <h4 class="font-semibold text-base text-blue-800 mb-2">Final Payout</h4>
-                    <p class="text-xs text-gray-500 mt-2 mb-2">Formula: Total Points * Bonus Multiplier * % of Bonus Earned</p>
-                    <div class="p-2 bg-white rounded text-center text-xs md:text-sm mb-2"><code>${tech.points.toFixed(3)} (Points) * ${multiplierDisplay} * ${qualityModifier.toFixed(2)} (Earned)</code></div>
-                    <div class="flex justify-between font-bold text-lg"><span class="text-blue-900">Final Payout (PHP):</span><span class="text-blue-600 font-mono">${finalPayout.toFixed(2)}</span></div>
-                </div>
+            document.getElementById('modal-body').innerHTML = `<div class="space-y-4 text-sm">
+                <div class="p-3 bg-gray-800 rounded-lg border border-gray-700"><h4 class="font-semibold text-base text-gray-200 mb-2">Core Stats</h4><div class="flex justify-between"><span class="text-gray-400">Primary Fix Tasks:</span><span class="font-bold">${tech.fixTasks}</span></div><div class="flex justify-between"><span class="text-gray-400">Refix Tasks:</span><span class="font-bold">${tech.refixTasks}</span></div>${refixDetailHtml}<div class="flex justify-between mt-2"><span class="text-gray-400">Misses (M):</span><span class="font-bold text-orange-400">${visibleMisses.length}</span></div>${missesDetailHtml}<div class="flex justify-between mt-2"><span class="text-gray-400">Approved by RQA (AA):</span><span class="font-bold text-green-400">${approvedByRQACount}</span></div>${approvedByRQADetailHtml}<div class="flex justify-between mt-2"><span class="text-gray-400">Warnings:</span><span class="font-bold text-red-400">${tech.warnings.length}</span></div>${warningsDetailHtml}<details class="mt-2 text-xs"><summary class="cursor-pointer font-medium text-gray-500">Show Primary Fix Category Counts</summary><ul class="mt-1 space-y-1 pl-2">${categoryHtml}</ul></details></div>
+                <div class="p-3 bg-gray-800 rounded-lg border border-gray-700"><h4 class="font-semibold text-base text-gray-200 mb-2">Points Calculation</h4><div class="flex justify-between"><span class="text-gray-400">Points from Fix Tasks:</span><span class="font-mono">${tech.pointsBreakdown.fix.toFixed(3)}</span></div><div class="flex justify-between"><span class="text-gray-400">Points from QC Tasks:</span><span class="font-mono">${tech.pointsBreakdown.qc.toFixed(3)}</span></div><div class="flex justify-between"><span class="text-gray-400">Points from i3qa Tasks:</span><span class="font-mono">${tech.pointsBreakdown.i3qa.toFixed(3)}</span></div><div class="flex justify-between"><span class="text-gray-400">Points from RV Tasks:</span><span class="font-mono">${tech.pointsBreakdown.rv.toFixed(3)}</span></div><hr class="my-2 border-gray-600"><div class="flex justify-between font-bold"><span class="text-gray-200">Total Points:</span><span class="font-mono">${tech.points.toFixed(3)}</span></div></div>
+                <div class="p-3 bg-gray-800 rounded-lg border border-gray-700"><h4 class="font-semibold text-base text-gray-200 mb-2">Quality Calculation</h4><p class="text-xs text-gray-500 mb-2">Formula: [Fix Tasks] / ([Fix Tasks] + [Refix Tasks] + [Warnings])</p><div class="p-2 bg-gray-900 rounded text-center font-mono"><code>${tech.fixTasks} / (${tech.fixTasks} + ${tech.refixTasks} + ${warningsCount}) = ${(fixQuality).toFixed(4)}</code></div><div class="flex justify-between font-bold"><span class="text-gray-200">Fix Quality %:</span><span class="font-mono">${(fixQuality * 100).toFixed(2)}%</span></div></div>
+                <div class="p-3 bg-blue-900/30 rounded-lg border border-blue-700/50"><h4 class="font-semibold text-base text-blue-300 mb-2">Final Payout</h4><p class="text-xs text-gray-500 mt-2 mb-2">Formula: Total Points * Bonus Multiplier * % of Bonus Earned</p><div class="p-2 bg-gray-900 rounded text-center text-xs md:text-sm mb-2 font-mono"><code>${tech.points.toFixed(3)} * ${multiplierDisplay} * ${qualityModifier.toFixed(2)}</code></div><div class="flex justify-between font-bold text-lg"><span class="text-blue-200">Final Payout (PHP):</span><span class="text-blue-400 font-mono">${finalPayout.toFixed(2)}</span></div></div>
             </div>`;
-
-            modalBody.innerHTML = bodyHtml;
             modal.classList.remove('hidden');
         }
 
@@ -1710,14 +1602,7 @@
         function openReorderModal() {
             const reorderList = document.getElementById('reorder-list');
             reorderList.innerHTML = '';
-
-            const sortedProjects = [...projectListCache].sort((a, b) => {
-                const orderA = a.projectOrder ?? Infinity;
-                const orderB = b.projectOrder ?? Infinity;
-                if (orderA !== orderB) return orderA - orderB;
-                return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
-            });
-
+            const sortedProjects = [...projectListCache].sort((a, b) => (a.projectOrder ?? Infinity) - (b.projectOrder ?? Infinity) || new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
             sortedProjects.forEach(project => {
                 const item = document.createElement('div');
                 item.className = 'project-list-item';
@@ -1725,20 +1610,12 @@
                 item.textContent = project.name;
                 reorderList.appendChild(item);
             });
-            
-            reorderSortable = new Sortable(reorderList, {
-                animation: 150,
-                ghostClass: 'sortable-ghost',
-            });
-            
+            reorderSortable = new Sortable(reorderList, { animation: 150, ghostClass: 'sortable-ghost' });
             document.getElementById('reorder-modal').classList.remove('hidden');
         }
 
         function closeReorderModal() {
-            if (reorderSortable) {
-                reorderSortable.destroy();
-                reorderSortable = null;
-            }
+            if (reorderSortable) { reorderSortable.destroy(); reorderSortable = null; }
             document.getElementById('reorder-modal').classList.add('hidden');
         }
 
@@ -1746,39 +1623,27 @@
             if (!reorderSortable) return;
             const summaryRef = doc(db, "public_settings", "project_summary");
             const newOrderIds = reorderSortable.toArray();
-
             try {
                 await runTransaction(db, async (transaction) => {
                     const summaryDoc = await transaction.get(summaryRef);
                     if (!summaryDoc.exists()) throw "Summary document not found!";
                     
                     let projectList = summaryDoc.data().projects || [];
-                    
-                    // Create a map for quick lookups
                     const projectMap = new Map(projectList.map(p => [p.id, p]));
-                    
-                    // Create the new sorted list
                     const reorderedList = newOrderIds.map((id, index) => {
                         const project = projectMap.get(id);
-                        if (project) {
-                            project.projectOrder = index;
-                            return project;
-                        }
-                    }).filter(Boolean); // Filter out any potential undefineds
-
+                        if (project) { project.projectOrder = index; return project; }
+                    }).filter(Boolean);
                     transaction.set(summaryRef, { projects: reorderedList });
                 });
-
-                alert("Project order saved successfully!");
-                await fetchProjectListSummary(); // Refresh list from new summary
+                alert("Project order saved!");
+                await fetchProjectListSummary();
                 closeReorderModal();
-
             } catch (err) {
-                console.error("Failed to save new project order:", err);
-                alert("Error saving the new order.");
+                console.error("Failed to save reorder:", err);
+                alert("Error saving order.");
             }
         }
-
     </script>
 </body>
 </html>
