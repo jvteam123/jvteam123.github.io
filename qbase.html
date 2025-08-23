@@ -193,10 +193,6 @@
                             <input type="number" id="bonusMultiplierDirect" class="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Default: 1 (No multiplier)">
                         </div>
                     </div>
-                     <div id="tl-summary-card" class="bg-gray-50 p-6 rounded-xl border">
-                        <h2 class="text-xl font-semibold text-gray-800 border-b pb-3 mb-4">TL Summary</h2>
-                        <div id="tl-summary-content" class="space-y-2 text-sm"></div>
-                    </div>
                 </div>
 
                 <div id="project-data-entry" class="lg:col-span-3 space-y-6">
@@ -240,6 +236,10 @@
                         <button id="calculatePastedDataBtn" class="w-full bg-purple-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-purple-700 transition-colors duration-300 shadow-md">
                             Calculate Pasted Data
                         </button>
+                    </div>
+                    <div id="tl-summary-card" class="bg-gray-50 p-6 rounded-xl border">
+                        <h2 class="text-xl font-semibold text-gray-800 border-b pb-3 mb-4">TL Summary</h2>
+                        <div id="tl-summary-content" class="space-y-4"></div>
                     </div>
                 </div>
             </div>
@@ -967,6 +967,7 @@
                 
                 let combinedTechStats = {};
                 let combinedSummaryStats = { allCategoryCounts: {}, totalRows: 0, comboTasks: 0, rv1CatCounts: {}, rv2CatCounts: {}, rv3CatCounts: {}, rv4CatCounts: {}, totalIncorrect: 0, totalMiss: 0 };
+                const projectBreakdown = [];
                 
                 if (allFullProjects.filter(Boolean).length > 0) {
                     lastUsedGsdValue = allFullProjects.filter(Boolean)[0].gsdValue || '3in';
@@ -976,6 +977,18 @@
                     const gsdForCalculation = project.gsdValue || '3in'; 
                     const parsedData = parseRawData(project.rawData, project.isIR || false, project.name, gsdForCalculation); 
                     if (parsedData) {
+                        const projectTotalPoints = Object.values(parsedData.techStats).reduce((sum, tech) => sum + tech.points, 0);
+                        const projectTotalCategories = Object.values(parsedData.techStats).reduce((sum, tech) => {
+                            return sum + Object.values(tech.categoryCounts).reduce((catSum, count) => catSum + count, 0);
+                        }, 0);
+
+                        projectBreakdown.push({
+                            name: project.name,
+                            points: projectTotalPoints,
+                            isIR: project.isIR || false,
+                            totalCategories: projectTotalCategories
+                        });
+
                         for (const techId in parsedData.techStats) {
                             if (!combinedTechStats[techId]) combinedTechStats[techId] = createNewTechStat();
                             const combined = combinedTechStats[techId];
@@ -1003,7 +1016,7 @@
 
                 currentTechStats = combinedTechStats; 
                 renderSingleProjectTable(currentTechStats, bonusMultiplier);
-                // Note: TL Summary for "All" might be complex, for now we skip re-rendering it
+                renderTlSummary(combinedSummaryStats, projectBreakdown);
             } else {
                 const projectId = document.getElementById('project-select').value;
                 if (!projectId) return alert("Please select a project to calculate.");
@@ -1182,7 +1195,7 @@
             
             const summaryStats = {
                 rv1CatCounts: {}, rv2CatCounts: {}, rv3CatCounts: {}, rv4CatCounts: {},
-                totalRows: lines.length,
+                totalRows: 0,
                 comboTasks: 0,
                 totalIncorrect: 0,
                 totalMiss: 0,
@@ -1191,6 +1204,7 @@
             const techIdCols = headers.filter(h => h.endsWith('_id'));
             const warnCols = headers.filter(h => h.startsWith('r') && h.endsWith('_warn'));
             const catCols = headers.filter(h => h.endsWith('_cat') || h === 'category');
+            let totalCategoryCount = 0;
 
             lines.forEach(line => {
                 const values = line.split(delimiter);
@@ -1251,6 +1265,7 @@
                             if (techId && techStats[techId]) {
                                 const categoryValue = parseInt(values[catIndex]);
                                 if (!isNaN(categoryValue) && categoryValue >= 1 && categoryValue <= 9) {
+                                    totalCategoryCount++;
                                     const catPoints = categoryValues[categoryValue]?.[gsdForCalculation] || categoryValues[categoryValue]?.["3in"] || 0;
                                     
                                     techStats[techId].points += catPoints;
@@ -1309,6 +1324,7 @@
                                             if (headerMap[catHeader] !== undefined) {
                                                 const categoryValue = parseInt(values[headerMap[catHeader]]);
                                                 if (!isNaN(categoryValue) && categoryValue >= 1 && categoryValue <= 9) {
+                                                    totalCategoryCount++;
                                                     categoriesInThisRow++;
                                                     const catPoints = categoryValues[categoryValue]?.[gsdForCalculation] || categoryValues[categoryValue]?.["3in"] || 0;
                                                     if (techStats[techId].categoryCounts[categoryValue] !== undefined) techStats[techId].categoryCounts[categoryValue]++;
@@ -1323,6 +1339,7 @@
                                             if (statIndex !== undefined && catIndex !== undefined && values[statIndex]?.trim().toUpperCase() === 'AA') {
                                                 const catValue = parseInt(values[catIndex]);
                                                 if (!isNaN(catValue) && catValue >= 1 && catValue <= 9) {
+                                                    totalCategoryCount++;
                                                     categoriesInThisRow++;
                                                     const catPoints = categoryValues[catValue]?.[gsdForCalculation] || categoryValues[catValue]?.["3in"] || 0;
                                                     if (techStats[techId].categoryCounts[catValue] !== undefined) techStats[techId].categoryCounts[catValue]++;
@@ -1382,10 +1399,12 @@
                     }
                 });
             });
+
+            summaryStats.totalRows = totalCategoryCount;
             return { techStats, summaryStats };
         }
         
-        function renderTlSummary(stats) {
+        function renderTlSummary(stats, projectBreakdown = null) {
             const card = document.getElementById('tl-summary-card');
             const content = document.getElementById('tl-summary-content');
 
@@ -1395,11 +1414,11 @@
             }
             
             const createRv3CategoryHtml = (title, counts) => {
-                let html = `<details class="text-sm" open><summary class="cursor-pointer font-medium text-gray-700 mt-3">${title}</summary>`;
+                let html = `<details class="text-sm" open><summary class="font-semibold text-gray-800 cursor-pointer">${title}</summary>`;
                 const sortedCats = Object.keys(counts).sort((a, b) => a - b);
 
                 if (sortedCats.length > 0) {
-                    html += '<div class="mt-1 border rounded-md divide-y divide-gray-200">';
+                    html += '<div class="mt-2 border rounded-lg overflow-hidden">';
                     sortedCats.forEach((cat, index) => {
                         const catData = counts[cat];
                         const bgColor = index % 2 === 0 ? 'bg-gray-50' : 'bg-white';
@@ -1410,33 +1429,79 @@
 
                         html += `
                             <details class="text-sm ${bgColor}" open>
-                                <summary class="p-2 cursor-pointer flex justify-between items-center">
+                                <summary class="p-2.5 cursor-pointer flex justify-between items-center border-b last:border-b-0">
                                     <span class="text-gray-800">Category ${cat}:</span>
-                                    <span class="font-mono font-medium text-gray-900">${catData.total}</span>
+                                    <span class="font-mono font-bold text-lg text-gray-900">${catData.total}</span>
                                 </summary>
-                                <div class="p-2 border-t border-gray-200">
-                                    <ul class="pl-4 text-gray-600 space-y-1">${techEntries}</ul>
+                                <div class="p-3 bg-white">
+                                    <ul class="pl-4 text-gray-700 space-y-1.5">${techEntries}</ul>
                                 </div>
                             </details>
                         `;
                     });
                     html += '</div>';
                 } else {
-                    html += '<p class="text-gray-500 text-xs italic mt-1 pl-4">No entries found.</p>';
+                    html += '<p class="text-gray-500 text-sm italic mt-2 pl-4">No entries found.</p>';
                 }
                 html += '</details>';
                 return html;
             };
             
             const rv3Html = createRv3CategoryHtml('RV3_CAT / Fix4 Breakdown', stats.rv3CatCounts);
+            
+            let mainStatsHtml = `
+                <div class="space-y-3">
+                    <div class="flex justify-between items-baseline"><span class="text-gray-600">Total Category Instances:</span><span class="font-bold text-xl">${stats.totalRows}</span></div>
+                    <div class="flex justify-between items-baseline"><span class="text-gray-600">Total "Incorrect":</span><span class="font-bold text-xl text-red-600">${stats.totalIncorrect}</span></div>
+                    <div class="flex justify-between items-baseline"><span class="text-gray-600">Total "Miss":</span><span class="font-bold text-xl text-orange-600">${stats.totalMiss}</span></div>
+                </div>
+            `;
 
             content.innerHTML = `
-                <div class="flex justify-between"><span class="text-gray-600">Total Data Rows Parsed:</span><span class="font-bold">${stats.totalRows}</span></div>
-                <div class="flex justify-between"><span class="text-gray-600">Total Incorrect:</span><span class="font-bold text-red-600">${stats.totalIncorrect}</span></div>
-                <div class="flex justify-between"><span class="text-gray-600">Total Miss:</span><span class="font-bold text-orange-600">${stats.totalMiss}</span></div>
-                <hr class="my-2">
+                ${mainStatsHtml}
+                <hr class="my-4">
                 ${rv3Html}
             `;
+            
+            if (projectBreakdown && projectBreakdown.length > 0) {
+                let grandTotalPoints = 0;
+                let grandTotalCategories = 0;
+                let breakdownHtml = `
+                    <details class="mt-6" open>
+                        <summary class="font-semibold text-gray-800 cursor-pointer">Detailed Project Breakdown</summary>
+                        <ul class="mt-2 border rounded-lg divide-y divide-gray-200 text-sm overflow-hidden">
+                `;
+                projectBreakdown.forEach((proj, index) => {
+                    grandTotalPoints += proj.points;
+                    grandTotalCategories += proj.totalCategories;
+                    const bgColor = index % 2 === 0 ? 'bg-gray-50' : 'bg-white';
+                    const irTag = proj.isIR
+                        ? '<span class="ml-2 text-xs font-semibold bg-yellow-200 text-yellow-800 px-2 py-0.5 rounded-full">IR</span>'
+                        : '';
+                    breakdownHtml += `
+                        <li class="p-3 flex justify-between items-center ${bgColor}">
+                            <span class="font-medium text-gray-700">${proj.name}${irTag}</span>
+                             <div class="flex items-center space-x-4">
+                                <span class="text-gray-500 font-mono text-xs">${proj.totalCategories} cats</span>
+                                <span class="font-mono font-medium">${proj.points.toFixed(3)} pts</span>
+                            </div>
+                        </li>
+                    `;
+                });
+                breakdownHtml += `
+                        </ul>
+                        <div class="mt-3 p-3 bg-gray-200 rounded-lg flex justify-between font-bold text-base">
+                            <span>Grand Total:</span>
+                            <div class="flex items-center space-x-4">
+                                <span class="text-gray-600 font-mono font-medium">${grandTotalCategories} cats</span>
+                                <span class="font-mono">${grandTotalPoints.toFixed(3)} pts</span>
+                            </div>
+                        </div>
+                    </details>
+                `;
+                content.insertAdjacentHTML('beforeend', breakdownHtml);
+            }
+
             card.classList.add('visible');
         }
 
