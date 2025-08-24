@@ -1324,120 +1324,143 @@
             }
             
             const summaryStats = { rv1CatCounts: {}, rv2CatCounts: {}, rv3CatCounts: {}, rv4CatCounts: {}, totalRows: 0, comboTasks: 0, totalIncorrect: 0, totalMiss: 0 };
-            const techIdCols = headers.filter(h => h.endsWith('_id'));
-            const warnCols = headers.filter(h => h.startsWith('r') && h.endsWith('_warn'));
-
+            
             lines.forEach(line => {
                 const values = line.split('\t');
                 const isComboIR = values[headerMap['combo?']] === 'Y';
                 if (isComboIR) summaryStats.comboTasks++;
-                
-                const allTechsInRow = new Set(techIdCols.map(col => values[headerMap[col]]?.trim()).filter(Boolean));
-                allTechsInRow.forEach(techId => { if (!techStats[techId]) techStats[techId] = createNewTechStat(); techStats[techId].id = techId; });
 
-                const fix4IdIndex = headerMap['fix4_id'];
-                const rv3CatIndex = headerMap['rv3_cat'];
-                if (fix4IdIndex !== undefined && rv3CatIndex !== undefined) {
-                    const fix4TechId = values[fix4IdIndex]?.trim();
-                    const rv3Category = values[rv3CatIndex]?.trim();
-                    if (fix4TechId && rv3Category) {
-                        const categoryNum = parseInt(rv3Category);
-                        if (!isNaN(categoryNum)) {
-                            if (!summaryStats.rv3CatCounts[categoryNum]) summaryStats.rv3CatCounts[categoryNum] = { total: 0, techs: {} };
-                            if (!summaryStats.rv3CatCounts[categoryNum].techs[fix4TechId]) summaryStats.rv3CatCounts[categoryNum].techs[fix4TechId] = 0;
-                            summaryStats.rv3CatCounts[categoryNum].total++;
-                            summaryStats.rv3CatCounts[categoryNum].techs[fix4TechId]++;
+                const allTechsInRow = new Set();
+                ['fix1_id', 'fix2_id', 'fix3_id', 'fix4_id', 'qc1_id', 'qc2_id', 'i3qa_id', 'rv1_id', 'rv2_id'].forEach(col => {
+                    const techId = values[headerMap[col]]?.trim();
+                    if (techId) allTechsInRow.add(techId);
+                });
+                
+                allTechsInRow.forEach(techId => {
+                    if (!techStats[techId]) {
+                        techStats[techId] = createNewTechStat();
+                        techStats[techId].id = techId;
+                    }
+                });
+                
+                let totalRowFixPoints = 0;
+
+                // New logic for category counting
+                const fix1_id = values[headerMap['fix1_id']]?.trim();
+                const fix2_id = values[headerMap['fix2_id']]?.trim();
+
+                if (fix1_id && techStats[fix1_id]) {
+                    // category
+                    const category = parseInt(values[headerMap['category']]);
+                    if (!isNaN(category)) {
+                        techStats[fix1_id].categoryCounts[category]++;
+                        totalRowFixPoints += categoryValues[category]?.[gsdForCalculation] || 0;
+                    }
+
+                    // i3qa_cat
+                    const i3qa_label = values[headerMap['i3qa_label']]?.trim().toUpperCase();
+                    if (i3qa_label === 'M' || i3qa_label === 'C') {
+                        const i3qa_cat = parseInt(values[headerMap['i3qa_cat']]);
+                        if (!isNaN(i3qa_cat)) {
+                            techStats[fix1_id].categoryCounts[i3qa_cat]++;
+                            totalRowFixPoints += categoryValues[i3qa_cat]?.[gsdForCalculation] || 0;
+                        }
+                    }
+
+                    // afp1_cat
+                    const afp1_stat = values[headerMap['afp1_stat']]?.trim().toUpperCase();
+                    if (afp1_stat === 'AA') {
+                        const afp1_cat = parseInt(values[headerMap['afp1_cat']]);
+                        if (!isNaN(afp1_cat)) {
+                            techStats[fix1_id].categoryCounts[afp1_cat]++;
+                            totalRowFixPoints += categoryValues[afp1_cat]?.[gsdForCalculation] || 0;
                         }
                     }
                 }
 
-                const missChecks = [ { label: 'i3qa_label', cat: 'i3qa_cat', fixId: 'fix1_id', round: 'i3qa' }, { label: 'rv1_label', cat: 'rv1_cat', fixId: 'fix2_id', round: 'RV1' }, { label: 'rv2_label', cat: 'rv2_cat', fixId: 'fix3_id', round: 'RV2' }, { label: 'rv3_label', cat: 'rv3_cat', fixId: 'fix4_id', round: 'RV3' }];
-                missChecks.forEach(check => {
-                    const labelIndex = headerMap[check.label], catIndex = headerMap[check.cat], fixIdIndex = headerMap[check.fixId];
-                    if (labelIndex !== undefined && catIndex !== undefined && fixIdIndex !== undefined) {
-                        if (values[labelIndex]?.trim().toUpperCase().includes('M')) {
-                            summaryStats.totalMiss++;
-                            const techId = values[fixIdIndex]?.trim();
-                            if (techId && techStats[techId]) {
-                                const categoryValue = parseInt(values[catIndex]);
-                                if (!isNaN(categoryValue) && categoryValue >= 1 && categoryValue <= 9) {
-                                    summaryStats.totalRows++;
-                                    const catPoints = categoryValues[categoryValue]?.[gsdForCalculation] || 0;
-                                    techStats[techId].points += catPoints;
-                                    techStats[techId].pointsBreakdown.fix += catPoints;
-                                    techStats[techId].fixTasks += 1; 
-                                    techStats[techId].categoryCounts[categoryValue]++;
-                                    techStats[techId].missedCategories.push({ round: check.round.toUpperCase(), category: categoryValue, project: currentProjectName });
-                                }
-                            }
+                if (fix2_id && techStats[fix2_id]) {
+                    // rv1_cat
+                    const rv1_label = values[headerMap['rv1_label']]?.trim().toUpperCase();
+                    if (rv1_label === 'M') {
+                        const rv1_cat = parseInt(values[headerMap['rv1_cat']]);
+                        if (!isNaN(rv1_cat)) {
+                            techStats[fix2_id].categoryCounts[rv1_cat]++;
+                            totalRowFixPoints += categoryValues[rv1_cat]?.[gsdForCalculation] || 0;
+                        }
+                    }
+
+                    // rv2_cat
+                    const rv2_label = values[headerMap['rv2_label']]?.trim().toUpperCase();
+                    if (rv2_label === 'M') {
+                        const rv2_cat = parseInt(values[headerMap['rv2_cat']]);
+                        if (!isNaN(rv2_cat)) {
+                            techStats[fix2_id].categoryCounts[rv2_cat]++;
+                            totalRowFixPoints += categoryValues[rv2_cat]?.[gsdForCalculation] || 0;
+                        }
+                    }
+
+                    // afp2_cat
+                    const afp2_stat = values[headerMap['afp2_stat']]?.trim().toUpperCase();
+                    if (afp2_stat === 'AA') {
+                        const afp2_cat = parseInt(values[headerMap['afp2_cat']]);
+                        if (!isNaN(afp2_cat)) {
+                            techStats[fix2_id].categoryCounts[afp2_cat]++;
+                            totalRowFixPoints += categoryValues[afp2_cat]?.[gsdForCalculation] || 0;
+                        }
+                    }
+                }
+
+                if (isFixTaskIR && totalRowFixPoints > 0) {
+                    totalRowFixPoints *= irModifierValue;
+                }
+                
+                if (fix1_id && techStats[fix1_id]) {
+                    techStats[fix1_id].points += totalRowFixPoints;
+                    techStats[fix1_id].pointsBreakdown.fix += totalRowFixPoints;
+                    techStats[fix1_id].fixTasks++;
+                }
+
+                // Points for other tasks (QC, i3qa, RV)
+                ['qc1_id', 'qc2_id', 'i3qa_id', 'rv1_id', 'rv2_id'].forEach(colName => {
+                     const techId = values[headerMap[colName]]?.trim();
+                     if (techId && techStats[techId]) {
+                         let points = 0;
+                         if (colName.startsWith('qc')) { points = 1 / 8; techStats[techId].pointsBreakdown.qc += points; } 
+                         else if (colName.startsWith('i3qa')) { points = 1 / 12; techStats[techId].pointsBreakdown.i3qa += points; } 
+                         else if (colName.startsWith('rv')) {
+                             if (colName === 'rv1_id') points = isComboIR ? 0.25 : 0.2;
+                             else if (colName === 'rv2_id') points = 0.5;
+                             techStats[techId].pointsBreakdown.rv += points;
+                         }
+                         techStats[techId].points += points;
+                     }
+                });
+
+                // Warnings and Refixes
+                ['r1_warn', 'r2_warn', 'r3_warn', 'r4_warn'].forEach((warnCol, index) => {
+                    const warnValue = values[headerMap[warnCol]]?.trim().toUpperCase();
+                    const validWarningLetters = ['B', 'C', 'D', 'E', 'F', 'G', 'I'];
+                    if (warnValue && validWarningLetters.includes(warnValue)) {
+                        const fixTechId = values[headerMap[`fix${index + 1}_id`]]?.trim();
+                        if (fixTechId && techStats[fixTechId]) {
+                            techStats[fixTechId].warnings.push({ type: warnValue, project: currentProjectName });
                         }
                     }
                 });
                 
-                techIdCols.forEach(colName => {
-                    const techId = values[headerMap[colName]]?.trim();
-                    if (techId) {
-                        let points = 0;
-                        if (colName.startsWith('fix')) {
-                            const round = colName.match(/\d+/)[0];
-                            const rvLabelIndex = headerMap[`rv${round}_label`];
-                            if (rvLabelIndex !== undefined && values[rvLabelIndex]?.trim().toUpperCase().includes('I')) {
-                                summaryStats.totalIncorrect++;
-                                const rvCatIndex = headerMap[`rv${round}_cat`];
-                                const refixCategory = rvCatIndex !== undefined ? values[rvCatIndex]?.trim() : 'N/A';
-                                techStats[techId].refixTasks++;
-                                techStats[techId].refixDetails.push({ round: `RV${round}`, project: currentProjectName, category: refixCategory });
-                            } else if (colName === 'fix1_id') {
-                                let totalRowFixPoints = 0, categoriesInThisRow = 0;
-                                ['category', 'rv1_cat', 'rv2_cat'].forEach(catHeader => {
-                                    if (headerMap[catHeader] !== undefined) {
-                                        const catValue = parseInt(values[headerMap[catHeader]]);
-                                        if (!isNaN(catValue) && catValue >= 1 && catValue <= 9) {
-                                            summaryStats.totalRows++; categoriesInThisRow++;
-                                            totalRowFixPoints += categoryValues[catValue]?.[gsdForCalculation] || 0;
-                                            techStats[techId].categoryCounts[catValue]++;
-                                        }
-                                    }
-                                });
-                                ['afp1', 'afp2'].forEach(afp => {
-                                    const statIndex = headerMap[`${afp}_stat`], catIndex = headerMap[`${afp}_cat`];
-                                    if (statIndex !== undefined && catIndex !== undefined && values[statIndex]?.trim().toUpperCase() === 'AA') {
-                                        const catValue = parseInt(values[catIndex]);
-                                        if (!isNaN(catValue) && catValue >= 1 && catValue <= 9) {
-                                            summaryStats.totalRows++; categoriesInThisRow++;
-                                            totalRowFixPoints += categoryValues[catValue]?.[gsdForCalculation] || 0;
-                                            techStats[techId].categoryCounts[catValue]++;
-                                            techStats[techId].approvedByRQACategoryCounts[catValue]++;
-                                            techStats[techId].approvedByRQA.push({ round: afp.toUpperCase(), category: catValue, project: currentProjectName });
-                                        }
-                                    }
-                                });
-                                techStats[techId].fixTasks += categoriesInThisRow;
-                                if (isFixTaskIR && totalRowFixPoints > 0) totalRowFixPoints *= irModifierValue;
-                                techStats[techId].points += totalRowFixPoints;
-                                techStats[techId].pointsBreakdown.fix += totalRowFixPoints;
-                            }
-                        } else if (colName.startsWith('qc')) { points = 1 / 8; techStats[techId].pointsBreakdown.qc += points; } 
-                          else if (colName.startsWith('i3qa')) { points = 1 / 12; techStats[techId].pointsBreakdown.i3qa += points; } 
-                          else if (colName.startsWith('rv')) {
-                            if (colName === 'rv1_id') points = isComboIR ? 0.25 : 0.2;
-                            else if (colName === 'rv2_id') points = 0.5;
-                            techStats[techId].pointsBreakdown.rv += points;
-                        }
-                        techStats[techId].points += points;
-                    }
-                });
-
-                const validWarningLetters = ['B', 'C', 'D', 'E', 'F', 'G', 'I'];
-                warnCols.forEach(colName => {
-                    const warnValue = values[headerMap[colName]]?.trim().toUpperCase();
-                    if (warnValue && validWarningLetters.includes(warnValue)) {
-                        const round = colName.match(/\d+/)[0];
-                        const fixTechId = values[headerMap[`fix${round}_id`]]?.trim();
-                        if (fixTechId && techStats[fixTechId]) techStats[fixTechId].warnings.push({ type: warnValue, project: currentProjectName });
-                    }
+                ['rv1_label', 'rv2_label', 'rv3_label', 'rv4_label'].forEach((rvLabelCol, index) => {
+                     const rvLabelValue = values[headerMap[rvLabelCol]]?.trim().toUpperCase();
+                     if (rvLabelValue && rvLabelValue.includes('I')) {
+                         const fixTechId = values[headerMap[`fix${index + 2}_id`]]?.trim();
+                         if (fixTechId && techStats[fixTechId]) {
+                             techStats[fixTechId].refixTasks++;
+                             const rvCat = values[headerMap[`rv${index + 1}_cat`]]?.trim();
+                             techStats[fixTechId].refixDetails.push({ round: `RV${index + 1}`, project: currentProjectName, category: rvCat });
+                         }
+                     }
                 });
             });
+
             return { techStats, summaryStats };
         }
         
