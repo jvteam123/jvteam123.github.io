@@ -709,75 +709,19 @@
             z-index: 20; /* Higher z-index for the header */
         }
 
-        /* --- Make the first 6 columns sticky --- */
-
-        /* --- Column 1: Fix Cat --- */
-        #projectTable th:nth-child(1),
-        #projectTable td:nth-child(1) {
+        /* --- Define which columns are sticky --- */
+        #projectTable th.sticky-col,
+        #projectTable td.sticky-col {
             position: sticky;
-            left: 0;
             z-index: 15;
         }
-
-        /* --- Column 2: Project Name --- */
-        #projectTable th:nth-child(2),
-        #projectTable td:nth-child(2) {
-            position: sticky;
-            left: 60px; /* Adjust this value based on the width of the first column */
-            z-index: 15;
-        }
-
-        /* --- Column 3: Area/Task --- */
-        #projectTable th:nth-child(3),
-        #projectTable td:nth-child(3) {
-            position: sticky;
-            left: 160px; /* Adjust based on width of first two columns */
-            z-index: 15;
-        }
-
-        /* --- Column 4: GSD --- */
-        #projectTable th:nth-child(4),
-        #projectTable td:nth-child(4) {
-            position: sticky;
-            left: 260px; /* Adjust based on width of first three columns */
-            z-index: 15;
-        }
-
-        /* --- Column 5: Assigned To --- */
-        #projectTable th:nth-child(5),
-        #projectTable td:nth-child(5) {
-            position: sticky;
-            left: 310px; /* Adjust based on width of first four columns */
-            z-index: 15;
-        }
-
-        /* --- Column 6: Status --- */
-        #projectTable th:nth-child(6),
-        #projectTable td:nth-child(6) {
-            position: sticky;
-            left: 410px; /* Adjust based on width of first five columns */
-            z-index: 15;
-        }
-
-        /* --- Add a background to sticky header cells to prevent content from showing through --- */
-        #projectTable thead th:nth-child(1),
-        #projectTable thead th:nth-child(2),
-        #projectTable thead th:nth-child(3),
-        #projectTable thead th:nth-child(4),
-        #projectTable thead th:nth-child(5),
-        #projectTable thead th:nth-child(6) {
+        
+        #projectTable thead th.sticky-col {
             background-color: #34495e; /* Match existing header color */
         }
-
-        /* --- Add a specific background to sticky body cells to match the row hover/color styles --- */
-        #projectTable tbody td:nth-child(1),
-        #projectTable tbody td:nth-child(2),
-        #projectTable tbody td:nth-child(3),
-        #projectTable tbody td:nth-child(4),
-        #projectTable tbody td:nth-child(5),
-        #projectTable tbody td:nth-child(6) {
-            /* This ensures sticky cells get the correct row background color */
-            background-color: inherit; 
+        
+        #projectTable tbody td.sticky-col {
+            background-color: inherit; /* Inherit the row's background color */
         }
 
         /* ====================================================== */
@@ -1187,12 +1131,12 @@
                 <table id="projectTable">
                     <thead>
                         <tr>
-                            <th>Fix Cat</th>
-                            <th class="column-project-name">Project Name</th>
-                            <th>Area/Task</th>
-                            <th>GSD</th>
-                            <th>Assigned To</th>
-                            <th>Status</th>
+                            <th class="sticky-col">Fix Cat</th>
+                            <th class="sticky-col column-project-name">Project Name</th>
+                            <th class="sticky-col">Area/Task</th>
+                            <th class="sticky-col">GSD</th>
+                            <th class="sticky-col">Assigned To</th>
+                            <th class="sticky-col">Status</th>
                             <th>Day 1 Start</th>
                             <th>Day 1 Finish</th>
                             <th>Day 1 Break</th>
