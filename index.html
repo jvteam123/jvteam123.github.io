@@ -693,41 +693,6 @@
         }
         /* === END: NEW STYLES FOR DISPUTE STATUS === */
 
-        /* ====================================================== */
-        /* START: STICKY HEADER AND COLUMN STYLES                 */
-        /* ====================================================== */
-
-        #projectTable th, #projectTable td {
-            /* Set a default background for all cells */
-            background-color: #fff; 
-        }
-
-        #projectTable thead th {
-            /* Make the header row sticky */
-            position: sticky;
-            top: 0;
-            z-index: 20; /* Higher z-index for the header */
-        }
-
-        /* --- Define which columns are sticky --- */
-        #projectTable th.sticky-col,
-        #projectTable td.sticky-col {
-            position: sticky;
-            z-index: 15;
-        }
-        
-        #projectTable thead th.sticky-col {
-            background-color: #34495e; /* Match existing header color */
-        }
-        
-        #projectTable tbody td.sticky-col {
-            background-color: inherit; /* Inherit the row's background color */
-        }
-
-        /* ====================================================== */
-        /* END: STICKY HEADER AND COLUMN STYLES                   */
-        /* ====================================================== */
-
     </style>
     <link rel="icon" type="image/png" href="icon.png">
 </head>
@@ -1131,12 +1096,12 @@
                 <table id="projectTable">
                     <thead>
                         <tr>
-                            <th class="sticky-col">Fix Cat</th>
-                            <th class="sticky-col column-project-name">Project Name</th>
-                            <th class="sticky-col">Area/Task</th>
-                            <th class="sticky-col">GSD</th>
-                            <th class="sticky-col">Assigned To</th>
-                            <th class="sticky-col">Status</th>
+                            <th>Fix Cat</th>
+                            <th class="column-project-name">Project Name</th>
+                            <th>Area/Task</th>
+                            <th>GSD</th>
+                            <th>Assigned To</th>
+                            <th>Status</th>
                             <th>Day 1 Start</th>
                             <th>Day 1 Finish</th>
                             <th>Day 1 Break</th>
