@@ -694,36 +694,44 @@
         /* === END: NEW STYLES FOR DISPUTE STATUS === */
 
         /* ====================================================== */
-        /* START: STICKY HEADER AND COLUMN STYLES                 */
+        /* START: STICKY HEADER AND COLUMN STYLES (CORRECTED)     */
         /* ====================================================== */
 
-        #projectTable th, #projectTable td {
-            /* Set a default background for all cells */
-            background-color: #fff; 
-        }
-
         #projectTable thead th {
-            /* Make the header row sticky */
             position: sticky;
             top: 0;
-            z-index: 20; /* Higher z-index for the header */
+            z-index: 20; 
         }
 
-        /* --- Define which columns are sticky --- */
         #projectTable th.sticky-col,
         #projectTable td.sticky-col {
             position: sticky;
             z-index: 15;
         }
-        
-        #projectTable thead th.sticky-col {
-            background-color: #34495e; /* Match existing header color */
-        }
-        
-        #projectTable tbody td.sticky-col {
-            background-color: inherit; /* Inherit the row's background color */
+
+        /* Set a default background for all cells to prevent transparency */
+        #projectTable td {
+            background-color: #fff; 
         }
 
+        #projectTable thead th.sticky-col {
+            background-color: #34495e;
+        }
+        
+        /* Apply row-specific colors to sticky cells to prevent see-through */
+        .batch-header-row td.sticky-col {
+             background-color: #6c757d !important;
+        }
+        .fix-group-header td.sticky-col {
+            background-color: #adb5bd !important;
+        }
+        #projectTable tbody tr:hover td.sticky-col {
+            background-color: #d0e0f0 !important;
+        }
+        #projectTable tbody tr.reassigned-task-highlight td.sticky-col {
+             background-color: #FFF9C4 !important;
+        }
+        
         /* ====================================================== */
         /* END: STICKY HEADER AND COLUMN STYLES                   */
         /* ====================================================== */
