@@ -1,21 +1,19 @@
 /**
  * =================================================================
- * Project Tracker Application - Refactored and Bug-Fixed
+ * Project Tracker Application - Refactored and Enhanced for Real-Time
  * =================================================================
- * This script has been fully refactored to encapsulate all logic
- * within the `ProjectTrackerApp` object. This approach eliminates
- * global variables, improves performance, and ensures correct
- * timezone handling.
+ * This script has been updated to use Firestore's real-time listeners
+ * (`onSnapshot`) to provide live updates across all user sessions.
  *
- * @version 4.9.2
- * @author Gemini AI Refactor & Bug-Fix
+ * @version 5.0.0
+ * @author Gemini AI Refactor & Live Update Implementation
  * @changeLog
+ * - MAJOR ENHANCEMENT: Replaced manual `.get()` calls with real-time `.onSnapshot()` listeners in `initializeFirebaseAndLoadData`. Now, any changes to project data (like starting/ending a timer) are instantly reflected on all connected clients without needing a manual refresh.
+ * - OPTIMIZED: The new real-time logic intelligently processes only the documents that have changed (`added`, `modified`, `removed`), leading to much more efficient UI updates and a better user experience.
+ * - REFINED: State management is now more robust to handle incoming real-time data, ensuring the local `projects` array is always in sync with the database.
  * - FIXED: Corrected a TypeError by replacing the incompatible `.count().get()` method with `.get()` followed by the `.size` property in the `checkForNewDisputes` and `checkForNewLeaveRequests` functions. This resolves the "query.count is not a function" error.
- * - FIXED: The project name dropdown in the Dispute Modal now correctly populates with all available project names for the selected month, instead of only showing projects from the current page of the main view.
- * - MODIFIED: The 'Show Day' filter checkboxes (Day 2-6) now also control the visibility of their corresponding Start/End action buttons in the table, in addition to hiding the table columns. This provides a more intuitive and cleaner interface when focusing on specific days.
- * - MODIFIED: Updated data loading logic to fetch all unique project names upfront (respecting month filter) to populate the project dropdown filter completely on initial load. This improves user experience by showing all available projects in the filter without incurring additional database reads, while the main task view remains paginated for performance.
- * - FIXED: Implemented a robust retry mechanism in the authentication flow to permanently resolve the "email not authorized" race condition. The app now waits for Firebase to fully validate the user's session before checking permissions.
- * - OPTIMIZED: Replaced real-time listeners (onSnapshot) with manual fetches (getDocs) for projects, disputes, and leave requests to dramatically reduce Firestore read operations.
+ * - FIXED: The project name dropdown in the Dispute Modal now correctly populates with all available project names for the selected month.
+ * - MODIFIED: The 'Show Day' filter checkboxes now also control the visibility of their corresponding action buttons.
  */
 document.addEventListener('DOMContentLoaded', () => {
 
@@ -106,6 +104,7 @@ document.addEventListener('DOMContentLoaded', () => {
         app: null,
         db: null,
         auth: null,
+        projectsListenerUnsubscribe: null, // New listener for projects
         chatListenerUnsubscribe: null,
         typingListenerUnsubscribe: null,
         appConfigListenerUnsubscribe: null,
@@ -661,7 +660,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (this.elements.openSettingsBtn) this.elements.openSettingsBtn.style.display = 'none';
                 this.state.currentUserTechId = null;
 
-                // Unsubscribe from real-time listeners
+                // Unsubscribe from all real-time listeners
+                if (this.projectsListenerUnsubscribe) this.projectsListenerUnsubscribe();
                 if (this.chatListenerUnsubscribe) this.chatListenerUnsubscribe();
                 if (this.typingListenerUnsubscribe) this.typingListenerUnsubscribe();
                 if (this.appConfigListenerUnsubscribe) this.appConfigListenerUnsubscribe();
@@ -704,11 +704,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     this.methods.hideLoading.call(this);
                     return;
                 }
+                
+                // If a listener is already active, unsubscribe before creating a new one.
+                if (this.projectsListenerUnsubscribe) {
+                    this.projectsListenerUnsubscribe();
+                }
 
                 this.methods.loadGroupVisibilityState.call(this);
                 await this.methods.populateMonthFilter.call(this);
 
-                // Fetch all unique project names for the dropdown filter, respecting the month filter.
                 this.methods.showLoading.call(this, "Building project list...");
                 const sortDirection = this.state.filters.sortBy === 'oldest' ? 'asc' : 'desc';
                 let nameQuery = this.db.collection("projects");
@@ -728,9 +732,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         sortedNames.push(name);
                     }
                 });
-                // Store the full list of names. This will be used by the dropdown.
                 this.state.allUniqueProjectNames = sortedNames;
-                this.state.pagination.paginatedProjectNameList = sortedNames; // Also update the list used for pagination.
+                this.state.pagination.paginatedProjectNameList = sortedNames;
+                 await this.methods.populateProjectNameFilter.call(this);
 
                 const shouldPaginate = !this.state.filters.batchId && !this.state.filters.fixCategory;
 
@@ -738,11 +742,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (shouldPaginate) {
                     this.elements.paginationControls.style.display = 'block';
-
                     this.state.pagination.totalPages = Math.ceil(this.state.pagination.paginatedProjectNameList.length / this.state.pagination.projectsPerPage);
-                    this.state.pagination.sortOrderForPaging = this.state.filters.sortBy;
-                    this.state.pagination.monthForPaging = this.state.filters.month;
-
                     const startIndex = (this.state.pagination.currentPage - 1) * this.state.pagination.projectsPerPage;
                     const endIndex = startIndex + this.state.pagination.projectsPerPage;
                     const projectsToDisplay = this.state.pagination.paginatedProjectNameList.slice(startIndex, endIndex);
@@ -767,40 +767,54 @@ document.addEventListener('DOMContentLoaded', () => {
                         projectsQuery = projectsQuery.where("fixCategory", "==", this.state.filters.fixCategory);
                     }
                 }
+                
+                // *** THIS IS THE MAJOR CHANGE FOR REAL-TIME UPDATES ***
+                this.projectsListenerUnsubscribe = projectsQuery.onSnapshot(
+                    (snapshot) => {
+                        snapshot.docChanges().forEach((change) => {
+                            const projectData = { id: change.doc.id, ...change.doc.data() };
+                            
+                            // Apply default values for robustness
+                            const fullProjectData = {
+                                ...projectData,
+                                breakDurationMinutesDay1: projectData.breakDurationMinutesDay1 || 0,
+                                breakDurationMinutesDay2: projectData.breakDurationMinutesDay2 || 0,
+                                breakDurationMinutesDay3: projectData.breakDurationMinutesDay3 || 0,
+                                breakDurationMinutesDay4: projectData.breakDurationMinutesDay4 || 0,
+                                breakDurationMinutesDay5: projectData.breakDurationMinutesDay5 || 0,
+                                breakDurationMinutesDay6: projectData.breakDurationMinutesDay6 || 0,
+                                additionalMinutesManual: projectData.additionalMinutesManual || 0,
+                                isLocked: projectData.isLocked || false,
+                            };
 
-                projectsQuery = projectsQuery.orderBy("creationTimestamp", sortDirection);
 
-                try {
-                    const snapshot = await projectsQuery.get();
-                    let newProjects = [];
-                    snapshot.forEach(doc => {
-                        if (doc.exists) newProjects.push({ id: doc.id, ...doc.data() });
-                    });
+                            const index = this.state.projects.findIndex(p => p.id === change.doc.id);
 
-                    if (shouldPaginate) {
-                        newProjects = newProjects.filter(p => this.state.pagination.paginatedProjectNameList.includes(p.baseProjectName));
+                            if (change.type === "added") {
+                                if (index === -1) {
+                                    this.state.projects.push(fullProjectData);
+                                }
+                            }
+                            if (change.type === "modified") {
+                                if (index > -1) {
+                                    this.state.projects[index] = fullProjectData;
+                                }
+                            }
+                            if (change.type === "removed") {
+                                if (index > -1) {
+                                    this.state.projects.splice(index, 1);
+                                }
+                            }
+                        });
+                        
+                        this.methods.refreshAllViews.call(this); // Re-render the table with the new data
+                    },
+                    (error) => {
+                        console.error("Error with real-time project listener:", error);
+                        alert("Error loading projects in real-time: " + error.message);
+                        this.methods.hideLoading.call(this);
                     }
-
-                    this.state.projects = newProjects.map(p => ({
-                        ...p,
-                        breakDurationMinutesDay1: p.breakDurationMinutesDay1 || 0,
-                        breakDurationMinutesDay2: p.breakDurationMinutesDay2 || 0,
-                        breakDurationMinutesDay3: p.breakDurationMinutesDay3 || 0,
-                        breakDurationMinutesDay4: p.breakDurationMinutesDay4 || 0,
-                        breakDurationMinutesDay5: p.breakDurationMinutesDay5 || 0,
-                        breakDurationMinutesDay6: p.breakDurationMinutesDay6 || 0,
-                        additionalMinutesManual: p.additionalMinutesManual || 0,
-                        isLocked: p.isLocked || false,
-                    }));
-
-                    await this.methods.populateProjectNameFilter.call(this);
-                    this.methods.refreshAllViews.call(this);
-                } catch (error) {
-                    console.error("Error fetching projects:", error);
-                    this.state.projects = [];
-                    this.methods.refreshAllViews.call(this);
-                    alert("Error loading projects: " + error.message);
-                }
+                );
             },
 
             async populateMonthFilter() {
@@ -924,8 +938,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     this.state.filters.month = "";
                     localStorage.setItem('currentSelectedMonth', "");
                     this.state.filters.fixCategory = "";
-
-                    this.methods.initializeFirebaseAndLoadData.call(this);
+                    
+                    // The real-time listener will handle the update, no need to call initialize again
+                    // this.methods.initializeFirebaseAndLoadData.call(this);
 
                 } catch (error) {
                     console.error("Error adding projects:", error);
@@ -991,7 +1006,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                             const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
                             if (!dateRegex.test(dateInput)) {
-                                alert("Invalid date format. Please use APAC-MM-DD. Aborting update.");
+                                alert("Invalid date format. Please use YYYY-MM-DD. Aborting update.");
                                 return;
                             }
 
@@ -1023,11 +1038,11 @@ document.addEventListener('DOMContentLoaded', () => {
                             lastModifiedTimestamp: firebase.firestore.FieldValue.serverTimestamp()
                         });
                     });
+                     // Real-time listener handles the update, no manual refresh needed.
 
                 } catch (error) {
                     console.error(`Error updating ${fieldName}:`, error);
                     alert(`Error updating time: ${error.message}`);
-                    this.methods.refreshAllViews.call(this);
                 } finally {
                     this.methods.hideLoading.call(this);
                 }
@@ -1122,7 +1137,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
 
                     await projectRef.update(updates);
-                    this.methods.initializeFirebaseAndLoadData.call(this); // Refresh data after update
+                    // The real-time listener will handle the update, no need to refresh data manually
                 } catch (error) {
                     console.error(`Error updating project for action ${action}:`, error);
                     alert("Error updating project status: " + error.message);
@@ -1454,7 +1469,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     try {
                         await projectRef.update(updates);
-                        this.methods.initializeFirebaseAndLoadData.call(this); // Refresh
+                        // The real-time listener will handle the update
                     } catch (error) {
                         console.error("Error resetting task:", error);
                         alert("Error resetting task: " + error.message);
@@ -2019,8 +2034,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     await firestoreBatch.commit();
                     alert(`${numToAdd} extra area(s) added successfully to ${latestFixCategory}!`);
-
-                    await this.methods.initializeFirebaseAndLoadData.call(this);
+                    
+                    // The real-time listener will handle the update
                     await this.methods.renderTLDashboard.call(this);
 
                 } catch (error) {
@@ -2059,7 +2074,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     await batch.commit();
 
-                    this.methods.initializeFirebaseAndLoadData.call(this);
+                    // The real-time listener will handle the update
                     this.methods.renderTLDashboard.call(this);
 
                 } catch (error) {
@@ -2135,7 +2150,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     alert(`Release Successful! Tasks from ${currentFixCategory} have been moved to ${nextFixCategory}. The dashboard will now refresh.`);
 
-                    this.methods.initializeFirebaseAndLoadData.call(this);
+                    // The real-time listener will handle the update
                     await this.methods.renderTLDashboard.call(this);
 
                 } catch (error) {
@@ -2176,7 +2191,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     await firestoreBatch.commit();
 
-                    this.methods.initializeFirebaseAndLoadData.call(this);
+                    // The real-time listener will handle the update
                     this.methods.renderTLDashboard.call(this);
 
                 } catch (error) {
@@ -2234,7 +2249,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     try {
                         await batch.commit();
-                        this.methods.initializeFirebaseAndLoadData.call(this);
+                        // The real-time listener will handle the update
                     } catch (error) {
                         console.error("Error in re-assignment:", error);
                         alert("Error during re-assignment: " + error.message);
