@@ -693,6 +693,106 @@
         }
         /* === END: NEW STYLES FOR DISPUTE STATUS === */
 
+        /* ====================================================== */
+        /* START: STICKY HEADER AND COLUMN STYLES (REVISED)       */
+        /* ====================================================== */
+
+        #projectTable th,
+        #projectTable td {
+            /* Set a default background for all cells */
+            background-color: #fff;
+            /* Set a minimum width for consistency */
+            min-width: 100px;
+        }
+
+        #projectTable thead th {
+            /* Make the header row sticky */
+            position: sticky;
+            top: 0;
+            z-index: 20; /* Higher z-index for the header */
+        }
+
+        /* --- Make the first 6 columns sticky --- */
+
+        /* --- Column 1: Fix Cat --- */
+        #projectTable th:nth-child(1),
+        #projectTable td:nth-child(1) {
+            position: sticky;
+            left: 0;
+            z-index: 15;
+            min-width: 80px; /* Adjust width as needed */
+        }
+
+        /* --- Column 2: Project Name --- */
+        #projectTable th:nth-child(2),
+        #projectTable td:nth-child(2) {
+            position: sticky;
+            left: 80px; /* Width of the first column */
+            z-index: 15;
+            min-width: 150px;
+        }
+
+        /* --- Column 3: Area/Task --- */
+        #projectTable th:nth-child(3),
+        #projectTable td:nth-child(3) {
+            position: sticky;
+            left: 230px; /* 80 + 150 */
+            z-index: 15;
+            min-width: 100px;
+        }
+
+        /* --- Column 4: GSD --- */
+        #projectTable th:nth-child(4),
+        #projectTable td:nth-child(4) {
+            position: sticky;
+            left: 330px; /* 230 + 100 */
+            z-index: 15;
+            min-width: 60px;
+        }
+
+        /* --- Column 5: Assigned To (Tech ID) --- */
+        #projectTable th:nth-child(5),
+        #projectTable td:nth-child(5) {
+            position: sticky;
+            left: 390px; /* 330 + 60 */
+            z-index: 15;
+            min-width: 120px;
+        }
+
+        /* --- Column 6: Status --- */
+        #projectTable th:nth-child(6),
+        #projectTable td:nth-child(6) {
+            position: sticky;
+            left: 510px; /* 390 + 120 */
+            z-index: 15;
+            min-width: 150px;
+        }
+
+
+        /* --- Add a background to sticky header cells to prevent content from showing through --- */
+        #projectTable thead th:nth-child(1),
+        #projectTable thead th:nth-child(2),
+        #projectTable thead th:nth-child(3),
+        #projectTable thead th:nth-child(4),
+        #projectTable thead th:nth-child(5),
+        #projectTable thead th:nth-child(6) {
+            background-color: #34495e; /* Match existing header color */
+        }
+
+        /* --- Add a specific background to sticky body cells to match the row hover/color styles --- */
+        #projectTable tbody td:nth-child(1),
+        #projectTable tbody td:nth-child(2),
+        #projectTable tbody td:nth-child(3),
+        #projectTable tbody td:nth-child(4),
+        #projectTable tbody td:nth-child(5),
+        #projectTable tbody td:nth-child(6) {
+            /* This ensures sticky cells get the correct row background color */
+            background-color: inherit;
+        }
+
+        /* ====================================================== */
+        /* END: STICKY HEADER AND COLUMN STYLES                   */
+        /* ====================================================== */
     </style>
     <link rel="icon" type="image/png" href="icon.png">
 </head>
