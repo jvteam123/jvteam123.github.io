@@ -5,15 +5,16 @@
  * This script has been updated to use Firestore's real-time listeners
  * (`onSnapshot`) to provide live updates across all user sessions.
  *
- * @version 5.1.0
+ * @version 5.2.0
  * @author Gemini AI Refactor & Live Update Implementation
  * @changeLog
+ * - MODIFIED: Removed the "Show Title" checkbox and its corresponding logic. The "Project Name" column is now always visible by default.
  * - NEW FEATURE: Added a floating "Tech ID" tooltip that appears on row hover when scrolling horizontally, preventing the need to scroll back to see the assigned technician.
- * - MAJOR ENHANCEMENT: Replaced manual `.get()` calls with real-time `.onSnapshot()` listeners in `initializeFirebaseAndLoadData`. Now, any changes to project data (like starting/ending a timer) are instantly reflected on all connected clients without needing a manual refresh.
- * - OPTIMIZED: The new real-time logic intelligently processes only the documents that have changed (`added`, `modified`, `removed`), leading to much more efficient UI updates and a better user experience.
- * - REFINED: State management is now more robust to handle incoming real-time data, ensuring the local `projects` array is always in sync with the database.
- * - FIXED: Corrected a TypeError by replacing the incompatible `.count().get()` method with `.get()` followed by the `.size` property in the `checkForNewDisputes` and `checkForNewLeaveRequests` functions. This resolves the "query.count is not a function" error.
- * - FIXED: The project name dropdown in the Dispute Modal now correctly populates with all available project names for the selected month.
+ * - MAJOR ENHANCEMENT: Replaced manual `.get()` calls with real-time `.onSnapshot()` listeners in `initializeFirebaseAndLoadData`.
+ * - OPTIMIZED: The new real-time logic intelligently processes only the documents that have changed (`added`, `modified`, `removed`).
+ * - REFINED: State management is now more robust to handle incoming real-time data.
+ * - FIXED: Corrected a TypeError by replacing the incompatible `.count().get()` method with `.get()` followed by the `.size` property.
+ * - FIXED: The project name dropdown in the Dispute Modal now correctly populates.
  * - MODIFIED: The 'Show Day' filter checkboxes now also control the visibility of their corresponding action buttons.
  */
 document.addEventListener('DOMContentLoaded', () => {
@@ -175,11 +176,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 this.methods.injectDisputeModalHTML.call(this);
                 this.methods.setupDOMReferences.call(this);
                 this.methods.injectNotificationStyles.call(this);
-                this.methods.injectTechIdHintStyles.call(this); // Inject styles for the new hint
+                this.methods.injectTechIdHintStyles.call(this);
                 this.methods.loadColumnVisibilityState.call(this);
                 this.methods.setupAuthRelatedDOMReferences.call(this);
                 this.methods.attachEventListeners.call(this);
-                this.methods.setupTechIdHint.call(this); // Setup logic for the new hint
+                this.methods.setupTechIdHint.call(this);
                 this.methods.setupAuthActions.call(this);
                 this.methods.listenForAuthStateChanges.call(this);
 
@@ -238,7 +239,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     pageInfo: document.getElementById('pageInfo'),
                     tlDashboardContentElement: document.getElementById('tlDashboardContent'),
                     tlSummaryContent: document.getElementById('tlSummaryContent'),
-                    toggleTitleCheckbox: document.getElementById('toggleTitleCheckbox'),
                     toggleDay2Checkbox: document.getElementById('toggleDay2Checkbox'),
                     toggleDay3Checkbox: document.getElementById('toggleDay3Checkbox'),
                     toggleDay4Checkbox: document.getElementById('toggleDay4Checkbox'),
@@ -302,36 +302,33 @@ document.addEventListener('DOMContentLoaded', () => {
                     disputeNotificationBadge: document.getElementById('disputeNotificationBadge'),
                 };
             },
-            
-            // --- NEW METHOD ---
+
             injectTechIdHintStyles() {
                 const style = document.createElement('style');
                 style.innerHTML = `
                     .tech-id-tooltip {
                         position: fixed;
-                        z-index: 9999; /* Ensure it's on top */
-                        background-color: rgba(30, 41, 59, 0.9); /* slate-800 with opacity */
-                        color: #f1f5f9; /* slate-100 */
+                        z-index: 9999;
+                        background-color: rgba(30, 41, 59, 0.9);
+                        color: #f1f5f9;
                         padding: 6px 12px;
                         border-radius: 6px;
                         font-size: 0.9em;
                         font-weight: 500;
-                        pointer-events: none; /* Prevents tooltip from blocking mouse events */
+                        pointer-events: none;
                         display: none;
-                        border: 1px solid #475569; /* slate-600 */
+                        border: 1px solid #475569;
                         box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-                        transform: translate(15px, -50%); /* Position relative to cursor */
+                        transform: translate(15px, -50%);
                     }
                 `;
                 document.head.appendChild(style);
             },
 
-            // --- NEW METHOD ---
             setupTechIdHint() {
                 const tableWrapper = document.querySelector('.table-scroll-wrapper');
                 if (!tableWrapper) return;
 
-                // 1. Create the tooltip element and append it to the body
                 let tooltip = document.getElementById('tech-id-tooltip');
                 if (!tooltip) {
                     tooltip = document.createElement('div');
@@ -340,21 +337,17 @@ document.addEventListener('DOMContentLoaded', () => {
                     document.body.appendChild(tooltip);
                 }
 
-                // 2. Add event listeners to the table body using event delegation
                 const tableBody = this.elements.projectTableBody;
                 if (!tableBody) return;
 
                 tableBody.addEventListener('mouseover', (e) => {
                     const row = e.target.closest('tr');
-                    // Ensure it's a project row with a valid ID
                     if (!row || !row.dataset.projectId || row.classList.contains('batch-header-row') || row.classList.contains('fix-group-header')) {
                         return;
                     }
                     
-                    // Check horizontal scroll position. 'Assigned To' is the 5th column.
-                    // The 6th column (Status) starts at 510px. Let's use that as a threshold.
                     if (tableWrapper.scrollLeft < 450) {
-                        return; // Don't show the hint if the column is likely visible
+                        return;
                     }
 
                     const projectId = row.dataset.projectId;
@@ -373,7 +366,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
 
                 tableBody.addEventListener('mousemove', (e) => {
-                    // Update position as mouse moves
                     if (tooltip.style.display === 'block') {
                         tooltip.style.left = `${e.clientX}px`;
                         tooltip.style.top = `${e.clientY}px`;
@@ -445,7 +437,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 attachClick(self.elements.openDisputeBtn, () => {
                     self.elements.disputeModal.style.display = 'block';
-                    self.methods.openDisputeModal.call(self); // Call the setup function here
+                    self.methods.openDisputeModal.call(self);
                     self.methods.fetchDisputes.call(self);
                     self.state.newDisputesCount = 0;
                     self.methods.updateDisputeBadge.call(self);
@@ -612,7 +604,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 };
 
-                setupToggle(self.elements.toggleTitleCheckbox);
                 setupToggle(self.elements.toggleDay2Checkbox);
                 setupToggle(self.elements.toggleDay3Checkbox);
                 setupToggle(self.elements.toggleDay4Checkbox);
@@ -786,7 +777,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     return;
                 }
                 
-                // If a listener is already active, unsubscribe before creating a new one.
                 if (this.projectsListenerUnsubscribe) {
                     this.projectsListenerUnsubscribe();
                 }
@@ -849,13 +839,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
                 
-                // *** THIS IS THE MAJOR CHANGE FOR REAL-TIME UPDATES ***
                 this.projectsListenerUnsubscribe = projectsQuery.onSnapshot(
                     (snapshot) => {
                         snapshot.docChanges().forEach((change) => {
                             const projectData = { id: change.doc.id, ...change.doc.data() };
                             
-                            // Apply default values for robustness
                             const fullProjectData = {
                                 ...projectData,
                                 breakDurationMinutesDay1: projectData.breakDurationMinutesDay1 || 0,
@@ -888,7 +876,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             }
                         });
                         
-                        this.methods.refreshAllViews.call(this); // Re-render the table with the new data
+                        this.methods.refreshAllViews.call(this);
                     },
                     (error) => {
                         console.error("Error with real-time project listener:", error);
@@ -934,7 +922,6 @@ document.addEventListener('DOMContentLoaded', () => {
             },
 
             async populateProjectNameFilter() {
-                // Use the comprehensive list of names that was already fetched.
                 const sortedNames = this.state.allUniqueProjectNames || [];
                 this.elements.batchIdSelect.innerHTML = '<option value="">All Projects</option>';
                 sortedNames.forEach(name => {
@@ -1019,9 +1006,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     this.state.filters.month = "";
                     localStorage.setItem('currentSelectedMonth', "");
                     this.state.filters.fixCategory = "";
-                    
-                    // The real-time listener will handle the update, no need to call initialize again
-                    // this.methods.initializeFirebaseAndLoadData.call(this);
 
                 } catch (error) {
                     console.error("Error adding projects:", error);
@@ -1119,7 +1103,6 @@ document.addEventListener('DOMContentLoaded', () => {
                             lastModifiedTimestamp: firebase.firestore.FieldValue.serverTimestamp()
                         });
                     });
-                     // Real-time listener handles the update, no manual refresh needed.
 
                 } catch (error) {
                     console.error(`Error updating ${fieldName}:`, error);
@@ -1218,7 +1201,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
 
                     await projectRef.update(updates);
-                    // The real-time listener will handle the update, no need to refresh data manually
                 } catch (error) {
                     console.error(`Error updating project for action ${action}:`, error);
                     alert("Error updating project status: " + error.message);
@@ -1337,13 +1319,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         let lockIcon = '';
                         if (status && status.total > 0) {
                         if (status.locked === status.total) {
-                        // Fully locked icon (solid lock)
                         lockIcon = ' <i class="fas fa-lock" title="All tasks in this group are locked"></i>';
                         } else if (status.locked > 0) {
-                        // Partially locked icon (lock with a slash or similar - using regular lock as placeholder)
                         lockIcon = ' <i class="fas fa-lock" title="Some tasks in this group are locked"></i>';
                         } else {
-                        // Unlocked icon
                         lockIcon = ' <i class="fas fa-unlock-alt" title="All tasks in this group are unlocked"></i>';
                            }
                         }
@@ -1360,7 +1339,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
 
                     const row = this.elements.projectTableBody.insertRow();
-                    row.dataset.projectId = project.id; // --- MODIFICATION: Add project ID to row ---
+                    row.dataset.projectId = project.id;
                     row.style.backgroundColor = this.config.FIX_CATEGORIES.COLORS[project.fixCategory] || this.config.FIX_CATEGORIES.COLORS.default;
                     const groupKey = `${currentBaseProjectNameHeader}_${project.fixCategory}`;
                     if (this.state.groupVisibilityState[groupKey]?.isExpanded === false) row.classList.add("hidden-group-row");
@@ -1551,7 +1530,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     try {
                         await projectRef.update(updates);
-                        // The real-time listener will handle the update
                     } catch (error) {
                         console.error("Error resetting task:", error);
                         alert("Error resetting task: " + error.message);
@@ -1590,12 +1568,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 localStorage.setItem('projectTrackerGroupVisibility', JSON.stringify(this.state.groupVisibilityState));
             },
             loadColumnVisibilityState() {
-                const loadState = (key, checkbox, defaultValue) => {
-                    const value = localStorage.getItem(key) !== 'false';
-                    if (checkbox) checkbox.checked = value;
+                const loadState = (checkboxKey, checkboxElement) => {
+                    const value = localStorage.getItem(checkboxKey) !== 'false';
+                    if (checkboxElement) checkboxElement.checked = value;
                 };
 
-                loadState('showTitleColumn', this.elements.toggleTitleCheckbox);
                 loadState('showDay2Column', this.elements.toggleDay2Checkbox);
                 loadState('showDay3Column', this.elements.toggleDay3Checkbox);
                 loadState('showDay4Column', this.elements.toggleDay4Checkbox);
@@ -1608,7 +1585,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (checkbox) localStorage.setItem(key, checkbox.checked);
                 };
 
-                saveState('showTitleColumn', this.elements.toggleTitleCheckbox);
                 saveState('showDay2Column', this.elements.toggleDay2Checkbox);
                 saveState('showDay3Column', this.elements.toggleDay3Checkbox);
                 saveState('showDay4Column', this.elements.toggleDay4Checkbox);
@@ -1618,22 +1594,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
             applyColumnVisibility() {
                 const toggleVisibility = (className, checkbox) => {
-                    // Hide/show table columns (th and td)
+                    const isChecked = checkbox ? checkbox.checked : true; // Default to true if checkbox doesn't exist
                     document.querySelectorAll(`#projectTable .${className}`).forEach(el => {
-                        el.classList.toggle('column-hidden', !checkbox.checked);
+                        el.classList.toggle('column-hidden', !isChecked);
                     });
 
-                    // Hide/show corresponding action buttons
                     const dayMatch = className.match(/day(\d)/);
                     if (dayMatch) {
                         const dayNum = dayMatch[1];
                         document.querySelectorAll(`#projectTable .action-day${dayNum}`).forEach(btn => {
-                            btn.style.display = checkbox.checked ? '' : 'none';
+                            btn.style.display = isChecked ? '' : 'none';
                         });
                     }
                 };
 
-                toggleVisibility('column-project-name', this.elements.toggleTitleCheckbox);
+                toggleVisibility('column-project-name', null); // Always show title
                 toggleVisibility('column-day2', this.elements.toggleDay2Checkbox);
                 toggleVisibility('column-day3', this.elements.toggleDay3Checkbox);
                 toggleVisibility('column-day4', this.elements.toggleDay4Checkbox);
@@ -2117,7 +2092,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     await firestoreBatch.commit();
                     alert(`${numToAdd} extra area(s) added successfully to ${latestFixCategory}!`);
                     
-                    // The real-time listener will handle the update
                     await this.methods.renderTLDashboard.call(this);
 
                 } catch (error) {
@@ -2156,7 +2130,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     await batch.commit();
 
-                    // The real-time listener will handle the update
                     this.methods.renderTLDashboard.call(this);
 
                 } catch (error) {
@@ -2232,7 +2205,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     alert(`Release Successful! Tasks from ${currentFixCategory} have been moved to ${nextFixCategory}. The dashboard will now refresh.`);
 
-                    // The real-time listener will handle the update
                     await this.methods.renderTLDashboard.call(this);
 
                 } catch (error) {
@@ -2273,7 +2245,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     await firestoreBatch.commit();
 
-                    // The real-time listener will handle the update
                     this.methods.renderTLDashboard.call(this);
 
                 } catch (error) {
@@ -2331,7 +2302,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     try {
                         await batch.commit();
-                        // The real-time listener will handle the update
                     } catch (error) {
                         console.error("Error in re-assignment:", error);
                         alert("Error during re-assignment: " + error.message);
@@ -2719,7 +2689,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 modal.className = 'notification-modal-content';
 
                 const title = document.createElement('h4');
-                // V-- WITH THIS NEW LINE --V
                 title.innerHTML = '<i class="fas fa-info-circle"></i> New Update';
 
                 const messageP = document.createElement('p');
@@ -2788,8 +2757,6 @@ document.addEventListener('DOMContentLoaded', () => {
             },
 
             listenForNotifications() {
-                // This function is kept for real-time pop-up notifications,
-                // which are a separate feature from the badge counts.
                 if (!this.db) {
                     console.error("Firestore not initialized for notifications.");
                     return;
