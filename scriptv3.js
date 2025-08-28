@@ -5,9 +5,10 @@
  * This script has been updated to use Firestore's real-time listeners
  * (`onSnapshot`) to provide live updates across all user sessions.
  *
- * @version 5.0.0
+ * @version 5.1.0
  * @author Gemini AI Refactor & Live Update Implementation
  * @changeLog
+ * - NEW FEATURE: Added a floating "Tech ID" tooltip that appears on row hover when scrolling horizontally, preventing the need to scroll back to see the assigned technician.
  * - MAJOR ENHANCEMENT: Replaced manual `.get()` calls with real-time `.onSnapshot()` listeners in `initializeFirebaseAndLoadData`. Now, any changes to project data (like starting/ending a timer) are instantly reflected on all connected clients without needing a manual refresh.
  * - OPTIMIZED: The new real-time logic intelligently processes only the documents that have changed (`added`, `modified`, `removed`), leading to much more efficient UI updates and a better user experience.
  * - REFINED: State management is now more robust to handle incoming real-time data, ensuring the local `projects` array is always in sync with the database.
@@ -174,9 +175,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 this.methods.injectDisputeModalHTML.call(this);
                 this.methods.setupDOMReferences.call(this);
                 this.methods.injectNotificationStyles.call(this);
+                this.methods.injectTechIdHintStyles.call(this); // Inject styles for the new hint
                 this.methods.loadColumnVisibilityState.call(this);
                 this.methods.setupAuthRelatedDOMReferences.call(this);
                 this.methods.attachEventListeners.call(this);
+                this.methods.setupTechIdHint.call(this); // Setup logic for the new hint
                 this.methods.setupAuthActions.call(this);
                 this.methods.listenForAuthStateChanges.call(this);
 
@@ -298,6 +301,84 @@ document.addEventListener('DOMContentLoaded', () => {
                     closeDisputeDetailsBtn: document.getElementById('closeDisputeDetailsBtn'),
                     disputeNotificationBadge: document.getElementById('disputeNotificationBadge'),
                 };
+            },
+            
+            // --- NEW METHOD ---
+            injectTechIdHintStyles() {
+                const style = document.createElement('style');
+                style.innerHTML = `
+                    .tech-id-tooltip {
+                        position: fixed;
+                        z-index: 9999; /* Ensure it's on top */
+                        background-color: rgba(30, 41, 59, 0.9); /* slate-800 with opacity */
+                        color: #f1f5f9; /* slate-100 */
+                        padding: 6px 12px;
+                        border-radius: 6px;
+                        font-size: 0.9em;
+                        font-weight: 500;
+                        pointer-events: none; /* Prevents tooltip from blocking mouse events */
+                        display: none;
+                        border: 1px solid #475569; /* slate-600 */
+                        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+                        transform: translate(15px, -50%); /* Position relative to cursor */
+                    }
+                `;
+                document.head.appendChild(style);
+            },
+
+            // --- NEW METHOD ---
+            setupTechIdHint() {
+                const tableWrapper = document.querySelector('.table-scroll-wrapper');
+                if (!tableWrapper) return;
+
+                // 1. Create the tooltip element and append it to the body
+                let tooltip = document.getElementById('tech-id-tooltip');
+                if (!tooltip) {
+                    tooltip = document.createElement('div');
+                    tooltip.id = 'tech-id-tooltip';
+                    tooltip.className = 'tech-id-tooltip';
+                    document.body.appendChild(tooltip);
+                }
+
+                // 2. Add event listeners to the table body using event delegation
+                const tableBody = this.elements.projectTableBody;
+                if (!tableBody) return;
+
+                tableBody.addEventListener('mouseover', (e) => {
+                    const row = e.target.closest('tr');
+                    // Ensure it's a project row with a valid ID
+                    if (!row || !row.dataset.projectId || row.classList.contains('batch-header-row') || row.classList.contains('fix-group-header')) {
+                        return;
+                    }
+                    
+                    // Check horizontal scroll position. 'Assigned To' is the 5th column.
+                    // The 6th column (Status) starts at 510px. Let's use that as a threshold.
+                    if (tableWrapper.scrollLeft < 450) {
+                        return; // Don't show the hint if the column is likely visible
+                    }
+
+                    const projectId = row.dataset.projectId;
+                    const project = this.state.projects.find(p => p.id === projectId);
+
+                    if (project && project.assignedTo) {
+                        tooltip.textContent = `Tech ID: ${project.assignedTo}`;
+                        tooltip.style.left = `${e.clientX}px`;
+                        tooltip.style.top = `${e.clientY}px`;
+                        tooltip.style.display = 'block';
+                    }
+                });
+
+                tableBody.addEventListener('mouseout', () => {
+                    tooltip.style.display = 'none';
+                });
+
+                tableBody.addEventListener('mousemove', (e) => {
+                    // Update position as mouse moves
+                    if (tooltip.style.display === 'block') {
+                        tooltip.style.left = `${e.clientX}px`;
+                        tooltip.style.top = `${e.clientY}px`;
+                    }
+                });
             },
 
             setupAuthRelatedDOMReferences() {
@@ -1279,6 +1360,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
 
                     const row = this.elements.projectTableBody.insertRow();
+                    row.dataset.projectId = project.id; // --- MODIFICATION: Add project ID to row ---
                     row.style.backgroundColor = this.config.FIX_CATEGORIES.COLORS[project.fixCategory] || this.config.FIX_CATEGORIES.COLORS.default;
                     const groupKey = `${currentBaseProjectNameHeader}_${project.fixCategory}`;
                     if (this.state.groupVisibilityState[groupKey]?.isExpanded === false) row.classList.add("hidden-group-row");
