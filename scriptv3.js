@@ -780,7 +780,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (this.projectsListenerUnsubscribe) {
                     this.projectsListenerUnsubscribe();
                 }
-
+                this.state.projects = [];
                 this.methods.loadGroupVisibilityState.call(this);
                 await this.methods.populateMonthFilter.call(this);
 
