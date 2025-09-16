@@ -22,16 +22,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const ProjectTrackerApp = {
         // --- 1. CONFIGURATION AND CONSTANTS ---
         config: {
-            firebase: {
-                apiKey: "AIzaSyC2WPqGuXr9huIXblMWc6JQwO3p_xJHkZY",
-                authDomain: "team114-ebca3.firebaseapp.com",
-                projectId: "team114-ebca3",
-                storageBucket: "team114-ebca3.firebasestorage.app",
-                messagingSenderId: "24454468220",
-                appId: "1:24454468220:web:d9f7748975bbf32974aff9",
-                measurementId: "G-0XP2VX9K9F"
-
-            },
+            const firebaseConfig = {
+  apiKey: "AIzaSyAblGk1BHPF3J6w--Ii1pfDyKqcN-MFZyQ",
+  authDomain: "time-tracker-41701.firebaseapp.com",
+  projectId: "time-tracker-41701",
+  storageBucket: "time-tracker-41701.firebasestorage.app",
+  messagingSenderId: "401097667777",
+  appId: "1:401097667777:web:d6c0c6e7741a2046945040",
+  measurementId: "G-BY9CV5ZQ11"
+};
             pins: {
                 TL_DASHBOARD_PIN: "1234"
             },
@@ -245,6 +244,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     toggleDay5Checkbox: document.getElementById('toggleDay5Checkbox'),
                     toggleDay6Checkbox: document.getElementById('toggleDay6Checkbox'),
                     tscLinkBtn: document.getElementById('tscLinkBtn'),
+                    exportSelectedProjectCsvBtn: document.getElementById('exportSelectedProjectCsvBtn'),
 
                     // User Management DOM elements
                     userManagementForm: document.getElementById('userManagementForm'),
@@ -397,6 +397,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 const attachClick = (element, handler) => {
                     if (element) element.onclick = handler;
                 };
+
+                attachClick(self.elements.exportSelectedProjectCsvBtn, self.methods.handleExportSelectedProjectCsv.bind(self));
 
                 attachClick(self.elements.openAddNewProjectBtn, () => {
                     const pin = prompt("Enter PIN to add new tracker:");
@@ -4074,6 +4076,79 @@ Status: ${dispute.status}
                     alert("Could not copy details.");
                 });
             },
+
+
+            // Inside the ProjectTrackerApp.methods object
+//...
+handleExportSelectedProjectCsv() {
+    // Check if a specific batchId (selected project) is currently filtered.
+    const selectedBatchId = this.state.filters.batchId;
+    
+    if (!selectedBatchId) {
+        alert("Please select a specific project from the 'All Projects' dropdown filter before exporting.");
+        return;
+    }
+    
+    // Filter the projects to include only the selected one.
+    const projectsToExport = this.state.projects.filter(p => p.baseProjectName === selectedBatchId);
+    
+    if (projectsToExport.length === 0) {
+        alert("No data found for the selected project.");
+        return;
+    }
+
+    const headers = [
+        ...this.config.CSV_HEADERS_FOR_IMPORT
+    ];
+    
+    const csvRows = [];
+    csvRows.push(headers.join(','));
+    
+    projectsToExport.forEach(project => {
+        const values = headers.map(header => {
+            const fieldName = this.config.CSV_HEADER_TO_FIELD_MAP[header];
+            let value = '';
+            
+            if (fieldName && project[fieldName] !== undefined) {
+                value = project[fieldName];
+            } else if (header === "Total (min)") {
+                value = this.methods.calculateTotalDurationMinutes.call(this, project);
+            } else if (header === "Creation Date") {
+                value = project.creationTimestamp ? project.creationTimestamp.toDate().toLocaleDateString() : '';
+            } else if (header === "Last Modified") {
+                value = project.lastModifiedTimestamp ? project.lastModifiedTimestamp.toDate().toLocaleDateString() : '';
+            } else {
+                value = '';
+            }
+
+            // Handle commas, quotes, and newlines in CSV data
+            const formattedValue = (typeof value === 'string' && (value.includes(',') || value.includes('"') || value.includes('\n')))
+                ? `"${value.replace(/"/g, '""')}"`
+                : value;
+                
+            return formattedValue;
+        });
+        csvRows.push(values.join(','));
+    });
+    
+    const csvString = csvRows.join('\n');
+    const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    
+    if (link.download !== undefined) {
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', `exported_project_${selectedBatchId}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        alert(`Successfully exported project "${selectedBatchId}" to CSV.`);
+    } else {
+        alert("Your browser does not support exporting. Please manually copy the data from the table.");
+    }
+},
+//...
 
              async handleMarkDisputeDone(id) {
                  if (confirm("Are you sure you want to mark this dispute as 'Done'?")) {
