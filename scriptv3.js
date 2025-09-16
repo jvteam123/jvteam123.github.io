@@ -22,15 +22,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const ProjectTrackerApp = {
         // --- 1. CONFIGURATION AND CONSTANTS ---
         config: {
-            const firebaseConfig = {
-  apiKey: "AIzaSyAblGk1BHPF3J6w--Ii1pfDyKqcN-MFZyQ",
-  authDomain: "time-tracker-41701.firebaseapp.com",
-  projectId: "time-tracker-41701",
-  storageBucket: "time-tracker-41701.firebasestorage.app",
-  messagingSenderId: "401097667777",
-  appId: "1:401097667777:web:d6c0c6e7741a2046945040",
-  measurementId: "G-BY9CV5ZQ11"
-};
+            firebase: {
+                apiKey: "AIzaSyC2WPqGuXr9huIXblMWc6JQwO3p_xJHkZY",
+                authDomain: "team114-ebca3.firebaseapp.com",
+                projectId: "team114-ebca3",
+                storageBucket: "team114-ebca3.firebasestorage.app",
+                messagingSenderId: "24454468220",
+                appId: "1:24454468220:web:d9f7748975bbf32974aff9",
+                measurementId: "G-0XP2VX9K9F"
+
+            },
+
             pins: {
                 TL_DASHBOARD_PIN: "1234"
             },
